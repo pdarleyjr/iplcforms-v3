@@ -1,5 +1,6 @@
 {
   "name": "iplcforms-v3",
+  "type": "module",
   "description": "Admin dashboard template built with Astro, shadcn/ui, and Cloudflare's developer stack",
   "cloudflare": {
     "label": "SaaS Admin Template",
@@ -42,6 +43,7 @@
     "zod": "3.25.67"
   },
   "devDependencies": {
+    "copyfiles": "^2.4.1",
     "wrangler": "4.21.x"
   },
   "scripts": {
@@ -55,6 +57,11 @@
     "dev": "npm run db:migrate && npm run build && npm run wrangler:wrapper && npx wrangler dev --port 4321",
     "predeploy": "npm run db:migrate:remote",
     "preview": "npm run build && npm run wrangler:wrapper && wrangler dev",
-    "wrangler:wrapper": "cp src/workflows/wrapper.js dist/index.js"
+    "wrangler:wrapper": "copy src\\workflows\\wrapper.js dist\\index.js",
+    "migrate": "node scripts/migrate.js --apply",
+    "migrate:dry-run": "node scripts/migrate.js --dry-run",
+    "migrate:test": "node scripts/test-migrations.js",
+    "db:setup": "npm run migrate && npm run migrate:test"
   }
 }
+
