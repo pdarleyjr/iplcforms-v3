@@ -1,3 +1,5 @@
+import type { D1Database } from '@cloudflare/workers-types';
+
 export const CUSTOMER_SUBSCRIPTION_QUERIES = {
   BASE_SELECT: `
     SELECT 
@@ -30,7 +32,7 @@ export const CUSTOMER_SUBSCRIPTION_QUERIES = {
   `,
 };
 
-const processCustomerSubscriptionResults = (rows) => {
+const processCustomerSubscriptionResults = (rows: any[]) => {
   const subscriptionsMap = new Map();
 
   rows.forEach((row) => {
@@ -60,11 +62,13 @@ const processCustomerSubscriptionResults = (rows) => {
 };
 
 export class CustomerSubscriptionService {
-  constructor(DB) {
+  private DB: D1Database;
+
+  constructor(DB: D1Database) {
     this.DB = DB;
   }
 
-  async getById(id) {
+  async getById(id: string | number) {
     const query = `${CUSTOMER_SUBSCRIPTION_QUERIES.BASE_SELECT} WHERE customer_subscriptions.id = ?`;
     const response = await this.DB.prepare(query).bind(id).all();
 
@@ -77,7 +81,7 @@ export class CustomerSubscriptionService {
     return null;
   }
 
-  async getByCustomerId(customerId) {
+  async getByCustomerId(customerId: string | number) {
     const query = `${CUSTOMER_SUBSCRIPTION_QUERIES.BASE_SELECT} WHERE customer_subscriptions.customer_id = ?`;
     const response = await this.DB.prepare(query).bind(customerId).all();
 
@@ -97,7 +101,12 @@ export class CustomerSubscriptionService {
     return [];
   }
 
-  async create(customerSubscriptionData) {
+  async create(customerSubscriptionData: {
+    customer_id: number;
+    subscription_id: number;
+    status?: string;
+    subscription_ends_at?: number;
+  }) {
     const {
       customer_id,
       subscription_id,
@@ -121,7 +130,7 @@ export class CustomerSubscriptionService {
     };
   }
 
-  async updateStatus(id, status) {
+  async updateStatus(id: string | number, status: string) {
     const response = await this.DB.prepare(
       CUSTOMER_SUBSCRIPTION_QUERIES.UPDATE_STATUS,
     )
@@ -135,7 +144,7 @@ export class CustomerSubscriptionService {
     return { success: true };
   }
 
-  async updateSubscriptionEndsAt(id, subscriptionEndsAt) {
+  async updateSubscriptionEndsAt(id: string | number, subscriptionEndsAt: number) {
     const response = await this.DB.prepare(
       CUSTOMER_SUBSCRIPTION_QUERIES.UPDATE_SUBSCRIPTION_ENDS_AT,
     )

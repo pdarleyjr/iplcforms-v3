@@ -66,7 +66,7 @@ export const APIDocumentation = () => {
                       : endpoint.method === "POST"
                         ? "destructive"
                         : endpoint.method === "PUT"
-                          ? "warning"
+                          ? "outline"
                           : "secondary"
                   }
                 >

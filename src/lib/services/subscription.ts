@@ -1,3 +1,5 @@
+import type { D1Database } from '@cloudflare/workers-types';
+
 export const SUBSCRIPTION_QUERIES = {
   BASE_SELECT: `
     SELECT 
@@ -17,7 +19,7 @@ export const SUBSCRIPTION_QUERIES = {
   INSERT_SUBSCRIPTION_FEATURE: `INSERT INTO subscription_features(subscription_id, feature_id) VALUES(?, ?)`,
 };
 
-const processSubscriptionResults = (rows) => {
+const processSubscriptionResults = (rows: any[]) => {
   const subscriptionsMap = new Map();
 
   rows.forEach((row) => {
@@ -45,11 +47,13 @@ const processSubscriptionResults = (rows) => {
 };
 
 export class SubscriptionService {
-  constructor(DB) {
+  private DB: D1Database;
+
+  constructor(DB: D1Database) {
     this.DB = DB;
   }
 
-  async getById(id) {
+  async getById(id: string | number) {
     const query = `${SUBSCRIPTION_QUERIES.BASE_SELECT} WHERE subscriptions.id = ?`;
     const response = await this.DB.prepare(query).bind(id).all();
 
@@ -70,8 +74,15 @@ export class SubscriptionService {
     return [];
   }
 
-  async create(subscriptionData) {
-    console.log(subscriptionData);
+  async create(subscriptionData: {
+    name: string;
+    description?: string;
+    price: number;
+    features?: Array<{
+      name: string;
+      description?: string;
+    }>;
+  }) {
     const { name, description, price, features } = subscriptionData;
 
     const subscriptionResponse = await this.DB.prepare(

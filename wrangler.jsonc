@@ -1,6 +1,6 @@
 {
   "name": "iplcforms-v3",
-  "main": "./dist/index.js",
+  "main": "./dist/wrapper.js",
   "assets": {
     "directory": "./dist"
   },

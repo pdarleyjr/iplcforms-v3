@@ -1,3 +1,5 @@
+import type { D1Database } from '@cloudflare/workers-types';
+
 export const CUSTOMER_QUERIES = {
   BASE_SELECT: `
     SELECT 

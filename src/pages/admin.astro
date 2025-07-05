@@ -1,9 +1,6 @@
 ---
-import { BadgeDollarSign, CalendarSync, User, FileText } from 'lucide-react';
 import Layout from '@/layouts/Layout.astro';
 import { APIDocumentation } from '@/components/admin/api-documentation';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 
 import { CustomerService } from '@/lib/services/customer';
 import { SubscriptionService } from '@/lib/services/subscription';
@@ -17,34 +14,41 @@ const subscriptionService = new SubscriptionService(DB);
 const customerSubscriptionService = new CustomerSubscriptionService(DB);
 const formTemplateService = new FormTemplateService(DB);
 
-const customers = await customerService.getAll();
-const subscriptions = await subscriptionService.getAll();
-const customerSubscriptions = await customerSubscriptionService.getAll();
-const formTemplates = await formTemplateService.getAll();
+// Initialize with fallback empty arrays in case of database errors
+let customers = [];
+let subscriptions = [];
+let customerSubscriptions = [];
+let formTemplates = [];
+
+try {
+  customers = await customerService.getAll();
+  subscriptions = await subscriptionService.getAll();
+  customerSubscriptions = await customerSubscriptionService.getAll();
+  formTemplates = await formTemplateService.getAll();
+} catch (error) {
+  console.error('Database error in admin page:', error);
+  // Fallback data will be empty arrays initialized above
+}
 
 const data = [
   {
     name: 'Customers',
     value: customers.length,
-    icon: User,
     href: '/admin/customers'
   },
   {
     name: 'Subscriptions',
     value: subscriptions.length,
-    icon: BadgeDollarSign,
     href: '/admin/subscriptions'
   },
   {
     name: 'Forms',
     value: formTemplates.length,
-    icon: FileText,
     href: '/forms'
   },
   {
     name: 'Customer Subscriptions',
-    value: customerSubscriptions.length,
-    icon: CalendarSync
+    value: customerSubscriptions.length
   }
 ]
 ---
@@ -59,7 +63,6 @@ const data = [
               <div class="p-6">
                 <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                   <div class="tracking-tight text-sm font-medium">{item.name}</div>
-                  <item.icon />
                 </div>
                 <div class="pt-0">
                   <div class="text-2xl font-bold">{item.value}</div>
@@ -72,7 +75,6 @@ const data = [
             <div class="p-6">
               <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div class="tracking-tight text-sm font-medium">{item.name}</div>
-                <item.icon />
               </div>
               <div class="pt-0">
                 <div class="text-2xl font-bold">{item.value}</div>

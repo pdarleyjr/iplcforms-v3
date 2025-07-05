@@ -1,35 +1,33 @@
+import type { D1Database } from '@cloudflare/workers-types';
+
 export const FORM_TEMPLATE_QUERIES = {
   BASE_SELECT: `
-    SELECT 
+    SELECT
       ft.*,
-      u.name as created_by_name,
-      u.email as created_by_email,
-      fc.name as category_name,
-      fc.description as category_description,
+      c.name as created_by_name,
+      c.email as created_by_email,
       COUNT(fs.id) as submission_count
     FROM form_templates ft
-    LEFT JOIN users u ON ft.created_by = u.id
-    LEFT JOIN form_categories fc ON ft.category_id = fc.id
+    LEFT JOIN customers c ON ft.created_by = c.id
     LEFT JOIN form_submissions fs ON ft.id = fs.template_id
   `,
   INSERT_TEMPLATE: `
     INSERT INTO form_templates (
-      title, description, category_id, form_config, ui_config, 
-      scoring_config, status, version, parent_template_id, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      name, description, category, form_config, metadata, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?)
   `,
   UPDATE_TEMPLATE: `
     UPDATE form_templates 
-    SET title = ?, description = ?, category_id = ?, form_config = ?, 
-        ui_config = ?, scoring_config = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+    SET name = ?, description = ?, category = ?, form_config = ?, 
+        metadata = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `,
-  DELETE_TEMPLATE: `UPDATE form_templates SET status = 'deleted' WHERE id = ?`,
+  DELETE_TEMPLATE: `UPDATE form_templates SET is_active = false WHERE id = ?`,
   GET_BY_ID: `WHERE ft.id = ? GROUP BY ft.id`,
-  GET_BY_CATEGORY: `WHERE ft.category_id = ? AND ft.status != 'deleted' GROUP BY ft.id`,
-  GET_BY_STATUS: `WHERE ft.status = ? GROUP BY ft.id`,
+  GET_BY_CATEGORY: `WHERE ft.category = ? AND ft.is_active = true GROUP BY ft.id`,
+  GET_BY_STATUS: `WHERE ft.is_published = ? AND ft.is_active = true GROUP BY ft.id`,
   GET_VERSIONS: `WHERE ft.parent_template_id = ? OR ft.id = ? GROUP BY ft.id ORDER BY ft.version DESC`,
-  SEARCH: `WHERE (ft.title LIKE ? OR ft.description LIKE ?) AND ft.status != 'deleted' GROUP BY ft.id`,
+  SEARCH: `WHERE (ft.name LIKE ? OR ft.description LIKE ?) AND ft.is_active = true GROUP BY ft.id`,
 };
 
 const processTemplateResults = (rows: any[]) => {
@@ -40,11 +38,8 @@ const processTemplateResults = (rows: any[]) => {
     if (template.form_config) {
       template.form_config = JSON.parse(template.form_config);
     }
-    if (template.ui_config) {
-      template.ui_config = JSON.parse(template.ui_config);
-    }
-    if (template.scoring_config) {
-      template.scoring_config = JSON.parse(template.scoring_config);
+    if (template.metadata) {
+      template.metadata = JSON.parse(template.metadata);
     }
 
     // Add creator info
@@ -55,16 +50,6 @@ const processTemplateResults = (rows: any[]) => {
       };
       delete template.created_by_name;
       delete template.created_by_email;
-    }
-
-    // Add category info
-    if (template.category_name) {
-      template.category_info = {
-        name: template.category_name,
-        description: template.category_description,
-      };
-      delete template.category_name;
-      delete template.category_description;
     }
 
     return template;
@@ -90,8 +75,8 @@ export class FormTemplateService {
   }
 
   async getAll(filters?: {
-    category_id?: number;
-    status?: string;
+    category?: string;
+    status?: boolean;
     search?: string;
     page?: number;
     per_page?: number;
@@ -99,17 +84,17 @@ export class FormTemplateService {
     let query = FORM_TEMPLATE_QUERIES.BASE_SELECT;
     let bindParams: any[] = [];
     
-    if (filters?.category_id) {
+    if (filters?.category) {
       query += ` ${FORM_TEMPLATE_QUERIES.GET_BY_CATEGORY}`;
-      bindParams.push(filters.category_id);
-    } else if (filters?.status) {
+      bindParams.push(filters.category);
+    } else if (filters?.status !== undefined) {
       query += ` ${FORM_TEMPLATE_QUERIES.GET_BY_STATUS}`;
       bindParams.push(filters.status);
     } else if (filters?.search) {
       query += ` ${FORM_TEMPLATE_QUERIES.SEARCH}`;
       bindParams.push(`%${filters.search}%`, `%${filters.search}%`);
     } else {
-      query += ` WHERE ft.status != 'deleted' GROUP BY ft.id`;
+      query += ` WHERE ft.is_active = true GROUP BY ft.id`;
     }
 
     query += ` ORDER BY ft.updated_at DESC`;
@@ -140,41 +125,29 @@ export class FormTemplateService {
   }
 
   async create(templateData: {
-    title: string;
+    name: string;
     description?: string;
-    category_id?: number;
+    category: string;
     form_config: object;
-    ui_config?: object;
-    scoring_config?: object;
-    status?: string;
-    version?: string;
-    parent_template_id?: number;
+    metadata?: object;
     created_by: number;
   }) {
     const {
-      title,
+      name,
       description,
-      category_id,
+      category,
       form_config,
-      ui_config,
-      scoring_config,
-      status = 'draft',
-      version = '1.0',
-      parent_template_id,
+      metadata,
       created_by,
     } = templateData;
 
     const response = await this.DB.prepare(FORM_TEMPLATE_QUERIES.INSERT_TEMPLATE)
       .bind(
-        title,
+        name,
         description || null,
-        category_id || null,
+        category,
         JSON.stringify(form_config),
-        JSON.stringify(ui_config || {}),
-        JSON.stringify(scoring_config || {}),
-        status,
-        version,
-        parent_template_id || null,
+        JSON.stringify(metadata || {}),
         created_by
       )
       .run();
@@ -188,13 +161,11 @@ export class FormTemplateService {
   }
 
   async update(id: number, templateData: {
-    title?: string;
+    name?: string;
     description?: string;
-    category_id?: number;
+    category?: string;
     form_config?: object;
-    ui_config?: object;
-    scoring_config?: object;
-    status?: string;
+    metadata?: object;
   }) {
     // First get the existing template
     const existing = await this.getById(id);
@@ -203,24 +174,20 @@ export class FormTemplateService {
     }
 
     const {
-      title = existing.title,
+      name = existing.name,
       description = existing.description,
-      category_id = existing.category_id,
+      category = existing.category,
       form_config = existing.form_config,
-      ui_config = existing.ui_config,
-      scoring_config = existing.scoring_config,
-      status = existing.status,
+      metadata = existing.metadata,
     } = templateData;
 
     const response = await this.DB.prepare(FORM_TEMPLATE_QUERIES.UPDATE_TEMPLATE)
       .bind(
-        title,
+        name,
         description,
-        category_id,
+        category,
         JSON.stringify(form_config),
-        JSON.stringify(ui_config),
-        JSON.stringify(scoring_config),
-        status,
+        JSON.stringify(metadata),
         id
       )
       .run();
@@ -245,35 +212,27 @@ export class FormTemplateService {
   }
 
   async publish(id: number) {
-    return this.update(id, { status: 'published' });
+    const response = await this.DB.prepare(`UPDATE form_templates SET is_published = true WHERE id = ?`)
+      .bind(id)
+      .run();
+
+    if (!response.success) {
+      throw new Error("Failed to publish template");
+    }
+
+    return { success: true };
   }
 
   async unpublish(id: number) {
-    return this.update(id, { status: 'draft' });
-  }
+    const response = await this.DB.prepare(`UPDATE form_templates SET is_published = false WHERE id = ?`)
+      .bind(id)
+      .run();
 
-  async createVersion(parentId: number, templateData: {
-    title?: string;
-    description?: string;
-    form_config: object;
-    ui_config?: object;
-    scoring_config?: object;
-    version: string;
-    created_by: number;
-  }) {
-    const parent = await this.getById(parentId);
-    if (!parent) {
-      throw new Error("Parent template not found");
+    if (!response.success) {
+      throw new Error("Failed to unpublish template");
     }
 
-    return this.create({
-      ...templateData,
-      title: templateData.title || parent.title,
-      description: templateData.description || parent.description,
-      category_id: parent.category_id,
-      parent_template_id: parentId,
-      status: 'draft',
-    });
+    return { success: true };
   }
 
   async getAnalytics(id: number) {
@@ -309,9 +268,9 @@ export class FormTemplateService {
     return {
       template_info: {
         id: template.id,
-        title: template.title,
+        name: template.name,
         version: template.version,
-        status: template.status,
+        is_published: template.is_published,
       },
       statistics: submissionStats,
       trends: submissionTrend.success ? submissionTrend.results : [],
