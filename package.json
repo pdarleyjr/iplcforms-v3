@@ -57,7 +57,7 @@
     "dev": "npm run db:migrate && npm run build && npm run wrangler:wrapper && npx wrangler dev --port 4321",
     "predeploy": "npm run db:migrate:remote",
     "preview": "npm run build && npm run wrangler:wrapper && wrangler dev",
-    "wrangler:wrapper": "copy src\\workflows\\wrapper.js dist\\index.js",
+    "wrangler:wrapper": "copyfiles src/workflows/wrapper.js dist/index.js",
     "migrate": "node scripts/migrate.js --apply",
     "migrate:dry-run": "node scripts/migrate.js --dry-run",
     "migrate:test": "node scripts/test-migrations.js",
