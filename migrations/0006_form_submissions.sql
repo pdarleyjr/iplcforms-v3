@@ -92,14 +92,5 @@ CREATE INDEX idx_form_submission_notes_type ON form_submission_notes(note_type);
 CREATE INDEX idx_form_submission_status_history_submission ON form_submission_status_history(submission_id);
 CREATE INDEX idx_form_submission_status_history_changed_by ON form_submission_status_history(changed_by);
 
--- Insert sample form submission for testing
-INSERT INTO form_submissions (template_id, template_version, patient_id, clinician_id, status, form_data, calculated_score, score_interpretation, submitted_at) VALUES 
-(1, 1, 1, 1, 'submitted', 
- '{"q1": 1, "q2": 2}', 
- 3, 'Minimal depression',
- CURRENT_TIMESTAMP);
-
--- Insert corresponding status history
-INSERT INTO form_submission_status_history (submission_id, previous_status, new_status, changed_by, change_reason) VALUES 
-(1, NULL, 'draft', 1, 'Initial creation'),
-(1, 'draft', 'submitted', 1, 'Patient completed form');
+-- Sample data removed for production deployment
+-- INSERT statements would reference non-existent customer and template records

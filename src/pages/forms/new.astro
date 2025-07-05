@@ -1,0 +1,59 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { Button } from '@/components/ui/button';
+import { FormBuilder } from '@/components/form-builder/FormBuilder';
+import { ComponentPalette } from '@/components/form-builder/ComponentPalette';
+---
+
+<Layout title="Create New Form">
+  <div class="space-y-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Create New Form</h1>
+        <p class="text-muted-foreground">Design your custom form with drag-and-drop components</p>
+      </div>
+      <Button variant="outline">
+        <a href="/forms">← Back to Forms</a>
+      </Button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <!-- Component Palette -->
+      <div class="lg:col-span-1">
+        <div class="sticky top-6">
+          <h3 class="text-lg font-semibold mb-4">Components</h3>
+          <ComponentPalette client:only="react" />
+        </div>
+      </div>
+
+      <!-- Form Builder -->
+      <div class="lg:col-span-3">
+        <div class="border rounded-lg">
+          <FormBuilder 
+            client:only="react"
+            mode="create"
+            onSave={(template) => {
+              // Handle form save
+              window.location.href = '/forms';
+            }}
+            onCancel={() => {
+              window.location.href = '/forms';
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* Ensure proper drag and drop styling */
+    .form-builder-container {
+      min-height: 600px;
+    }
+    
+    .component-palette {
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+  </style>
+</Layout>

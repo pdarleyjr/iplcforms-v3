@@ -1,0 +1,94 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { Button } from '@/components/ui/button';
+import { FormBuilder } from '@/components/form-builder/FormBuilder';
+import { ComponentPalette } from '@/components/form-builder/ComponentPalette';
+import { FormTemplateService } from '@/lib/services/form_template';
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect('/forms');
+}
+
+const { DB } = Astro.locals.runtime.env;
+const formTemplateService = new FormTemplateService(DB);
+
+let template;
+try {
+  template = await formTemplateService.getById(parseInt(id));
+  if (!template) {
+    return Astro.redirect('/forms');
+  }
+} catch (error) {
+  console.error('Error loading form template:', error);
+  return Astro.redirect('/forms');
+}
+---
+
+<Layout title={`Edit Form: ${template.name}`}>
+  <div class="space-y-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Edit Form</h1>
+        <p class="text-muted-foreground">
+          Editing: <span class="font-medium">{template.name}</span> (Version {template.version})
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <Button variant="outline">
+          <a href={`/forms/${id}/preview`}>Preview</a>
+        </Button>
+        <Button variant="outline">
+          <a href="/forms">← Back to Forms</a>
+        </Button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <!-- Component Palette -->
+      <div class="lg:col-span-1">
+        <div class="sticky top-6">
+          <h3 class="text-lg font-semibold mb-4">Components</h3>
+          <ComponentPalette client:only="react" />
+        </div>
+      </div>
+
+      <!-- Form Builder -->
+      <div class="lg:col-span-3">
+        <div class="border rounded-lg">
+          <FormBuilder 
+            client:only="react"
+            mode="edit"
+            templateId={template.id}
+            initialTemplate={template}
+            onSave={(updatedTemplate) => {
+              // Handle form save
+              window.location.href = `/forms/${template.id}/preview`;
+            }}
+            onCancel={() => {
+              window.location.href = '/forms';
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* Ensure proper drag and drop styling */
+    .form-builder-container {
+      min-height: 600px;
+    }
+    
+    .component-palette {
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+  </style>
+
+  <script define:vars={{ template }}>
+    // Make template data available to React components
+    window.__FORM_TEMPLATE__ = template;
+  </script>
+</Layout>

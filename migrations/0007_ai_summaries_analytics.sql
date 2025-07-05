@@ -140,18 +140,11 @@ CREATE INDEX idx_clinical_insights_type ON clinical_insights(insight_type);
 CREATE INDEX idx_clinical_insights_severity ON clinical_insights(severity_level);
 CREATE INDEX idx_clinical_insights_action_required ON clinical_insights(action_required);
 
--- Insert default AI model configurations
-INSERT INTO ai_model_configs (model_name, model_version, provider, system_prompt) VALUES 
+-- Insert default AI model configurations (no foreign key dependencies)
+INSERT INTO ai_model_configs (model_name, model_version, provider, system_prompt) VALUES
 ('claude-3-sonnet', '20240229', 'anthropic', 'You are a clinical AI assistant analyzing patient form submissions. Provide concise, professional clinical summaries focusing on key findings, risk indicators, and evidence-based recommendations.'),
 ('gpt-4-turbo', '2024-04-09', 'openai', 'Analyze this clinical form submission and provide a structured summary with key findings, risk assessment, and clinical recommendations.'),
 ('llama-3-70b', 'latest', 'cloudflare', 'Generate a clinical summary for this patient form submission, highlighting important findings and potential areas of concern.');
 
--- Insert sample analytics metrics
-INSERT INTO form_analytics (template_id, metric_type, metric_name, metric_value, metric_unit, date_range_start, date_range_end) VALUES 
-(1, 'usage', 'total_submissions', 150, 'count', '2024-01-01', '2024-01-31'),
-(1, 'completion', 'completion_rate', 0.85, 'percentage', '2024-01-01', '2024-01-31'),
-(1, 'performance', 'average_completion_time', 180, 'seconds', '2024-01-01', '2024-01-31');
-
--- Insert sample clinical insight
-INSERT INTO clinical_insights (patient_id, clinician_id, insight_type, insight_category, title, description, severity_level, action_required, supporting_data) VALUES 
-(1, 1, 'trend', 'depression', 'Improving Depression Scores', 'Patient shows consistent improvement in PHQ-9 scores over the last 3 assessments', 'low', false, '{"submissions": [1], "trend": "improving", "score_change": -5}');
+-- Sample analytics and insights data removed for production deployment
+-- INSERT statements would reference non-existent template and customer records

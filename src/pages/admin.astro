@@ -1,5 +1,5 @@
 ---
-import { BadgeDollarSign, CalendarSync, User } from 'lucide-react';
+import { BadgeDollarSign, CalendarSync, User, FileText } from 'lucide-react';
 import Layout from '@/layouts/Layout.astro';
 import { APIDocumentation } from '@/components/admin/api-documentation';
 import { Label } from '@/components/ui/label';
@@ -8,16 +8,19 @@ import { Input } from '@/components/ui/input';
 import { CustomerService } from '@/lib/services/customer';
 import { SubscriptionService } from '@/lib/services/subscription';
 import { CustomerSubscriptionService } from '@/lib/services/customer_subscription';
+import { FormTemplateService } from '@/lib/services/form_template';
 
 const { DB } = Astro.locals.runtime.env;
 
 const customerService = new CustomerService(DB);
 const subscriptionService = new SubscriptionService(DB);
 const customerSubscriptionService = new CustomerSubscriptionService(DB);
+const formTemplateService = new FormTemplateService(DB);
 
 const customers = await customerService.getAll();
 const subscriptions = await subscriptionService.getAll();
 const customerSubscriptions = await customerSubscriptionService.getAll();
+const formTemplates = await formTemplateService.getAll();
 
 const data = [
   {
@@ -31,6 +34,12 @@ const data = [
     value: subscriptions.length,
     icon: BadgeDollarSign,
     href: '/admin/subscriptions'
+  },
+  {
+    name: 'Forms',
+    value: formTemplates.length,
+    icon: FileText,
+    href: '/forms'
   },
   {
     name: 'Customer Subscriptions',

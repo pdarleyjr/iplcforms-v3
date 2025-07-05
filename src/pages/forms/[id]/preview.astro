@@ -1,0 +1,212 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { FormPreview } from '@/components/form-builder/FormPreview';
+import { FormTemplateService } from '@/lib/services/form_template';
+
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect('/forms');
+}
+
+const { DB } = Astro.locals.runtime.env;
+const formTemplateService = new FormTemplateService(DB);
+
+let template;
+try {
+  template = await formTemplateService.getById(parseInt(id));
+  if (!template) {
+    return Astro.redirect('/forms');
+  }
+} catch (error) {
+  console.error('Error loading form template:', error);
+  return Astro.redirect('/forms');
+}
+
+// Format dates
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+---
+
+<Layout title={`Preview: ${template.name}`}>
+  <div class="space-y-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Form Preview</h1>
+        <p class="text-muted-foreground">
+          Previewing: <span class="font-medium">{template.name}</span>
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <Button variant="outline">
+          <a href={`/forms/${id}/analytics`}>View Analytics</a>
+        </Button>
+        <Button>
+          <a href={`/forms/${id}/edit`}>Edit Form</a>
+        </Button>
+        <Button variant="outline">
+          <a href="/forms">← Back to Forms</a>
+        </Button>
+      </div>
+    </div>
+
+    <!-- Form Information -->
+    <Card>
+      <CardHeader>
+        <div class="flex items-center justify-between">
+          <div>
+            <CardTitle>{template.name}</CardTitle>
+            <CardDescription>{template.description}</CardDescription>
+          </div>
+          <div class="flex items-center gap-2">
+            <Badge variant={template.status === 'published' ? 'default' : 'secondary'}>
+              {template.status}
+            </Badge>
+            <Badge variant="outline">Version {template.version}</Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <strong>Created:</strong> {formatDate(template.created_at)}
+          </div>
+          <div>
+            <strong>Last Updated:</strong> {formatDate(template.updated_at)}
+          </div>
+          <div>
+            <strong>Type:</strong> {template.type}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Form Preview -->
+    <Card>
+      <CardHeader>
+        <CardTitle>Live Preview</CardTitle>
+        <CardDescription>
+          This is how your form will appear to users
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div class="bg-gray-50 p-6 rounded-lg">
+          <FormPreview 
+            client:only="react"
+            template={template}
+            showSubmitButton={true}
+            onSubmit={(formData) => {
+              // Handle preview submission
+              alert('This is a preview - form submission would be processed here');
+              console.log('Preview form data:', formData);
+            }}
+          />
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Form Actions -->
+    <Card>
+      <CardHeader>
+        <CardTitle>Form Actions</CardTitle>
+        <CardDescription>
+          Manage this form template
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div class="flex flex-wrap gap-4">
+          <Button>
+            <a href={`/forms/${id}/edit`}>Edit Form</a>
+          </Button>
+          <Button variant="outline">
+            <a href={`/forms/${id}/analytics`}>View Analytics</a>
+          </Button>
+          <Button variant="outline">
+            Share Form
+          </Button>
+          <Button variant="outline">
+            Export Data
+          </Button>
+          {template.status === 'draft' ? (
+            <Button>
+              Publish Form
+            </Button>
+          ) : (
+            <Button variant="secondary">
+              Unpublish Form
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+
+  <script define:vars={{ template }}>
+    // Make template data available to React components
+    window.__FORM_TEMPLATE__ = template;
+    
+    // Handle form actions
+    document.addEventListener('DOMContentLoaded', () => {
+      // Add event handlers for publish/unpublish actions
+      const publishBtn = document.querySelector('[data-action="publish"]');
+      const unpublishBtn = document.querySelector('[data-action="unpublish"]');
+      
+      if (publishBtn) {
+        publishBtn.addEventListener('click', async () => {
+          try {
+            const response = await fetch(`/api/form-templates/${template.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                ...template,
+                status: 'published'
+              })
+            });
+            
+            if (response.ok) {
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error('Error publishing form:', error);
+          }
+        });
+      }
+      
+      if (unpublishBtn) {
+        unpublishBtn.addEventListener('click', async () => {
+          try {
+            const response = await fetch(`/api/form-templates/${template.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                ...template,
+                status: 'draft'
+              })
+            });
+            
+            if (response.ok) {
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error('Error unpublishing form:', error);
+          }
+        });
+      }
+    });
+  </script>
+</Layout>

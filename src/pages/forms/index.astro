@@ -1,0 +1,69 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { FormTemplateService } from '@/lib/services/form_template';
+
+const { DB } = Astro.locals.runtime.env;
+const formTemplateService = new FormTemplateService(DB);
+
+const templates = await formTemplateService.getAll();
+---
+
+<Layout title="Form Builder">
+  <div class="space-y-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Form Builder</h1>
+        <p class="text-muted-foreground">Create and manage your custom forms</p>
+      </div>
+      <Button>
+        <a href="/forms/new">Create New Form</a>
+      </Button>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {templates.map((template) => (
+        <Card className="p-6">
+          <div class="space-y-4">
+            <div>
+              <h3 class="text-lg font-semibold">{template.name}</h3>
+              <p class="text-sm text-muted-foreground">{template.description}</p>
+            </div>
+            
+            <div class="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Version {template.version}</span>
+              <span class={`px-2 py-1 rounded-full text-xs ${
+                template.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {template.status}
+              </span>
+            </div>
+
+            <div class="flex gap-2">
+              <Button variant="outline" size="sm">
+                <a href={`/forms/${template.id}/preview`}>Preview</a>
+              </Button>
+              <Button variant="outline" size="sm">
+                <a href={`/forms/${template.id}/edit`}>Edit</a>
+              </Button>
+              <Button variant="outline" size="sm">
+                <a href={`/forms/${template.id}/analytics`}>Analytics</a>
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+
+    {templates.length === 0 && (
+      <div class="text-center py-12">
+        <h3 class="text-lg font-semibold text-muted-foreground">No forms yet</h3>
+        <p class="text-muted-foreground mt-2">Get started by creating your first form</p>
+        <Button className="mt-4">
+          <a href="/forms/new">Create Your First Form</a>
+        </Button>
+      </div>
+    )}
+  </div>
+</Layout>

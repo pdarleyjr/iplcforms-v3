@@ -68,13 +68,5 @@ CREATE INDEX idx_form_template_versions_created_by ON form_template_versions(cre
 CREATE INDEX idx_form_template_access_template ON form_template_access(template_id);
 CREATE INDEX idx_form_template_access_user ON form_template_access(user_id);
 
--- Insert sample clinical form templates
-INSERT INTO form_templates (name, description, category, form_config, metadata, created_by) VALUES
-('PHQ-9 Depression Assessment', 'Patient Health Questionnaire-9 for depression screening', 'screening',
- '{"fields":[{"id":"q1","type":"radio","label":"Little interest or pleasure in doing things","options":[{"value":0,"label":"Not at all"},{"value":1,"label":"Several days"},{"value":2,"label":"More than half the days"},{"value":3,"label":"Nearly every day"}],"required":true},{"id":"q2","type":"radio","label":"Feeling down, depressed, or hopeless","options":[{"value":0,"label":"Not at all"},{"value":1,"label":"Several days"},{"value":2,"label":"More than half the days"},{"value":3,"label":"Nearly every day"}],"required":true}],"scoring":{"type":"sum","ranges":[{"min":0,"max":4,"label":"Minimal depression"},{"min":5,"max":9,"label":"Mild depression"},{"min":10,"max":14,"label":"Moderate depression"},{"min":15,"max":19,"label":"Moderately severe depression"},{"min":20,"max":27,"label":"Severe depression"}]}}',
- '{"clinical_codes":["ICD-10:Z13.31"],"tags":["depression","screening","PHQ-9"],"estimated_time":5}',
- 1),
-('Initial Intake Assessment', 'Comprehensive patient intake form', 'intake',
- '{"fields":[{"id":"presenting_concern","type":"textarea","label":"Primary presenting concern","required":true,"maxLength":500},{"id":"symptom_duration","type":"select","label":"Duration of symptoms","options":[{"value":"days","label":"Days"},{"value":"weeks","label":"Weeks"},{"value":"months","label":"Months"},{"value":"years","label":"Years"}],"required":true},{"id":"previous_treatment","type":"checkbox","label":"Previous mental health treatment","required":false}]}',
- '{"tags":["intake","assessment"],"estimated_time":15}',
- 1);
+-- Sample data removed for production deployment
+-- Form templates will be created through the application interface
