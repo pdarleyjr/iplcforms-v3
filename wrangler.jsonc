@@ -1,7 +1,8 @@
 {
   "name": "iplcforms-v3",
-  "main": "./dist/wrapper.js",
+  "main": "./dist/_worker.js",
   "assets": {
+    "binding": "ASSETS",
     "directory": "./dist"
   },
   "compatibility_date": "2025-04-01",
