@@ -1,7 +1,9 @@
 import { CustomerService } from "@/lib/services/customer";
 import { validateApiTokenResponse } from "@/lib/api";
+import { CreateCustomerRequest, validateRequest, ApiResponseSchema } from "@/lib/schemas/api-validation";
+import type { APIRoute } from "astro";
 
-export async function GET({ locals, request }) {
+export const GET: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -23,7 +25,7 @@ export async function GET({ locals, request }) {
   }
 }
 
-export async function POST({ locals, request }) {
+export const POST: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -32,20 +34,53 @@ export async function POST({ locals, request }) {
   );
   if (invalidTokenResponse) return invalidTokenResponse;
 
-  const customerService = new CustomerService(DB);
+  try {
+    // Parse and validate request body with Zod
+    const body = await request.json();
+    const validation = validateRequest(CreateCustomerRequest, body);
+    
+    if (!validation.success) {
+      return Response.json(
+        {
+          success: false,
+          message: "Validation failed",
+          errors: validation.errors,
+        },
+        { status: 400 }
+      );
+    }
 
-  const body = await request.json();
-  const success = await customerService.create(body);
+    const customerService = new CustomerService(DB);
+    const success = await customerService.create(validation.data);
 
-  if (success) {
+    if (success) {
+      return Response.json(
+        {
+          success: true,
+          message: "Customer created successfully",
+          data: { customer_id: success }
+        },
+        { status: 201 },
+      );
+    } else {
+      return Response.json(
+        {
+          success: false,
+          message: "Failed to create customer",
+          errors: ["Database operation failed"]
+        },
+        { status: 500 },
+      );
+    }
+  } catch (error) {
+    console.error("Customer creation error:", error);
     return Response.json(
-      { message: "Customer created successfully", success: true },
-      { status: 201 },
-    );
-  } else {
-    return Response.json(
-      { message: "Couldn't create customer", success: false },
-      { status: 500 },
+      {
+        success: false,
+        message: "Failed to create customer",
+        errors: [error instanceof Error ? error.message : "Unknown error"],
+      },
+      { status: 500 }
     );
   }
-}
+};

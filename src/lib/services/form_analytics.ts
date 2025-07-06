@@ -1,3 +1,6 @@
+import type { D1Database } from '@cloudflare/workers-types';
+import { getD1Manager, type D1ConnectionManager } from './d1-connection-manager';
+
 export interface FormAnalytics {
   templateId: number;
   totalSubmissions: number;
@@ -125,82 +128,135 @@ export const ANALYTICS_QUERIES = {
     AND json_extract(metadata, '$.validation_errors') IS NOT NULL
     GROUP BY validation_errors
   `,
+  TIME_SERIES_ANALYTICS: `
+    SELECT 
+      DATE(submitted_at) as date,
+      COUNT(*) as submissions,
+      COUNT(CASE WHEN status = 'completed' THEN 1 END) as completions,
+      AVG(score) as avg_score,
+      AVG(completion_time_seconds) as avg_time
+    FROM form_submissions 
+    WHERE template_id = ?
+    AND submitted_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY DATE(submitted_at)
+    ORDER BY date
+  `,
+  RESPONSE_DISTRIBUTION: `
+    SELECT 
+      status,
+      COUNT(*) as count,
+      AVG(score) as avg_score
+    FROM form_submissions 
+    WHERE template_id = ?
+    GROUP BY status
+  `,
+  FIELD_VALIDATION_ERRORS: `
+    SELECT COUNT(*) as error_count
+    FROM form_submissions
+    WHERE template_id = ?
+    AND json_extract(metadata, '$.validation_errors.' || ?) IS NOT NULL
+  `
 };
 
 export class FormAnalyticsService {
-  private DB: D1Database;
+  private d1Manager: D1ConnectionManager;
 
   constructor(DB: D1Database) {
-    this.DB = DB;
+    this.d1Manager = getD1Manager(DB);
   }
 
   async getFormAnalytics(templateId: number): Promise<FormAnalytics> {
-    // Get basic submission statistics
-    const statsResponse = await this.DB.prepare(ANALYTICS_QUERIES.TEMPLATE_SUBMISSIONS)
-      .bind(templateId)
-      .first();
+    const cacheKey = `form_analytics:${templateId}`;
+    
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        // Get basic submission statistics
+        const statsStmt = this.d1Manager.prepare(ANALYTICS_QUERIES.TEMPLATE_SUBMISSIONS);
+        const statsResponse = await statsStmt.bind(templateId).first();
 
-    const stats = statsResponse || {
-      total_submissions: 0,
-      avg_completion_time: 0,
-      completion_rate: 0,
-      avg_score: null
-    };
+        const stats = statsResponse || {
+          total_submissions: 0,
+          avg_completion_time: 0,
+          completion_rate: 0,
+          avg_score: null
+        };
 
-    // Get submission trends
-    const trendsResponse = await this.DB.prepare(ANALYTICS_QUERIES.SUBMISSION_TRENDS)
-      .bind(templateId)
-      .all();
+        // Get submission trends
+        const trendsStmt = this.d1Manager.prepare(ANALYTICS_QUERIES.SUBMISSION_TRENDS);
+        const trendsResponse = await trendsStmt.bind(templateId).all();
 
-    const submissionTrends = trendsResponse.success 
-      ? trendsResponse.results.map((row: any) => ({
-          date: row.submission_date,
-          count: row.submission_count
-        }))
-      : [];
+        const submissionTrends = trendsResponse.success 
+          ? (trendsResponse.results as unknown as Array<{ submission_date: string; submission_count: number }>).map(row => ({
+              date: row.submission_date,
+              count: row.submission_count
+            }))
+          : [];
 
-    // Get template structure for field analysis
-    const template = await this.DB.prepare(`
-      SELECT components FROM form_templates WHERE id = ?
-    `).bind(templateId).first();
+        // Get template structure for field analysis
+        const templateStmt = this.d1Manager.prepare(`
+          SELECT components FROM form_templates WHERE id = ?
+        `);
+        const template = await templateStmt.bind(templateId).first();
 
-    let fieldAnalytics: any[] = [];
-    if (template && template.components) {
-      const components = typeof template.components === 'string' 
-        ? JSON.parse(template.components) 
-        : template.components;
-      
-      fieldAnalytics = await this.analyzeFields(templateId, components);
-    }
+        let fieldAnalytics: any[] = [];
+        if (template && template.components) {
+          const components = this.d1Manager.parseJSON(template.components as string);
+          fieldAnalytics = await this.analyzeFields(templateId, components);
+        }
 
-    // Calculate response distribution
-    const responseDistribution = await this.getResponseDistribution(templateId);
+        // Calculate response distribution
+        const responseDistribution = await this.getResponseDistribution(templateId);
 
-    return {
-      templateId,
-      totalSubmissions: Number(stats.total_submissions) || 0,
-      completionRate: Number(stats.completion_rate) || 0,
-      averageCompletionTime: Number(stats.avg_completion_time) || 0,
-      abandonmentRate: 1 - (Number(stats.completion_rate) || 0),
-      averageScore: stats.avg_score ? Number(stats.avg_score) : undefined,
-      responseDistribution,
-      submissionTrends,
-      fieldAnalytics,
-    };
+        return {
+          templateId,
+          totalSubmissions: Number(stats.total_submissions) || 0,
+          completionRate: Number(stats.completion_rate) || 0,
+          averageCompletionTime: Number(stats.avg_completion_time) || 0,
+          abandonmentRate: 1 - (Number(stats.completion_rate) || 0),
+          averageScore: stats.avg_score ? Number(stats.avg_score) : undefined,
+          responseDistribution,
+          submissionTrends,
+          fieldAnalytics,
+        };
+      },
+      600 // 10-minute cache for analytics data
+    );
   }
 
   private async analyzeFields(templateId: number, components: any[]): Promise<any[]> {
     const fieldAnalytics: any[] = [];
+    const fieldAnalysisPromises = [];
 
     for (const component of components) {
       if (component.type && component.id) {
-        const fieldResponse = await this.DB.prepare(ANALYTICS_QUERIES.FIELD_ANALYTICS)
+        fieldAnalysisPromises.push(this.analyzeField(templateId, component));
+      }
+    }
+
+    const results = await Promise.all(fieldAnalysisPromises);
+    return results.filter(result => result !== null);
+  }
+
+  private async analyzeField(templateId: number, component: any): Promise<any | null> {
+    const cacheKey = `field_analytics:${templateId}:${component.id}`;
+    
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        const fieldStmt = this.d1Manager.prepare(ANALYTICS_QUERIES.FIELD_ANALYTICS);
+        const fieldResponse = await fieldStmt
           .bind(component.id, component.id, templateId, component.id)
           .all();
 
         if (fieldResponse.success && fieldResponse.results.length > 0) {
-          const responses = fieldResponse.results;
-          const responseCount = responses.reduce((sum: number, r: any) => sum + r.response_count, 0);
+          const responses = fieldResponse.results as unknown as Array<{
+            field_value: any;
+            time_spent: number;
+            response_count: number;
+          }>;
+          
+          const responseCount = responses.reduce((sum, r) => sum + r.response_count, 0);
           
           // Calculate field-specific metrics
           let averageValue: number | undefined;
@@ -208,8 +264,8 @@ export class FormAnalyticsService {
 
           if (component.type === 'number' || component.type === 'slider') {
             const values = responses
-              .filter((r: any) => r.field_value !== null && !isNaN(Number(r.field_value)))
-              .map((r: any) => ({ value: Number(r.field_value), count: r.response_count }));
+              .filter(r => r.field_value !== null && !isNaN(Number(r.field_value)))
+              .map(r => ({ value: Number(r.field_value), count: r.response_count }));
             
             if (values.length > 0) {
               const totalWeightedSum = values.reduce((sum, v) => sum + (v.value * v.count), 0);
@@ -218,7 +274,7 @@ export class FormAnalyticsService {
           }
 
           // Find most common value
-          const sortedResponses = responses.sort((a: any, b: any) => b.response_count - a.response_count);
+          const sortedResponses = responses.sort((a, b) => b.response_count - a.response_count);
           if (sortedResponses.length > 0) {
             mostCommonValue = String(sortedResponses[0].field_value);
           }
@@ -226,144 +282,161 @@ export class FormAnalyticsService {
           // Get validation errors for this field
           const validationErrors = await this.getFieldValidationErrors(templateId, component.id);
 
-          fieldAnalytics.push({
+          return {
             fieldId: component.id,
             fieldType: component.type,
             responseCount,
             averageValue,
             mostCommonValue,
             validationErrors,
-          });
+          };
         }
-      }
-    }
-
-    return fieldAnalytics;
+        return null;
+      },
+      300 // 5-minute cache for field analytics
+    );
   }
 
   private async getFieldValidationErrors(templateId: number, fieldId: string): Promise<number> {
-    const response = await this.DB.prepare(`
-      SELECT COUNT(*) as error_count
-      FROM form_submissions
-      WHERE template_id = ?
-      AND json_extract(metadata, '$.validation_errors.' || ?) IS NOT NULL
-    `).bind(templateId, fieldId).first();
+    const stmt = this.d1Manager.prepare(ANALYTICS_QUERIES.FIELD_VALIDATION_ERRORS);
+    const response = await stmt.bind(templateId, fieldId).first();
 
     return (response && typeof response === 'object' && 'error_count' in response && typeof response.error_count === 'number')
       ? response.error_count : 0;
   }
 
   private async getResponseDistribution(templateId: number): Promise<Record<string, any>> {
-    const response = await this.DB.prepare(`
-      SELECT 
-        status,
-        COUNT(*) as count,
-        AVG(score) as avg_score
-      FROM form_submissions 
-      WHERE template_id = ?
-      GROUP BY status
-    `).bind(templateId).all();
+    const stmt = this.d1Manager.prepare(ANALYTICS_QUERIES.RESPONSE_DISTRIBUTION);
+    const response = await stmt.bind(templateId).all();
 
     const distribution: Record<string, any> = {};
     
     if (response.success) {
-      response.results.forEach((row: any) => {
-        distribution[row.status] = {
-          count: row.count,
-          averageScore: row.avg_score
-        };
-      });
+      (response.results as unknown as Array<{ status: string; count: number; avg_score: number | null }>)
+        .forEach(row => {
+          distribution[row.status] = {
+            count: row.count,
+            averageScore: row.avg_score
+          };
+        });
     }
 
     return distribution;
   }
 
   async getSubmissionAnalytics(submissionId: number): Promise<SubmissionAnalytics | null> {
-    const submission = await this.DB.prepare(`
-      SELECT * FROM form_submissions WHERE id = ?
-    `).bind(submissionId).first();
+    const cacheKey = `submission_analytics:${submissionId}`;
+    
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT * FROM form_submissions WHERE id = ?
+        `);
+        const submission = await stmt.bind(submissionId).first();
 
-    if (!submission || typeof submission !== 'object') {
-      return null;
-    }
+        if (!submission || typeof submission !== 'object') {
+          return null;
+        }
 
-    // Parse responses and metadata with proper type checking
-    const responses = (submission as any).responses && typeof (submission as any).responses === 'string'
-      ? JSON.parse((submission as any).responses) : {};
-    const metadata = (submission as any).metadata && typeof (submission as any).metadata === 'string'
-      ? JSON.parse((submission as any).metadata) : {};
+        // Parse responses and metadata
+        const responses = this.d1Manager.parseJSON((submission as any).responses || '{}');
+        const metadata = this.d1Manager.parseJSON((submission as any).metadata || '{}');
 
-    // Analyze field responses
-    const fieldResponses = Object.keys(responses).map(fieldId => {
-      const fieldData = responses[fieldId];
-      return {
-        fieldId: fieldId.replace('field_', ''),
-        value: fieldData.value,
-        timeSpent: fieldData.time_spent || 0,
-        validationErrors: fieldData.validation_errors || 0,
-      };
-    });
+        // Analyze field responses
+        const fieldResponses = Object.keys(responses).map(fieldId => {
+          const fieldData = responses[fieldId];
+          return {
+            fieldId: fieldId.replace('field_', ''),
+            value: fieldData.value,
+            timeSpent: fieldData.time_spent || 0,
+            validationErrors: fieldData.validation_errors || 0,
+          };
+        });
 
-    // Get completion time with proper type checking
-    const completionTime = 'completion_time_seconds' in submission && typeof (submission as any).completion_time_seconds === 'number'
-      ? (submission as any).completion_time_seconds : 0;
+        // Get completion time and score
+        const completionTime = (submission as any).completion_time_seconds || 0;
+        const score = (submission as any).score || undefined;
 
-    // Get score with proper type checking
-    const score = 'score' in submission && typeof (submission as any).score === 'number'
-      ? (submission as any).score : undefined;
+        // Calculate user behavior metrics
+        const userBehavior = {
+          totalTimeSpent: completionTime,
+          fieldsVisited: fieldResponses.length,
+          backtrackCount: metadata.backtrack_count || 0,
+          pauseCount: metadata.pause_count || 0,
+        };
 
-    // Calculate user behavior metrics
-    const userBehavior = {
-      totalTimeSpent: completionTime,
-      fieldsVisited: fieldResponses.length,
-      backtrackCount: metadata.backtrack_count || 0,
-      pauseCount: metadata.pause_count || 0,
-    };
-
-    return {
-      submissionId,
-      completionTime,
-      score,
-      fieldResponses,
-      userBehavior,
-    };
+        return {
+          submissionId,
+          completionTime,
+          score,
+          fieldResponses,
+          userBehavior,
+        };
+      },
+      300 // 5-minute cache for submission analytics
+    );
   }
 
   async getClinicalInsights(): Promise<ClinicalInsights> {
-    // Get patient outcomes
-    const patientOutcomesResponse = await this.DB.prepare(ANALYTICS_QUERIES.PATIENT_OUTCOMES).all();
-    const patientOutcomes = patientOutcomesResponse.success 
-      ? patientOutcomesResponse.results.map((row: any) => {
-          const trend = this.calculateTrend(row.first_score, row.latest_score);
-          return {
-            patientId: row.patient_id,
-            submissionCount: row.submission_count,
-            averageScore: Number(row.avg_score),
-            trend,
-            lastSubmission: row.last_submission,
-          };
-        })
-      : [];
+    const cacheKey = 'clinical_insights:all';
+    
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        // Get patient outcomes
+        const patientStmt = this.d1Manager.prepare(ANALYTICS_QUERIES.PATIENT_OUTCOMES);
+        const patientOutcomesResponse = await patientStmt.all();
+        
+        const patientOutcomes = patientOutcomesResponse.success 
+          ? (patientOutcomesResponse.results as unknown as Array<{
+              patient_id: number;
+              submission_count: number;
+              avg_score: number;
+              last_submission: string;
+              first_score: number;
+              latest_score: number;
+            }>).map(row => {
+              const trend = this.calculateTrend(row.first_score, row.latest_score);
+              return {
+                patientId: row.patient_id,
+                submissionCount: row.submission_count,
+                averageScore: Number(row.avg_score),
+                trend,
+                lastSubmission: row.last_submission,
+              };
+            })
+          : [];
 
-    // Get clinician performance
-    const clinicianPerformanceResponse = await this.DB.prepare(ANALYTICS_QUERIES.CLINICIAN_PERFORMANCE).all();
-    const clinicianPerformance = clinicianPerformanceResponse.success
-      ? clinicianPerformanceResponse.results.map((row: any) => ({
-          clinicianId: row.clinician_id,
-          formsAdministered: row.forms_administered || 0,
-          averagePatientScore: Number(row.avg_patient_score) || 0,
-          completionRate: Number(row.completion_rate) || 0,
-        }))
-      : [];
+        // Get clinician performance
+        const clinicianStmt = this.d1Manager.prepare(ANALYTICS_QUERIES.CLINICIAN_PERFORMANCE);
+        const clinicianPerformanceResponse = await clinicianStmt.all();
+        
+        const clinicianPerformance = clinicianPerformanceResponse.success
+          ? (clinicianPerformanceResponse.results as unknown as Array<{
+              clinician_id: number;
+              forms_administered: number;
+              avg_patient_score: number;
+              completion_rate: number;
+            }>).map(row => ({
+              clinicianId: row.clinician_id,
+              formsAdministered: row.forms_administered || 0,
+              averagePatientScore: Number(row.avg_patient_score) || 0,
+              completionRate: Number(row.completion_rate) || 0,
+            }))
+          : [];
 
-    // Get treatment effectiveness (placeholder - would need treatment data)
-    const treatmentEffectiveness: any[] = [];
+        // Get treatment effectiveness (placeholder - would need treatment data)
+        const treatmentEffectiveness: any[] = [];
 
-    return {
-      patientOutcomes,
-      clinicianPerformance,
-      treatmentEffectiveness,
-    };
+        return {
+          patientOutcomes,
+          clinicianPerformance,
+          treatmentEffectiveness,
+        };
+      },
+      1800 // 30-minute cache for clinical insights
+    );
   }
 
   private calculateTrend(firstScore: number, latestScore: number): 'improving' | 'stable' | 'declining' {
@@ -385,28 +458,44 @@ export class FormAnalyticsService {
     averageScore: number;
     averageCompletionTime: number;
   }>> {
-    const comparisons: any[] = [];
+    const cacheKey = `form_comparison:${templateIds.sort().join('_')}`;
+    
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        const comparisons: any[] = [];
+        const comparisonPromises = [];
 
-    for (const templateId of templateIds) {
-      const template = await this.DB.prepare(`
-        SELECT id, name FROM form_templates WHERE id = ?
-      `).bind(templateId).first();
+        for (const templateId of templateIds) {
+          comparisonPromises.push(this.getTemplateComparison(templateId));
+        }
 
-      if (template) {
-        const analytics = await this.getFormAnalytics(templateId);
-        
-        comparisons.push({
-          templateId,
-          templateName: template.name,
-          totalSubmissions: analytics.totalSubmissions,
-          completionRate: analytics.completionRate,
-          averageScore: analytics.averageScore || 0,
-          averageCompletionTime: analytics.averageCompletionTime,
-        });
-      }
+        const results = await Promise.all(comparisonPromises);
+        return results.filter(result => result !== null);
+      },
+      600 // 10-minute cache for comparison data
+    );
+  }
+
+  private async getTemplateComparison(templateId: number): Promise<any | null> {
+    const templateStmt = this.d1Manager.prepare(`
+      SELECT id, name FROM form_templates WHERE id = ?
+    `);
+    const template = await templateStmt.bind(templateId).first();
+
+    if (template) {
+      const analytics = await this.getFormAnalytics(templateId);
+      
+      return {
+        templateId,
+        templateName: template.name,
+        totalSubmissions: analytics.totalSubmissions,
+        completionRate: analytics.completionRate,
+        averageScore: analytics.averageScore || 0,
+        averageCompletionTime: analytics.averageCompletionTime,
+      };
     }
-
-    return comparisons;
+    return null;
   }
 
   async getTimeSeriesAnalytics(templateId: number, days: number = 30): Promise<Array<{
@@ -416,31 +505,34 @@ export class FormAnalyticsService {
     averageScore: number;
     averageTime: number;
   }>> {
-    const response = await this.DB.prepare(`
-      SELECT 
-        DATE(submitted_at) as date,
-        COUNT(*) as submissions,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completions,
-        AVG(score) as avg_score,
-        AVG(completion_time_seconds) as avg_time
-      FROM form_submissions 
-      WHERE template_id = ?
-      AND submitted_at >= datetime('now', '-' || ? || ' days')
-      GROUP BY DATE(submitted_at)
-      ORDER BY date
-    `).bind(templateId, days).all();
+    const cacheKey = `time_series:${templateId}:${days}`;
+    
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        const stmt = this.d1Manager.prepare(ANALYTICS_QUERIES.TIME_SERIES_ANALYTICS);
+        const response = await stmt.bind(templateId, days).all();
 
-    if (response.success) {
-      return response.results.map((row: any) => ({
-        date: row.date,
-        submissions: row.submissions || 0,
-        completions: row.completions || 0,
-        averageScore: Number(row.avg_score) || 0,
-        averageTime: Number(row.avg_time) || 0,
-      }));
-    }
+        if (response.success) {
+          return (response.results as unknown as Array<{
+            date: string;
+            submissions: number;
+            completions: number;
+            avg_score: number;
+            avg_time: number;
+          }>).map(row => ({
+            date: row.date,
+            submissions: row.submissions || 0,
+            completions: row.completions || 0,
+            averageScore: Number(row.avg_score) || 0,
+            averageTime: Number(row.avg_time) || 0,
+          }));
+        }
 
-    return [];
+        return [];
+      },
+      300 // 5-minute cache for time series data
+    );
   }
 
   async exportAnalyticsReport(templateId: number, format: 'json' | 'csv' = 'json'): Promise<string> {
@@ -485,5 +577,31 @@ export class FormAnalyticsService {
     });
 
     return csv;
+  }
+
+  // Cache invalidation methods
+
+  clearFormAnalyticsCaches(templateId?: number) {
+    const patterns = ['form_analytics:', 'field_analytics:', 'time_series:', 'form_comparison:'];
+    
+    if (templateId) {
+      patterns.push(`form_analytics:${templateId}`);
+      patterns.push(`field_analytics:${templateId}:`);
+      patterns.push(`time_series:${templateId}:`);
+    }
+    
+    this.d1Manager.clearSpecificCaches(patterns);
+  }
+
+  clearClinicalInsightsCaches() {
+    this.d1Manager.clearSpecificCaches(['clinical_insights:']);
+  }
+
+  clearSubmissionAnalyticsCaches(submissionId?: number) {
+    if (submissionId) {
+      this.d1Manager.clearSpecificCaches([`submission_analytics:${submissionId}`]);
+    } else {
+      this.d1Manager.clearSpecificCaches(['submission_analytics:']);
+    }
   }
 }

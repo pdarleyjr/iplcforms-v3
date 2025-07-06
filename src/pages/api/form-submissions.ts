@@ -1,7 +1,14 @@
+import type { APIRoute } from "astro";
 import { FormSubmissionService } from "@/lib/services/form_submission";
 import { validateApiTokenResponse } from "@/lib/api";
+import {
+  FormSubmissionFiltersSchema,
+  CreateFormSubmissionRequest,
+  validateRequest,
+  validateQueryParams
+} from "@/lib/schemas/api-validation";
 
-export async function GET({ locals, request }: any) {
+export const GET: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
   
   // Validate API token
@@ -11,44 +18,33 @@ export async function GET({ locals, request }: any) {
   const formSubmissionService = new FormSubmissionService(DB);
   
   try {
-    // Parse URL query parameters for filtering
+    // Validate query parameters using Zod schema
     const url = new URL(request.url);
-    const filters: any = {};
+    const filtersValidation = validateQueryParams(url, FormSubmissionFiltersSchema);
     
-    if (url.searchParams.get('template_id')) {
-      filters.template_id = parseInt(url.searchParams.get('template_id')!, 10);
-    }
-    if (url.searchParams.get('patient_id')) {
-      filters.patient_id = parseInt(url.searchParams.get('patient_id')!, 10);
-    }
-    if (url.searchParams.get('status')) {
-      filters.status = url.searchParams.get('status');
-    }
-    if (url.searchParams.get('date_from')) {
-      filters.date_from = url.searchParams.get('date_from');
-    }
-    if (url.searchParams.get('date_to')) {
-      filters.date_to = url.searchParams.get('date_to');
-    }
-    if (url.searchParams.get('page')) {
-      filters.page = parseInt(url.searchParams.get('page')!, 10);
-    }
-    if (url.searchParams.get('per_page')) {
-      filters.per_page = parseInt(url.searchParams.get('per_page')!, 10);
+    if (!filtersValidation.success) {
+      return Response.json(
+        {
+          message: "Invalid query parameters",
+          errors: filtersValidation.errors
+        },
+        { status: 400 }
+      );
     }
 
+    const filters = filtersValidation.data;
     const submissions = await formSubmissionService.getAll(filters);
     return Response.json({ submissions });
   } catch (error) {
     console.error('Error loading form submissions:', error);
     return Response.json(
-      { message: "Couldn't load form submissions" }, 
+      { message: "Couldn't load form submissions" },
       { status: 500 }
     );
   }
-}
+};
 
-export async function POST({ locals, request }: any) {
+export const POST: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
   
   // Validate API token
@@ -58,15 +54,31 @@ export async function POST({ locals, request }: any) {
   const formSubmissionService = new FormSubmissionService(DB);
   
   try {
-    const submissionData = await request.json();
+    const body = await request.json();
     
-    // Validate required fields
-    if (!submissionData.template_id || !submissionData.responses) {
+    // Validate request body using Zod schema
+    const validation = validateRequest(CreateFormSubmissionRequest, body);
+    
+    if (!validation.success) {
       return Response.json(
-        { message: "Missing required fields: template_id and responses are required" },
+        {
+          message: "Invalid request data",
+          errors: validation.errors
+        },
         { status: 400 }
       );
     }
+
+    // Transform validated data to match service interface
+    const submissionData = {
+      template_id: validation.data.template_id,
+      patient_id: validation.data.user_id ? parseInt(validation.data.user_id) : undefined,
+      responses: validation.data.form_data,
+      status: validation.data.status,
+      completion_time_seconds: undefined,
+      submitted_by: validation.data.user_id ? parseInt(validation.data.user_id) : undefined,
+      metadata: validation.data.metadata
+    };
 
     const result = await formSubmissionService.create(submissionData);
     
@@ -89,4 +101,4 @@ export async function POST({ locals, request }: any) {
       { status: 500 }
     );
   }
-}
+};

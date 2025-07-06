@@ -19,9 +19,47 @@ export default defineConfig({
       path: "src/worker.ts",
       namedExports: ["CustomerWorkflow"]
     },
+    // Enhanced Cloudflare-specific optimizations
+    routes: {
+      extend: {
+        include: [{ pattern: "/api/*" }, { pattern: "/admin/*" }, { pattern: "/forms/*" }],
+        exclude: [{ pattern: "/assets/*" }, { pattern: "/_astro/*" }]
+      }
+    }
   }),
-  integrations: [react(), tailwind({ applyBaseStyles: true })],
+  integrations: [
+    react({
+      include: ["**/react/*"]
+    }),
+    tailwind({
+      applyBaseStyles: true
+    })
+  ],
   output: "server",
+  // Enhanced SSR Performance Configuration
+  server: {
+    port: 4321,
+    host: true
+  },
+  // Build optimizations for production
+  build: {
+    inlineStylesheets: "auto",
+    split: true,
+    excludeMiddleware: false,
+    assets: "_astro"
+  },
+  // Enhanced prefetch configuration
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: "viewport"
+  },
+  // Advanced caching strategy
+  experimental: {
+    contentCollectionCache: true,
+    optimizeHoistedScript: true,
+    clientPrerender: true,
+    globalRoutePriority: true
+  },
   vite: {
     resolve: {
       // Use react-dom/server.edge instead of react-dom/server.browser for React 19.
@@ -30,5 +68,40 @@ export default defineConfig({
         "react-dom/server": "react-dom/server.edge",
       },
     },
+    // Enhanced development server optimizations
+    optimizeDeps: {
+      include: ["react", "react-dom", "lucide-react", "@tanstack/react-table"],
+      exclude: ["@astrojs/cloudflare"]
+    },
+    // Build performance optimizations
+    build: {
+      target: "esnext",
+      minify: "esbuild",
+      sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'ui-vendor': ['lucide-react', '@radix-ui/react-slot'],
+            'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
+            'table-vendor': ['@tanstack/react-table']
+          }
+        }
+      }
+    },
+    // Enhanced SSR optimization
+    ssr: {
+      external: ["@astrojs/cloudflare"],
+      noExternal: ["react-hook-form", "lucide-react"]
+    }
   },
+  // Image optimization
+  image: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "imagedelivery.net"
+      }
+    ]
+  }
 });

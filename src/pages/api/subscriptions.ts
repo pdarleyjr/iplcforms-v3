@@ -1,7 +1,9 @@
+import type { APIRoute } from "astro";
 import { validateApiTokenResponse } from "@/lib/api";
 import { SubscriptionService } from "@/lib/services/subscription";
+import { validateRequest, CreateSubscriptionRequest } from "@/lib/schemas/api-validation";
 
-export async function GET({ locals, params, request }) {
+export const GET: APIRoute = async ({ locals, params, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -23,7 +25,7 @@ export async function GET({ locals, params, request }) {
   }
 }
 
-export async function POST({ locals, request }) {
+export const POST: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -36,7 +38,21 @@ export async function POST({ locals, request }) {
 
   try {
     const body = await request.json();
-    await subscriptionService.create(body);
+    
+    // Validate request body using Zod schema
+    const validation = validateRequest(CreateSubscriptionRequest, body);
+    
+    if (!validation.success) {
+      return Response.json(
+        {
+          message: "Invalid request data",
+          errors: validation.errors
+        },
+        { status: 400 }
+      );
+    }
+
+    await subscriptionService.create(validation.data);
     return Response.json(
       {
         message: "Subscription created successfully",
@@ -47,7 +63,7 @@ export async function POST({ locals, request }) {
   } catch (error) {
     return Response.json(
       {
-        message: error.message || "Failed to create subscription",
+        message: error instanceof Error ? error.message : "Failed to create subscription",
         success: false,
       },
       { status: 500 },

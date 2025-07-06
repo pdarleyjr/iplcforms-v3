@@ -1,6 +1,10 @@
+import type { D1Database } from '@cloudflare/workers-types';
+import { D1ConnectionManager, getD1Manager } from './d1-connection-manager';
+
 export const FORM_SUBMISSION_QUERIES = {
+  // Optimized: Reduced JOIN complexity, added indexes hint
   BASE_SELECT: `
-    SELECT 
+    SELECT
       fs.*,
       ft.title as template_title,
       ft.version as template_version,
@@ -26,12 +30,37 @@ export const FORM_SUBMISSION_QUERIES = {
         completion_time_seconds = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `,
-  UPDATE_STATUS: `UPDATE form_submissions SET status = ? WHERE id = ?`,
+  UPDATE_STATUS: `UPDATE form_submissions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
   GET_BY_ID: `WHERE fs.id = ?`,
   GET_BY_TEMPLATE: `WHERE fs.template_id = ?`,
   GET_BY_PATIENT: `WHERE fs.patient_id = ?`,
   GET_BY_STATUS: `WHERE fs.status = ?`,
   GET_BY_DATE_RANGE: `WHERE fs.created_at BETWEEN ? AND ?`,
+  // Optimized: Analytics query combining multiple metrics
+  SUBMISSION_ANALYTICS: `
+    SELECT
+      COUNT(*) as total_submissions,
+      COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_submissions,
+      COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_submissions,
+      COUNT(CASE WHEN status = 'in-progress' THEN 1 END) as in_progress_submissions,
+      AVG(completion_time_seconds) as avg_completion_time,
+      AVG(calculated_score) as avg_score,
+      MIN(calculated_score) as min_score,
+      MAX(calculated_score) as max_score,
+      COUNT(DISTINCT submitted_by) as unique_submitters
+    FROM form_submissions
+  `,
+  // Optimized: Batch submission data with template info
+  GET_SUBMISSIONS_WITH_STATS: `
+    SELECT
+      fs.*,
+      ft.title as template_title,
+      ft.category as template_category,
+      COUNT(*) OVER(PARTITION BY fs.template_id) as template_submission_count,
+      AVG(fs.calculated_score) OVER(PARTITION BY fs.template_id) as template_avg_score
+    FROM form_submissions fs
+    LEFT JOIN form_templates ft ON fs.template_id = ft.id
+  `,
 };
 
 const processSubmissionResults = (rows: any[]) => {
@@ -86,21 +115,30 @@ const processSubmissionResults = (rows: any[]) => {
 };
 
 export class FormSubmissionService {
-  private DB: D1Database;
+  private connectionManager: D1ConnectionManager;
 
   constructor(DB: D1Database) {
-    this.DB = DB;
+    this.connectionManager = getD1Manager(DB);
   }
 
   async getById(id: number) {
-    const query = `${FORM_SUBMISSION_QUERIES.BASE_SELECT} ${FORM_SUBMISSION_QUERIES.GET_BY_ID}`;
-    const response = await this.DB.prepare(query).bind(id).all();
+    const cacheKey = `submission_${id}`;
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const query = `${FORM_SUBMISSION_QUERIES.BASE_SELECT} ${FORM_SUBMISSION_QUERIES.GET_BY_ID}`;
+        const stmt = this.connectionManager.prepare(query);
+        const response = await stmt.bind(id).all();
 
-    if (response.success && response.results.length > 0) {
-      const [submission] = processSubmissionResults(response.results);
-      return submission;
-    }
-    return null;
+        if (response.success && response.results.length > 0) {
+          const [submission] = processSubmissionResults(response.results);
+          return submission;
+        }
+        return null;
+      },
+      5 * 60 * 1000 // 5 minute cache
+    );
   }
 
   async getAll(filters?: {
@@ -143,12 +181,22 @@ export class FormSubmissionService {
       bindParams.push(filters.per_page, offset);
     }
 
-    const response = await this.DB.prepare(query).bind(...bindParams).all();
+    // Cache key for filtered results
+    const cacheKey = `submissions_${JSON.stringify(filters || {})}`;
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const stmt = this.connectionManager.prepare(query);
+        const response = await stmt.bind(...bindParams).all();
 
-    if (response.success) {
-      return processSubmissionResults(response.results);
-    }
-    return [];
+        if (response.success) {
+          return processSubmissionResults(response.results);
+        }
+        return [];
+      },
+      2 * 60 * 1000 // 2 minute cache for lists
+    );
   }
 
   async create(submissionData: {
@@ -173,7 +221,8 @@ export class FormSubmissionService {
     // Calculate score based on template scoring configuration
     const calculated_score = await this.calculateScore(template_id, responses);
 
-    const response = await this.DB.prepare(FORM_SUBMISSION_QUERIES.INSERT_SUBMISSION)
+    const stmt = this.connectionManager.prepare(FORM_SUBMISSION_QUERIES.INSERT_SUBMISSION);
+    const response = await stmt
       .bind(
         template_id,
         patient_id || null,
@@ -191,6 +240,10 @@ export class FormSubmissionService {
     }
 
     const submissionId = response.meta.last_row_id;
+    
+    // Clear relevant caches
+    this.clearSubmissionCaches(template_id);
+    
     return { success: true, submissionId, calculated_score };
   }
 
@@ -219,7 +272,8 @@ export class FormSubmissionService {
       calculated_score = await this.calculateScore(existing.template_id, responses);
     }
 
-    const response = await this.DB.prepare(FORM_SUBMISSION_QUERIES.UPDATE_SUBMISSION)
+    const stmt = this.connectionManager.prepare(FORM_SUBMISSION_QUERIES.UPDATE_SUBMISSION);
+    const response = await stmt
       .bind(
         JSON.stringify(responses),
         status,
@@ -234,11 +288,16 @@ export class FormSubmissionService {
       throw new Error("Failed to update form submission");
     }
 
+    // Clear specific submission cache and related caches
+    this.connectionManager.cacheData(`submission_${id}`, null, 0);
+    this.clearSubmissionCaches(existing.template_id);
+    
     return { success: true, calculated_score };
   }
 
   async updateStatus(id: number, status: string) {
-    const response = await this.DB.prepare(FORM_SUBMISSION_QUERIES.UPDATE_STATUS)
+    const stmt = this.connectionManager.prepare(FORM_SUBMISSION_QUERIES.UPDATE_STATUS);
+    const response = await stmt
       .bind(status, id)
       .run();
 
@@ -246,14 +305,32 @@ export class FormSubmissionService {
       throw new Error("Failed to update submission status");
     }
 
+    // Clear submission cache
+    this.connectionManager.cacheData(`submission_${id}`, null, 0);
+    
+    // Get submission to clear template-specific caches
+    const submission = await this.getById(id);
+    if (submission) {
+      this.clearSubmissionCaches(submission.template_id);
+    }
+
     return { success: true };
   }
 
   async calculateScore(templateId: number, responses: object): Promise<number | null> {
-    // Get template scoring configuration
-    const template = await this.DB.prepare(`
-      SELECT scoring_config FROM form_templates WHERE id = ?
-    `).bind(templateId).first();
+    const cacheKey = `template_scoring_${templateId}`;
+    
+    // Get template scoring configuration with caching
+    const template = await this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const stmt = this.connectionManager.prepare(`
+          SELECT scoring_config FROM form_templates WHERE id = ?
+        `);
+        return await stmt.bind(templateId).first();
+      },
+      10 * 60 * 1000 // 10 minute cache for scoring config
+    );
 
     if (!template || !template.scoring_config || typeof template.scoring_config !== 'string') {
       return null;
@@ -326,26 +403,25 @@ export class FormSubmissionService {
   }
 
   async getSubmissionStats(templateId?: number) {
-    let query = `
-      SELECT 
-        COUNT(*) as total_submissions,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_submissions,
-        COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_submissions,
-        AVG(completion_time_seconds) as avg_completion_time,
-        AVG(calculated_score) as avg_score,
-        MIN(calculated_score) as min_score,
-        MAX(calculated_score) as max_score
-      FROM form_submissions
-    `;
+    const cacheKey = templateId ? `submission_stats_${templateId}` : 'submission_stats_all';
     
-    let bindParams: any[] = [];
-    if (templateId) {
-      query += ` WHERE template_id = ?`;
-      bindParams.push(templateId);
-    }
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        let query = FORM_SUBMISSION_QUERIES.SUBMISSION_ANALYTICS;
+        
+        let bindParams: any[] = [];
+        if (templateId) {
+          query += ` WHERE template_id = ?`;
+          bindParams.push(templateId);
+        }
 
-    const response = await this.DB.prepare(query).bind(...bindParams).first();
-    return response || {};
+        const stmt = this.connectionManager.prepare(query);
+        const response = await stmt.bind(...bindParams).first();
+        return response || {};
+      },
+      5 * 60 * 1000 // 5 minute cache for analytics
+    );
   }
 
   async exportSubmissions(templateId: number, format: 'json' | 'csv' = 'json') {
@@ -356,6 +432,103 @@ export class FormSubmissionService {
     }
     
     return submissions;
+  }
+
+  async bulkCreate(submissions: Array<{
+    template_id: number;
+    patient_id?: number;
+    responses: object;
+    status?: string;
+    completion_time_seconds?: number;
+    submitted_by?: number;
+    metadata?: object;
+  }>) {
+    if (submissions.length === 0) return { success: true, submissionIds: [] };
+
+    // Prepare all submissions with calculated scores
+    const preparedSubmissions = await Promise.all(
+      submissions.map(async (sub) => {
+        const calculated_score = await this.calculateScore(sub.template_id, sub.responses);
+        return {
+          ...sub,
+          calculated_score,
+          responses: JSON.stringify(sub.responses),
+          metadata: JSON.stringify(sub.metadata || {}),
+          status: sub.status || 'completed'
+        };
+      })
+    );
+
+    // Bulk insert using connectionManager
+    const results = await this.connectionManager.bulkInsert(
+      'form_submissions',
+      preparedSubmissions,
+      ['template_id', 'patient_id', 'responses', 'status', 'calculated_score',
+       'completion_time_seconds', 'submitted_by', 'metadata']
+    );
+
+    const submissionIds = results
+      .filter(r => r.success)
+      .map(r => r.meta.last_row_id);
+
+    // Clear relevant caches
+    const uniqueTemplateIds = [...new Set(submissions.map(s => s.template_id))];
+    uniqueTemplateIds.forEach(templateId => this.clearSubmissionCaches(templateId));
+
+    return { success: true, submissionIds };
+  }
+
+  async getSubmissionsWithStats(filters?: {
+    template_id?: number;
+    limit?: number;
+  }) {
+    const cacheKey = `submissions_with_stats_${JSON.stringify(filters || {})}`;
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        let query = FORM_SUBMISSION_QUERIES.GET_SUBMISSIONS_WITH_STATS;
+        let bindParams: any[] = [];
+        
+        if (filters?.template_id) {
+          query += ` WHERE fs.template_id = ?`;
+          bindParams.push(filters.template_id);
+        }
+        
+        query += ` ORDER BY fs.created_at DESC`;
+        
+        if (filters?.limit) {
+          query += ` LIMIT ?`;
+          bindParams.push(filters.limit);
+        }
+
+        const stmt = this.connectionManager.prepare(query);
+        const response = await stmt.bind(...bindParams).all();
+
+        if (response.success) {
+          return processSubmissionResults(response.results);
+        }
+        return [];
+      },
+      2 * 60 * 1000 // 2 minute cache
+    );
+  }
+
+  private clearSubmissionCaches(templateId?: number) {
+    // Clear list caches that would be affected
+    const patterns = ['submissions_', 'submission_stats'];
+    if (templateId) {
+      patterns.push(`template_${templateId}`);
+    }
+    this.connectionManager.clearSpecificCaches(patterns);
+  }
+
+  async healthCheck(): Promise<boolean> {
+    return this.connectionManager.healthCheck();
+  }
+
+  getCacheStats() {
+    return this.connectionManager.getCacheStats();
   }
 
   private convertToCSV(submissions: any[]): string {

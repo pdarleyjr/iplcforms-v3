@@ -3,7 +3,9 @@
 
 export interface FormComponent {
   id: string;
-  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale';
+  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' |
+        'clinical_scale' | 'assistance_level' | 'demographics' | 'standardized_test' | 'oral_motor' |
+        'language_sample' | 'sensory_processing' | 'goals_planning' | 'clinical_signature' | 'cpt_code';
   label: string;
   order: number;
   props?: {
@@ -25,6 +27,37 @@ export interface FormComponent {
       value: any;
       operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
     };
+    // Clinical component specific properties
+    scaleType?: string;
+    labels?: string[];
+    levels?: string[];
+    fields?: string[];
+    includeEmergencyContact?: boolean;
+    includeInsurance?: boolean;
+    testName?: string;
+    includeRawScore?: boolean;
+    includeStandardScore?: boolean;
+    includePercentile?: boolean;
+    includeAgeEquivalent?: boolean;
+    structures?: string[];
+    functions?: string[];
+    includeReflexes?: boolean;
+    sampleType?: string;
+    duration?: number;
+    analysisType?: string[];
+    includeTranscript?: boolean;
+    systems?: string[];
+    responsePatterns?: string[];
+    includeADLImpact?: boolean;
+    goalType?: string;
+    timeframe?: string;
+    includeBaseline?: boolean;
+    signatureType?: string;
+    includeDate?: boolean;
+    includeCredentials?: boolean;
+    cptCodes?: string[];
+    includeBilling?: boolean;
+    includeJustification?: boolean;
   };
 }
 

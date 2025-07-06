@@ -1,6 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/admin/data-table";
+import { Badge } from "@/components/ui/badge";
 
 import {
   createColumnHelper,
@@ -15,44 +16,200 @@ export type Subscription = {
   price: number;
   created_at: string;
   updated_at: string;
+  status?: string;
+  tier?: string;
+  features?: string[];
+  subscribers?: number;
 };
 
 const columnHelper = createColumnHelper<Subscription>();
 
-const columns: ColumnDef<Subscription>[] = [
-  columnHelper.accessor("id", {
-    header: "ID",
-    cell: (info) => info.getValue(),
-  }),
-  columnHelper.accessor("name", {
-    header: "Name",
-    cell: (info) => {
+// Enhanced subscription tier detection based on name and price
+const getSubscriptionTier = (name: string, price: number): 'Basic' | 'Professional' | 'Enterprise' | 'Clinical' => {
+  const lowerName = name.toLowerCase();
+  if (price === 0 || lowerName.includes('free') || lowerName.includes('trial')) return 'Basic';
+  if (price > 100 || lowerName.includes('enterprise') || lowerName.includes('premium')) return 'Enterprise';
+  if (lowerName.includes('clinical') || lowerName.includes('therapy') || lowerName.includes('professional')) return 'Clinical';
+  return 'Professional';
+};
+
+// Enhanced subscription status detection
+const getSubscriptionStatus = (subscription: Subscription): 'Active' | 'Inactive' | 'Trial' | 'Expired' => {
+  if (subscription.status) {
+    const status = subscription.status.toLowerCase();
+    if (status === 'trial') return 'Trial';
+    if (status === 'expired' || status === 'cancelled') return 'Expired';
+    if (status === 'inactive') return 'Inactive';
+  }
+  return 'Active';
+};
+
+// Clinical subscription tier badge styling
+const getTierBadgeVariant = (tier: string) => {
+  switch (tier) {
+    case 'Basic': return 'outline';
+    case 'Professional': return 'default';
+    case 'Clinical': return 'destructive';
+    case 'Enterprise': return 'secondary';
+    default: return 'outline';
+  }
+};
+
+// Clinical subscription status badge styling
+const getStatusBadgeVariant = (status: string) => {
+  switch (status) {
+    case 'Active': return 'default';
+    case 'Trial': return 'secondary';
+    case 'Inactive': return 'outline';
+    case 'Expired': return 'destructive';
+    default: return 'outline';
+  }
+};
+
+const columns: ColumnDef<Subscription, any>[] = [
+  {
+    accessorKey: "id",
+    header: "Plan ID",
+    cell: ({ getValue }) => (
+      <div className="flex items-center space-x-2">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium">
+          {String(getValue()).slice(-2)}
+        </div>
+        <span className="text-sm font-medium text-muted-foreground">#{getValue()}</span>
+      </div>
+    ),
+  } as ColumnDef<Subscription, any>,
+  {
+    accessorKey: "name",
+    header: "Subscription Plan",
+    cell: ({ getValue, row }) => {
+      const name = getValue() as string;
+      const tier = getSubscriptionTier(name, row.original.price);
       return (
-        <a
-          className="text-primary underline"
-          href={`/admin/subscriptions/${info.row.original.id}`}
-        >
-          {info.getValue()}
-        </a>
+        <div className="space-y-1">
+          <a
+            className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            href={`/admin/subscriptions/${row.original.id}`}
+          >
+            {name}
+          </a>
+          <div className="flex items-center space-x-2">
+            <Badge variant={getTierBadgeVariant(tier)} className="text-xs">
+              {tier}
+            </Badge>
+            {row.original.subscribers && (
+              <span className="text-xs text-muted-foreground">
+                {row.original.subscribers} subscribers
+              </span>
+            )}
+          </div>
+        </div>
       );
     },
-  }),
-  columnHelper.accessor("description", {
-    header: "Description",
-    cell: (info) => info.getValue(),
-  }),
-  columnHelper.accessor("price", {
-    header: "Price",
-    cell: (info) => info.getValue(),
-  }),
-  columnHelper.accessor("created_at", {
-    header: "Created At",
-    cell: (info) => new Date(info.getValue()).toLocaleDateString(),
-  }),
-  columnHelper.accessor("updated_at", {
-    header: "Updated At",
-    cell: (info) => new Date(info.getValue()).toLocaleDateString(),
-  }),
+  } as ColumnDef<Subscription, any>,
+  {
+    accessorKey: "description",
+    header: "Clinical Features",
+    cell: ({ getValue, row }) => {
+      const description = getValue() as string;
+      const features = row.original.features || [];
+      return (
+        <div className="space-y-1 max-w-xs">
+          <p className="text-sm text-foreground line-clamp-2">{description}</p>
+          {features.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {features.slice(0, 2).map((feature: string, index: number) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {feature}
+                </Badge>
+              ))}
+              {features.length > 2 && (
+                <Badge variant="outline" className="text-xs">
+                  +{features.length - 2} more
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    },
+  } as ColumnDef<Subscription, any>,
+  {
+    accessorKey: "price",
+    header: "Monthly Rate",
+    cell: ({ getValue, row }) => {
+      const price = getValue() as number;
+      const tier = getSubscriptionTier(row.original.name, price);
+      return (
+        <div className="space-y-1">
+          <div className="text-sm font-semibold text-foreground">
+            {price === 0 ? (
+              <span className="text-green-600">Free</span>
+            ) : (
+              <span>${price.toFixed(2)}</span>
+            )}
+            {price > 0 && <span className="text-muted-foreground text-xs">/month</span>}
+          </div>
+          {tier === 'Clinical' && (
+            <Badge variant="destructive" className="text-xs">
+              HIPAA Compliant
+            </Badge>
+          )}
+        </div>
+      );
+    },
+  } as ColumnDef<Subscription, any>,
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      const status = getSubscriptionStatus(row.original);
+      return (
+        <div className="space-y-1">
+          <Badge variant={getStatusBadgeVariant(status)} className="text-xs">
+            {status}
+          </Badge>
+          {status === 'Active' && (
+            <div className="text-xs text-green-600">
+              ● Available for signup
+            </div>
+          )}
+          {status === 'Trial' && (
+            <div className="text-xs text-blue-600">
+              ● 14-day trial period
+            </div>
+          )}
+        </div>
+      );
+    },
+  } as ColumnDef<Subscription, any>,
+  {
+    accessorKey: "created_at",
+    header: "Launch Date",
+    cell: ({ getValue }) => {
+      const date = new Date(getValue() as string);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      return (
+        <div className="space-y-1">
+          <div className="text-sm text-foreground">
+            {date.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            })}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {diffDays < 30 ? `${diffDays} days ago` :
+             diffDays < 365 ? `${Math.floor(diffDays / 30)} months ago` :
+             `${Math.floor(diffDays / 365)} years ago`}
+          </div>
+        </div>
+      );
+    },
+  } as ColumnDef<Subscription, any>,
 ];
 
 interface DataTableProps {
@@ -67,7 +224,25 @@ export function SubscriptionsTable({ data }: DataTableProps) {
   });
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
+      <div className="p-4 border-b border-border/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Clinical Subscription Plans</h3>
+            <p className="text-sm text-muted-foreground">
+              Manage healthcare professional subscription tiers and billing
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline" className="text-xs">
+              {data.length} Plans
+            </Badge>
+            <Badge variant="default" className="text-xs">
+              {data.filter(sub => getSubscriptionStatus(sub) === 'Active').length} Active
+            </Badge>
+          </div>
+        </div>
+      </div>
       <DataTable table={table} />
     </div>
   );

@@ -1,390 +1,531 @@
-export const CLINICAL_ROLES = {
-  PATIENT: 'patient',
-  CLINICIAN: 'clinician', 
-  ADMIN: 'admin',
-  RESEARCHER: 'researcher',
-} as const;
+import type { D1Database } from '@cloudflare/workers-types';
+import { getD1Manager, type D1ConnectionManager } from './d1-connection-manager';
 
-export const PERMISSION_ACTIONS = {
-  CREATE: 'create',
-  READ: 'read',
-  UPDATE: 'update',
-  DELETE: 'delete',
-  PUBLISH: 'publish',
-  ARCHIVE: 'archive',
-  EXPORT: 'export',
-  ANALYZE: 'analyze',
-} as const;
+export interface Role {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
 
-export const RESOURCE_TYPES = {
-  FORM_TEMPLATE: 'form_template',
-  FORM_SUBMISSION: 'form_submission',
-  PATIENT_DATA: 'patient_data',
-  ANALYTICS: 'analytics',
-  SYSTEM_CONFIG: 'system_config',
-} as const;
+export interface Permission {
+  id: number;
+  role_id: number;
+  resource_type: string;
+  resource_id: number | null;
+  action: string;
+  created_at: string;
+}
 
-export const CLINICAL_PERMISSIONS_QUERIES = {
-  GET_USER_ROLES: `
-    SELECT cr.role_name, cr.permissions, cr.resource_access_rules
-    FROM clinical_roles cr
-    JOIN user_roles ur ON cr.role_name = ur.role_name
-    WHERE ur.user_id = ?
-  `,
-  GET_USER_PERMISSIONS: `
-    SELECT p.permission_name, p.resource_type, p.conditions
-    FROM permissions p
-    JOIN role_permissions rp ON p.id = rp.permission_id
-    JOIN user_roles ur ON rp.role_name = ur.role_name
-    WHERE ur.user_id = ?
-  `,
-  CHECK_RESOURCE_ACCESS: `
-    SELECT COUNT(*) as has_access
-    FROM permissions p
-    JOIN role_permissions rp ON p.id = rp.permission_id
-    JOIN user_roles ur ON rp.role_name = ur.role_name
-    WHERE ur.user_id = ? 
-    AND p.resource_type = ? 
-    AND p.permission_name = ?
-  `,
-  GET_ACCESSIBLE_TEMPLATES: `
-    SELECT DISTINCT ft.*
-    FROM form_templates ft
-    LEFT JOIN template_permissions tp ON ft.id = tp.template_id
-    LEFT JOIN user_roles ur ON tp.role_name = ur.role_name
-    WHERE (tp.template_id IS NULL AND ft.is_public = 1)
-    OR (ur.user_id = ? AND tp.can_read = 1)
-    OR ft.created_by = ?
-  `,
-  GET_ACCESSIBLE_SUBMISSIONS: `
-    SELECT DISTINCT fs.*
-    FROM form_submissions fs
-    LEFT JOIN form_templates ft ON fs.template_id = ft.id
-    LEFT JOIN template_permissions tp ON ft.id = tp.template_id
-    LEFT JOIN user_roles ur ON tp.role_name = ur.role_name
-    WHERE (fs.submitted_by = ?)
-    OR (ur.user_id = ? AND tp.can_read = 1)
-    OR (ur.user_id = ? AND EXISTS (
-      SELECT 1 FROM user_roles ur2 
-      WHERE ur2.user_id = ? AND ur2.role_name IN ('admin', 'clinician')
-    ))
-  `,
-};
+export interface UserRole {
+  user_id: number;
+  role_id: number;
+  assigned_at: string;
+  assigned_by: number;
+}
 
-export interface UserPermissions {
-  roles: string[];
-  canCreate: (resourceType: string) => boolean;
-  canRead: (resourceType: string, resourceId?: number) => boolean;
-  canUpdate: (resourceType: string, resourceId?: number) => boolean;
-  canDelete: (resourceType: string, resourceId?: number) => boolean;
-  canPublish: (resourceType: string) => boolean;
-  canArchive: (resourceType: string) => boolean;
-  canExport: (resourceType: string) => boolean;
-  canAnalyze: (resourceType: string) => boolean;
+export interface TemplatePermission {
+  id: number;
+  template_id: number;
+  user_id: number;
+  permission_type: string;
+  granted_at: string;
+  granted_by: number;
+}
+
+export interface PermissionAuditLog {
+  id: number;
+  user_id: number;
+  action: string;
+  resource_type: string;
+  resource_id: number;
+  details: string;
+  created_at: string;
 }
 
 export class ClinicalPermissionsService {
-  private DB: D1Database;
+  private d1Manager: D1ConnectionManager;
+
+  // Cache TTLs (in milliseconds)
+  private readonly ROLE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly PERMISSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly USER_ROLE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+  private readonly TEMPLATE_ACCESS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+  private readonly AUDIT_LOG_CACHE_TTL = 1 * 60 * 1000; // 1 minute
+
+  // Prepared statement keys
+  private readonly STMT_GET_ALL_ROLES = 'get_all_roles';
+  private readonly STMT_GET_ROLE_BY_ID = 'get_role_by_id';
+  private readonly STMT_GET_USER_ROLES = 'get_user_roles';
+  private readonly STMT_GET_ROLE_PERMISSIONS = 'get_role_permissions';
+  private readonly STMT_GET_USER_PERMISSIONS = 'get_user_permissions';
+  private readonly STMT_GET_USER_TEMPLATE_PERMISSIONS = 'get_user_template_permissions';
+  private readonly STMT_CHECK_TEMPLATE_ACCESS = 'check_template_access';
+  private readonly STMT_CHECK_SUBMISSION_ACCESS = 'check_submission_access';
+  private readonly STMT_CHECK_ROLE_EXISTS = 'check_role_exists';
+  private readonly STMT_ASSIGN_ROLE_TO_USER = 'assign_role_to_user';
+  private readonly STMT_REMOVE_ROLE_FROM_USER = 'remove_role_from_user';
+  private readonly STMT_GRANT_TEMPLATE_PERMISSION = 'grant_template_permission';
+  private readonly STMT_REVOKE_TEMPLATE_PERMISSION = 'revoke_template_permission';
 
   constructor(DB: D1Database) {
-    this.DB = DB;
+    this.d1Manager = getD1Manager(DB);
   }
 
-  async getUserPermissions(userId: number): Promise<UserPermissions> {
-    // Get user roles
-    const rolesResponse = await this.DB.prepare(CLINICAL_PERMISSIONS_QUERIES.GET_USER_ROLES)
-      .bind(userId)
-      .all();
-
-    const roles = rolesResponse.success ? rolesResponse.results.map((r: any) => r.role_name) : [];
-
-    // Get specific permissions
-    const permissionsResponse = await this.DB.prepare(CLINICAL_PERMISSIONS_QUERIES.GET_USER_PERMISSIONS)
-      .bind(userId)
-      .all();
-
-    const permissions = permissionsResponse.success ? permissionsResponse.results : [];
-
-    return {
-      roles,
-      canCreate: (resourceType: string) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.CREATE),
-      canRead: (resourceType: string, resourceId?: number) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.READ, resourceId),
-      canUpdate: (resourceType: string, resourceId?: number) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.UPDATE, resourceId),
-      canDelete: (resourceType: string, resourceId?: number) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.DELETE, resourceId),
-      canPublish: (resourceType: string) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.PUBLISH),
-      canArchive: (resourceType: string) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.ARCHIVE),
-      canExport: (resourceType: string) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.EXPORT),
-      canAnalyze: (resourceType: string) => this.checkPermission(permissions, resourceType, PERMISSION_ACTIONS.ANALYZE),
-    };
+  // Role Management
+  async getAllRoles(): Promise<Role[]> {
+    return this.d1Manager.executeWithCache(
+      'all-roles',
+      async () => {
+        const stmt = this.d1Manager.prepare(
+          'SELECT * FROM clinical_roles ORDER BY name'
+        );
+        const response = await stmt.all();
+        return response.success ? (response.results as unknown as Role[]) : [];
+      },
+      this.ROLE_CACHE_TTL
+    );
   }
 
-  private checkPermission(permissions: any[], resourceType: string, action: string, resourceId?: number): boolean {
-    return permissions.some(permission => {
-      if (permission.resource_type !== resourceType || permission.permission_name !== action) {
-        return false;
-      }
-
-      // Check conditions if they exist
-      if (permission.conditions && resourceId) {
-        const conditions = JSON.parse(permission.conditions);
-        return this.evaluateConditions(conditions, resourceId);
-      }
-
-      return true;
-    });
+  async getRoleById(roleId: number): Promise<Role | null> {
+    return this.d1Manager.executeWithCache(
+      `role-${roleId}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(
+          'SELECT * FROM clinical_roles WHERE id = ?'
+        );
+        const response = await stmt.bind(roleId).first();
+        return response as Role | null;
+      },
+      this.ROLE_CACHE_TTL
+    );
   }
 
-  private evaluateConditions(conditions: any, resourceId: number): boolean {
-    // Placeholder for condition evaluation logic
-    // In a real implementation, this would evaluate complex conditions
-    // like ownership, department access, time-based restrictions, etc.
-    return true;
+  async getUserRoles(userId: number): Promise<Role[]> {
+    return this.d1Manager.executeWithCache(
+      `user-roles-${userId}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT r.* 
+          FROM clinical_roles r
+          JOIN clinical_user_roles ur ON r.id = ur.role_id
+          WHERE ur.user_id = ?
+          ORDER BY r.name
+        `);
+        const response = await stmt.bind(userId).all();
+        return response.success ? (response.results as unknown as Role[]) : [];
+      },
+      this.USER_ROLE_CACHE_TTL
+    );
   }
 
-  async checkResourceAccess(userId: number, resourceType: string, action: string): Promise<boolean> {
-    const response = await this.DB.prepare(CLINICAL_PERMISSIONS_QUERIES.CHECK_RESOURCE_ACCESS)
-      .bind(userId, resourceType, action)
-      .first();
-
-    return (response && typeof response === 'object' && 'has_access' in response && typeof response.has_access === 'number')
-      ? response.has_access > 0
-      : false;
+  // Permission Checks
+  async getUserPermissions(userId: number): Promise<Permission[]> {
+    return this.d1Manager.executeWithCache(
+      `user-permissions-${userId}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT DISTINCT p.*
+          FROM clinical_permissions p
+          JOIN clinical_user_roles ur ON p.role_id = ur.role_id
+          WHERE ur.user_id = ?
+          ORDER BY p.resource_type, p.resource_id, p.action
+        `);
+        const response = await stmt.bind(userId).all();
+        return response.success ? (response.results as unknown as Permission[]) : [];
+      },
+      this.PERMISSION_CACHE_TTL
+    );
   }
 
-  async getAccessibleTemplates(userId: number): Promise<any[]> {
-    const response = await this.DB.prepare(CLINICAL_PERMISSIONS_QUERIES.GET_ACCESSIBLE_TEMPLATES)
-      .bind(userId, userId)
-      .all();
-
-    if (response.success) {
-      return response.results.map((template: any) => {
-        // Parse JSON fields
-        if (template.components) {
-          template.components = JSON.parse(template.components);
-        }
-        if (template.styling_config) {
-          template.styling_config = JSON.parse(template.styling_config);
-        }
-        if (template.logic_config) {
-          template.logic_config = JSON.parse(template.logic_config);
-        }
-        if (template.scoring_config) {
-          template.scoring_config = JSON.parse(template.scoring_config);
-        }
-        if (template.metadata) {
-          template.metadata = JSON.parse(template.metadata);
-        }
-        return template;
-      });
-    }
-    return [];
+  async getRolePermissions(roleId: number): Promise<Permission[]> {
+    return this.d1Manager.executeWithCache(
+      `role-permissions-${roleId}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT * FROM clinical_permissions 
+          WHERE role_id = ? 
+          ORDER BY resource_type, resource_id, action
+        `);
+        const response = await stmt.bind(roleId).all();
+        return response.success ? (response.results as unknown as Permission[]) : [];
+      },
+      this.PERMISSION_CACHE_TTL
+    );
   }
 
-  async getAccessibleSubmissions(userId: number): Promise<any[]> {
-    const response = await this.DB.prepare(CLINICAL_PERMISSIONS_QUERIES.GET_ACCESSIBLE_SUBMISSIONS)
-      .bind(userId, userId, userId, userId)
-      .all();
+  async getUserTemplatePermissions(userId: number): Promise<TemplatePermission[]> {
+    return this.d1Manager.executeWithCache(
+      `user-template-permissions-${userId}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT * FROM clinical_template_permissions 
+          WHERE user_id = ? 
+          ORDER BY template_id, permission_type
+        `);
+        const response = await stmt.bind(userId).all();
+        return response.success ? (response.results as unknown as TemplatePermission[]) : [];
+      },
+      this.TEMPLATE_ACCESS_CACHE_TTL
+    );
+  }
 
-    if (response.success) {
-      return response.results.map((submission: any) => {
-        // Parse JSON fields
-        if (submission.responses) {
-          submission.responses = JSON.parse(submission.responses);
-        }
-        if (submission.metadata) {
-          submission.metadata = JSON.parse(submission.metadata);
-        }
-        return submission;
-      });
-    }
-    return [];
+  async getAccessibleTemplates(userId: number, permissionType: string = 'read'): Promise<number[]> {
+    return this.d1Manager.executeWithCache(
+      `accessible-templates-${userId}-${permissionType}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT DISTINCT ft.id
+          FROM form_templates ft
+          WHERE ft.id IN (
+            -- Templates user created
+            SELECT id FROM form_templates WHERE created_by = ?
+            UNION
+            -- Templates with direct permissions
+            SELECT template_id FROM clinical_template_permissions 
+            WHERE user_id = ? AND permission_type = ?
+            UNION
+            -- Templates accessible through roles
+            SELECT p.resource_id 
+            FROM clinical_permissions p
+            JOIN clinical_user_roles ur ON p.role_id = ur.role_id
+            WHERE ur.user_id = ? 
+              AND p.resource_type = 'form_template' 
+              AND p.action = ?
+          )
+        `);
+        const response = await stmt.bind(userId, userId, permissionType, userId, permissionType).all();
+        return response.success ? response.results.map(r => r.id as number) : [];
+      },
+      this.TEMPLATE_ACCESS_CACHE_TTL
+    );
+  }
+
+  async getAccessibleSubmissions(userId: number, permissionType: string = 'read'): Promise<number[]> {
+    return this.d1Manager.executeWithCache(
+      `accessible-submissions-${userId}-${permissionType}`,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT DISTINCT fs.id
+          FROM form_submissions fs
+          JOIN form_templates ft ON fs.form_template_id = ft.id
+          WHERE fs.id IN (
+            -- Submissions user created
+            SELECT id FROM form_submissions WHERE created_by = ?
+            UNION
+            -- Submissions for templates with permissions
+            SELECT fs2.id 
+            FROM form_submissions fs2
+            JOIN clinical_template_permissions ctp ON fs2.form_template_id = ctp.template_id
+            WHERE ctp.user_id = ? AND ctp.permission_type = ?
+            UNION
+            -- Submissions accessible through roles
+            SELECT fs3.id
+            FROM form_submissions fs3
+            JOIN clinical_permissions p ON p.resource_id = fs3.form_template_id
+            JOIN clinical_user_roles ur ON p.role_id = ur.role_id
+            WHERE ur.user_id = ? 
+              AND p.resource_type = 'form_template'
+              AND p.action = ?
+          )
+        `);
+        const response = await stmt.bind(userId, userId, permissionType, userId, permissionType).all();
+        const results = response.success ? response.results : [];
+        
+        // Return submission IDs
+        return results.map(submission => submission.id as number);
+      },
+      this.TEMPLATE_ACCESS_CACHE_TTL
+    );
   }
 
   async canAccessTemplate(userId: number, templateId: number, action: string = 'read'): Promise<boolean> {
-    // Check if user can access specific template
-    const template = await this.DB.prepare(`
-      SELECT ft.*, tp.can_read, tp.can_write, ft.created_by
-      FROM form_templates ft
-      LEFT JOIN template_permissions tp ON ft.id = tp.template_id
-      LEFT JOIN user_roles ur ON tp.role_name = ur.role_name
-      WHERE ft.id = ? AND (
-        (ft.is_public = 1 AND ? = 'read')
-        OR (ur.user_id = ? AND tp.can_read = 1 AND ? = 'read')
-        OR (ur.user_id = ? AND tp.can_write = 1 AND ? IN ('write', 'update'))
-        OR ft.created_by = ?
-      )
-    `).bind(templateId, action, userId, action, userId, action, userId).first();
+    const cacheKey = `template-access-${userId}-${templateId}-${action}`;
+    const template = await this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT 1
+          FROM form_templates ft
+          WHERE ft.id = ?
+            AND (
+              -- User created the template
+              ft.created_by = ?
+              -- Direct permission
+              OR EXISTS (
+                SELECT 1 FROM clinical_template_permissions
+                WHERE template_id = ? AND user_id = ? AND permission_type = ?
+              )
+              -- Role-based permission
+              OR EXISTS (
+                SELECT 1 
+                FROM clinical_permissions p
+                JOIN clinical_user_roles ur ON p.role_id = ur.role_id
+                WHERE ur.user_id = ?
+                  AND p.resource_type = 'form_template'
+                  AND (p.resource_id = ? OR p.resource_id IS NULL)
+                  AND p.action = ?
+              )
+            )
+          LIMIT 1
+        `);
+        return await stmt.bind(templateId, userId, templateId, userId, action, userId, templateId, action).first();
+      },
+      this.TEMPLATE_ACCESS_CACHE_TTL
+    );
 
     return !!template;
   }
 
   async canAccessSubmission(userId: number, submissionId: number, action: string = 'read'): Promise<boolean> {
-    // Check if user can access specific submission
-    const submission = await this.DB.prepare(`
-      SELECT fs.*, ft.id as template_id, tp.can_read, tp.can_write
-      FROM form_submissions fs
-      JOIN form_templates ft ON fs.template_id = ft.id
-      LEFT JOIN template_permissions tp ON ft.id = tp.template_id
-      LEFT JOIN user_roles ur ON tp.role_name = ur.role_name
-      WHERE fs.id = ? AND (
-        fs.submitted_by = ?
-        OR (ur.user_id = ? AND tp.can_read = 1 AND ? = 'read')
-        OR (ur.user_id = ? AND tp.can_write = 1 AND ? IN ('write', 'update'))
-        OR (ur.user_id = ? AND EXISTS (
-          SELECT 1 FROM user_roles ur2 
-          WHERE ur2.user_id = ? AND ur2.role_name IN ('admin', 'clinician')
-        ))
-      )
-    `).bind(submissionId, userId, userId, action, userId, action, userId, userId).first();
-
-    return !!submission;
+    const cacheKey = `submission-access-${userId}-${submissionId}-${action}`;
+    return this.d1Manager.executeWithCache(
+      cacheKey,
+      async () => {
+        const stmt = this.d1Manager.prepare(`
+          SELECT 1
+          FROM form_submissions fs
+          JOIN form_templates ft ON fs.form_template_id = ft.id
+          WHERE fs.id = ?
+            AND (
+              -- User created the submission
+              fs.created_by = ?
+              -- Can access the template
+              OR ft.created_by = ?
+              OR EXISTS (
+                SELECT 1 FROM clinical_template_permissions
+                WHERE template_id = ft.id AND user_id = ? AND permission_type = ?
+              )
+              OR EXISTS (
+                SELECT 1 
+                FROM clinical_permissions p
+                JOIN clinical_user_roles ur ON p.role_id = ur.role_id
+                WHERE ur.user_id = ?
+                  AND p.resource_type = 'form_template'
+                  AND (p.resource_id = ft.id OR p.resource_id IS NULL)
+                  AND p.action = ?
+              )
+            )
+          LIMIT 1
+        `);
+        const response = await stmt.bind(submissionId, userId, userId, userId, action, userId, action).first();
+        return !!response;
+      },
+      this.TEMPLATE_ACCESS_CACHE_TTL
+    );
   }
 
-  async assignRoleToUser(userId: number, role: string, assignedBy: number): Promise<{ success: boolean }> {
-    // Check if assigner has permission to assign roles
-    const canAssign = await this.checkResourceAccess(assignedBy, RESOURCE_TYPES.SYSTEM_CONFIG, PERMISSION_ACTIONS.UPDATE);
-    
-    if (!canAssign) {
-      throw new Error("Insufficient permissions to assign roles");
+  // Role Assignment
+  async assignRoleToUser(userId: number, roleId: number, assignedBy: number): Promise<boolean> {
+    // Check if role exists
+    const roleExists = await this.d1Manager.prepare(
+      'SELECT 1 FROM clinical_roles WHERE id = ?'
+    ).bind(roleId).first();
+
+    if (!roleExists) {
+      throw new Error(`Role with ID ${roleId} does not exist`);
     }
 
-    // Validate role exists
-    const roleExists = await this.DB.prepare(`
-      SELECT COUNT(*) as count FROM clinical_roles WHERE role_name = ?
-    `).bind(role).first();
-
-    if (!roleExists?.count) {
-      throw new Error("Invalid role specified");
-    }
-
-    // Insert or update user role
-    const response = await this.DB.prepare(`
-      INSERT OR REPLACE INTO user_roles (user_id, role_name, assigned_by, assigned_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `).bind(userId, role, assignedBy).run();
-
-    if (!response.success) {
-      throw new Error("Failed to assign role to user");
-    }
-
-    return { success: true };
-  }
-
-  async removeRoleFromUser(userId: number, role: string, removedBy: number): Promise<{ success: boolean }> {
-    // Check if remover has permission
-    const canRemove = await this.checkResourceAccess(removedBy, RESOURCE_TYPES.SYSTEM_CONFIG, PERMISSION_ACTIONS.UPDATE);
-    
-    if (!canRemove) {
-      throw new Error("Insufficient permissions to remove roles");
-    }
-
-    const response = await this.DB.prepare(`
-      DELETE FROM user_roles WHERE user_id = ? AND role_name = ?
-    `).bind(userId, role).run();
-
-    if (!response.success) {
-      throw new Error("Failed to remove role from user");
-    }
-
-    return { success: true };
-  }
-
-  async grantTemplatePermission(templateId: number, role: string, permissions: {
-    can_read?: boolean;
-    can_write?: boolean;
-  }, grantedBy: number): Promise<{ success: boolean }> {
-    // Check if granter can manage template permissions
-    const canGrant = await this.canAccessTemplate(grantedBy, templateId, 'write') ||
-                     await this.checkResourceAccess(grantedBy, RESOURCE_TYPES.SYSTEM_CONFIG, PERMISSION_ACTIONS.UPDATE);
-    
-    if (!canGrant) {
-      throw new Error("Insufficient permissions to grant template access");
-    }
-
-    const response = await this.DB.prepare(`
-      INSERT OR REPLACE INTO template_permissions 
-      (template_id, role_name, can_read, can_write, granted_by, granted_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).bind(
-      templateId,
-      role,
-      permissions.can_read ? 1 : 0,
-      permissions.can_write ? 1 : 0,
-      grantedBy
-    ).run();
-
-    if (!response.success) {
-      throw new Error("Failed to grant template permission");
-    }
-
-    return { success: true };
-  }
-
-  async revokeTemplatePermission(templateId: number, role: string, revokedBy: number): Promise<{ success: boolean }> {
-    // Check if revoker can manage template permissions
-    const canRevoke = await this.canAccessTemplate(revokedBy, templateId, 'write') ||
-                      await this.checkResourceAccess(revokedBy, RESOURCE_TYPES.SYSTEM_CONFIG, PERMISSION_ACTIONS.UPDATE);
-    
-    if (!canRevoke) {
-      throw new Error("Insufficient permissions to revoke template access");
-    }
-
-    const response = await this.DB.prepare(`
-      DELETE FROM template_permissions WHERE template_id = ? AND role_name = ?
-    `).bind(templateId, role).run();
-
-    if (!response.success) {
-      throw new Error("Failed to revoke template permission");
-    }
-
-    return { success: true };
-  }
-
-  async getAuditLog(filters?: {
-    user_id?: number;
-    resource_type?: string;
-    action?: string;
-    date_from?: string;
-    date_to?: string;
-  }): Promise<any[]> {
-    let query = `
-      SELECT * FROM audit_logs
-      WHERE 1 = 1
-    `;
-    let bindParams: any[] = [];
-
-    if (filters?.user_id) {
-      query += ` AND user_id = ?`;
-      bindParams.push(filters.user_id);
-    }
-
-    if (filters?.resource_type) {
-      query += ` AND resource_type = ?`;
-      bindParams.push(filters.resource_type);
-    }
-
-    if (filters?.action) {
-      query += ` AND action = ?`;
-      bindParams.push(filters.action);
-    }
-
-    if (filters?.date_from && filters?.date_to) {
-      query += ` AND created_at BETWEEN ? AND ?`;
-      bindParams.push(filters.date_from, filters.date_to);
-    }
-
-    query += ` ORDER BY created_at DESC LIMIT 1000`;
-
-    const response = await this.DB.prepare(query).bind(...bindParams).all();
+    const response = await this.d1Manager.prepare(
+      'INSERT INTO clinical_user_roles (user_id, role_id, assigned_by) VALUES (?, ?, ?)'
+    ).bind(userId, roleId, assignedBy).run();
 
     if (response.success) {
-      return response.results.map((log: any) => {
-        if (log.metadata) {
-          log.metadata = JSON.parse(log.metadata);
-        }
-        return log;
-      });
+      // Clear relevant caches
+      this.clearUserPermissionCaches(userId);
+      
+      // Log the action
+      await this.logPermissionChange(assignedBy, 'assign_role', 'user', userId, 
+        `Assigned role ${roleId} to user ${userId}`);
     }
-    return [];
+
+    return response.success;
+  }
+
+  async removeRoleFromUser(userId: number, roleId: number, removedBy: number): Promise<boolean> {
+    const response = await this.d1Manager.prepare(
+      'DELETE FROM clinical_user_roles WHERE user_id = ? AND role_id = ?'
+    ).bind(userId, roleId).run();
+
+    if (response.success) {
+      // Clear relevant caches
+      this.clearUserPermissionCaches(userId);
+      
+      // Log the action
+      await this.logPermissionChange(removedBy, 'remove_role', 'user', userId,
+        `Removed role ${roleId} from user ${userId}`);
+    }
+
+    return response.success;
+  }
+
+  // Template Permission Management
+  async grantTemplatePermission(
+    templateId: number,
+    userId: number,
+    permissionType: string,
+    grantedBy: number
+  ): Promise<boolean> {
+    // Check if granter has permission to grant
+    const canGrant = await this.canAccessTemplate(grantedBy, templateId, 'write') ||
+                    await this.hasRole(grantedBy, 'clinical_admin');
+
+    if (!canGrant) {
+      throw new Error('Insufficient permissions to grant template access');
+    }
+
+    const response = await this.d1Manager.prepare(`
+      INSERT INTO clinical_template_permissions 
+      (template_id, user_id, permission_type, granted_by) 
+      VALUES (?, ?, ?, ?)
+    `).bind(templateId, userId, permissionType, grantedBy).run();
+
+    if (response.success) {
+      // Clear relevant caches
+      this.clearUserPermissionCaches(userId);
+      this.clearTemplateAccessCaches(templateId);
+      
+      // Log the action
+      await this.logPermissionChange(grantedBy, 'grant_permission', 'template', templateId,
+        `Granted ${permissionType} permission to user ${userId} for template ${templateId}`);
+    }
+
+    return response.success;
+  }
+
+  async revokeTemplatePermission(
+    templateId: number,
+    userId: number,
+    permissionType: string,
+    revokedBy: number
+  ): Promise<boolean> {
+    // Check if revoker has permission to revoke
+    const canRevoke = await this.canAccessTemplate(revokedBy, templateId, 'write') ||
+                     await this.hasRole(revokedBy, 'clinical_admin');
+
+    if (!canRevoke) {
+      throw new Error('Insufficient permissions to revoke template access');
+    }
+
+    const response = await this.d1Manager.prepare(`
+      DELETE FROM clinical_template_permissions 
+      WHERE template_id = ? AND user_id = ? AND permission_type = ?
+    `).bind(templateId, userId, permissionType).run();
+
+    if (response.success) {
+      // Clear relevant caches
+      this.clearUserPermissionCaches(userId);
+      this.clearTemplateAccessCaches(templateId);
+      
+      // Log the action
+      await this.logPermissionChange(revokedBy, 'revoke_permission', 'template', templateId,
+        `Revoked ${permissionType} permission from user ${userId} for template ${templateId}`);
+    }
+
+    return response.success;
+  }
+
+  // Audit Logging
+  async logPermissionChange(
+    userId: number,
+    action: string,
+    resourceType: string,
+    resourceId: number,
+    details: string
+  ): Promise<void> {
+    await this.d1Manager.prepare(`
+      INSERT INTO clinical_permission_audit_log 
+      (user_id, action, resource_type, resource_id, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(userId, action, resourceType, resourceId, details).run();
+  }
+
+  async getAuditLog(
+    filters: {
+      userId?: number;
+      resourceType?: string;
+      resourceId?: number;
+      startDate?: string;
+      endDate?: string;
+    },
+    limit: number = 100
+  ): Promise<PermissionAuditLog[]> {
+    return this.d1Manager.executeWithCache(
+      `audit-log-${JSON.stringify(filters)}-${limit}`,
+      async () => {
+        let query = 'SELECT * FROM clinical_permission_audit_log WHERE 1=1';
+        const params: any[] = [];
+
+        if (filters.userId !== undefined) {
+          query += ' AND user_id = ?';
+          params.push(filters.userId);
+        }
+        if (filters.resourceType) {
+          query += ' AND resource_type = ?';
+          params.push(filters.resourceType);
+        }
+        if (filters.resourceId !== undefined) {
+          query += ' AND resource_id = ?';
+          params.push(filters.resourceId);
+        }
+        if (filters.startDate) {
+          query += ' AND created_at >= ?';
+          params.push(filters.startDate);
+        }
+        if (filters.endDate) {
+          query += ' AND created_at <= ?';
+          params.push(filters.endDate);
+        }
+
+        query += ' ORDER BY created_at DESC LIMIT ?';
+        params.push(limit);
+
+        // Create a unique key for this specific query
+        const stmtKey = `audit-log-${params.length}`;
+        const stmt = this.d1Manager.prepare(query);
+        const response = await stmt.bind(...params).all();
+        const logs = response.success ? (response.results as unknown as PermissionAuditLog[]) : [];
+
+        // Parse JSON details field if it's a string
+        return logs.map(log => {
+          if (typeof log.details === 'string' && log.details.startsWith('{')) {
+            const parsed = this.d1Manager.parseJSON(log.details);
+            return {
+              ...log,
+              details: parsed || log.details
+            };
+          }
+          return log;
+        });
+      },
+      this.AUDIT_LOG_CACHE_TTL
+    );
+  }
+
+  // Helper Methods
+  private async hasRole(userId: number, roleName: string): Promise<boolean> {
+    const roles = await this.getUserRoles(userId);
+    return roles.some(role => role.name === roleName);
+  }
+
+  private clearUserPermissionCaches(userId: number): void {
+    this.d1Manager.clearSpecificCaches([
+      `user-roles-${userId}`,
+      `user-permissions-${userId}`,
+      `user-template-permissions-${userId}`,
+      `accessible-templates-${userId}`,
+      `accessible-submissions-${userId}`,
+      `template-access-${userId}`,
+      `submission-access-${userId}`
+    ]);
+  }
+
+  private clearTemplateAccessCaches(templateId: number): void {
+    this.d1Manager.clearSpecificCaches([
+      `template-access-`,
+      `accessible-templates-`,
+      `template-${templateId}`
+    ]);
   }
 }
