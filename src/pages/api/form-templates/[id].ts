@@ -51,8 +51,9 @@ const putHandler: APIRoute = async (context) => {
   const authzResult = await authzMiddleware(authResult);
   if (authzResult instanceof Response) return authzResult;
 
-  // Validate request body
-  const validationResult = await validateRequest(request, FormTemplateSchema.partial());
+  // Parse and validate request body
+  const body = await request.json();
+  const validationResult = validateRequest(FormTemplateSchema.partial(), body);
   if (!validationResult.success) {
     return Response.json({ errors: validationResult.errors }, { status: 400 });
   }

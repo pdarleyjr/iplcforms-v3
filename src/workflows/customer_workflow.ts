@@ -1,5 +1,5 @@
-import { WorkflowEntrypoint, WorkflowStep } from "cloudflare:workers";
-import type { WorkflowEvent } from "cloudflare:workers";
+import { WorkflowEntrypoint } from "cloudflare:workers";
+import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 type Env = {
   CUSTOMER_WORKFLOW: WorkflowEntrypoint<Env, Params>;
@@ -19,7 +19,7 @@ export class CustomerWorkflow extends WorkflowEntrypoint<Env, Params> {
       const resp = await DB.prepare(`SELECT * FROM customers WHERE id = ?`)
         .bind(id)
         .run();
-      if (resp.success) return resp.results[0];
+      if (resp.success) return resp.results[0] as Record<string, any>;
       return null;
     });
 

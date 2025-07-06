@@ -55,10 +55,14 @@ export default defineConfig({
   },
   vite: {
     resolve: {
-      // Use react-dom/server.edge instead of react-dom/server.browser for React 19.
-      // Without this, MessageChannel from node:worker_threads needs to be polyfilled.
-      alias: import.meta.env.PROD && {
-        "react-dom/server": "react-dom/server.edge",
+      alias: {
+        // Path alias for cleaner imports
+        '@': new URL('./src', import.meta.url).pathname,
+        // Use react-dom/server.edge instead of react-dom/server.browser for React 19.
+        // Without this, MessageChannel from node:worker_threads needs to be polyfilled.
+        ...(import.meta.env.PROD && {
+          "react-dom/server": "react-dom/server.edge",
+        }),
       },
     },
     // Enhanced development server optimizations

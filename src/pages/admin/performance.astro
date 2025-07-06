@@ -1,6 +1,6 @@
 ---
 import Layout from "@/layouts/Layout.astro";
-import PerformanceMonitor from "@/components/PerformanceMonitor";
+import { PerformanceMonitor } from "@/components/admin/PerformanceMonitor";
 
 // Check authentication
 const token = Astro.cookies.get("adminAuthToken")?.value;

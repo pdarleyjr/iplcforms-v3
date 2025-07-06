@@ -1,20 +1,21 @@
 import { FormTemplateService } from "@/lib/services/form_template";
-import { authenticate, authorize } from "@/lib/auth/rbac-middleware";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
 import { withPerformanceMonitoring } from '@/lib/utils/performance-wrapper';
 import type { APIContext } from 'astro';
-import type { AuthenticatedContext } from '@/lib/auth/rbac-middleware';
 
-const getHandler = async (context: APIContext) => {
+const getHandler = async (context: APIContext): Promise<Response> => {
   // Apply authentication middleware
-  const authResponse = await authenticate(context);
-  if (authResponse) return authResponse;
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) {
+    return authResult;
+  }
 
   // Apply authorization middleware - READ permission on form_templates
-  const authzResponse = await authorize({
-    resource: 'form_templates',
-    action: 'read'
-  })(context);
-  if (authzResponse) return authzResponse;
+  const authzMiddleware = authorize('read', 'form_templates');
+  const authzResult = await authzMiddleware(context);
+  if (authzResult instanceof Response) {
+    return authzResult;
+  }
 
   const { id } = context.params;
   
@@ -50,17 +51,19 @@ const getHandler = async (context: APIContext) => {
   }
 };
 
-const postHandler = async (context: APIContext) => {
+const postHandler = async (context: APIContext): Promise<Response> => {
   // Apply authentication middleware
-  const authResponse = await authenticate(context);
-  if (authResponse) return authResponse;
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) {
+    return authResult;
+  }
 
   // Apply authorization middleware - CREATE permission on form_templates
-  const authzResponse = await authorize({
-    resource: 'form_templates',
-    action: 'create'
-  })(context);
-  if (authzResponse) return authzResponse;
+  const authzMiddleware = authorize('create', 'form_templates');
+  const authzResult = await authzMiddleware(context);
+  if (authzResult instanceof Response) {
+    return authzResult;
+  }
 
   const { id } = context.params;
   
