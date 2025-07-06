@@ -1,5 +1,7 @@
 // @ts-check
 import { defineConfig } from "astro/config";
+import { fileURLToPath } from "url";
+import path from "path";
 
 import cloudflare from "@astrojs/cloudflare";
 import react from "@astrojs/react";
@@ -57,7 +59,7 @@ export default defineConfig({
     resolve: {
       alias: {
         // Path alias for cleaner imports
-        '@': new URL('./src', import.meta.url).pathname,
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
         // Use react-dom/server.edge instead of react-dom/server.browser for React 19.
         // Without this, MessageChannel from node:worker_threads needs to be polyfilled.
         ...(import.meta.env.PROD && {
