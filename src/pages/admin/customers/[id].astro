@@ -4,7 +4,7 @@ import Layout from '@/layouts/Layout.astro';
 import { CustomerService } from '@/lib/services/customer';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const { API_TOKEN, DB } = Astro.locals.runtime.env;
+const { API_TOKEN, DB } = Astro.locals.env;
 const { id } = Astro.params;
 
 const customerService = new CustomerService(DB);

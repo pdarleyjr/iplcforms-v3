@@ -4,7 +4,7 @@ import { SubscriptionService } from '@/lib/services/subscription';
 import { CreateSubscriptionButton } from '@/components/admin/create-subscription';
 import { SubscriptionsTable } from '@/components/admin/subscriptions-table';
 
-const { API_TOKEN, DB } = Astro.locals.runtime.env;
+const { API_TOKEN, DB } = Astro.locals.env;
 const subscriptionService = new SubscriptionService(DB);
 const subscriptions = await subscriptionService.getAll();
 ---

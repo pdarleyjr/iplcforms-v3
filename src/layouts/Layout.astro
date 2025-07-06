@@ -6,7 +6,7 @@ import ApiTokenMissingCard from '@/components/admin/api-token-missing-card';
 
 const currentPath = Astro.url.pathname;
 const title = Astro.props.title || 'SaaS Admin Template';
-const { API_TOKEN } = Astro.locals.runtime.env;
+const { API_TOKEN } = Astro.locals.env;
 const apiTokenSet = API_TOKEN && API_TOKEN !== '';
 ---
 

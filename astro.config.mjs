@@ -15,6 +15,10 @@ export default defineConfig({
         path: "./.cache/wrangler/v3",
       },
     },
+    workerEntryPoint: {
+      path: "src/worker.ts",
+      namedExports: ["CustomerWorkflow"]
+    },
   }),
   integrations: [react(), tailwind({ applyBaseStyles: true })],
   output: "server",
