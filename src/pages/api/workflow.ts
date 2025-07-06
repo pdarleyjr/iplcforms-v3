@@ -1,8 +1,9 @@
 import { validateApiTokenResponse } from "@/lib/api";
 import { CustomerWorkflowSchema, validateRequest, ApiResponseSchema } from "@/lib/schemas/api-validation";
 import type { APIRoute } from "astro";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export const POST: APIRoute = async ({ locals, request, params }) => {
+const postHandler: APIRoute = async ({ locals, request, params }) => {
   const { API_TOKEN, CUSTOMER_WORKFLOW } = locals.runtime.env;
   
   // Validate API token
@@ -416,3 +417,5 @@ async function updateTreatmentPlan(customerId: number, db: any) {
     data: { customer_id: customerId, treatment_plan_updated: true },
   };
 }
+
+export const POST = withPerformanceMonitoring(postHandler, 'workflow:create');

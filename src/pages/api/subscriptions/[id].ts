@@ -1,7 +1,9 @@
+import type { APIRoute } from "astro";
 import { validateApiTokenResponse } from "@/lib/api";
 import { SubscriptionService } from "@/lib/services/subscription";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export async function GET({ locals, params, request }) {
+const getHandler: APIRoute = async ({ locals, params, request }) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
 
@@ -10,6 +12,13 @@ export async function GET({ locals, params, request }) {
     API_TOKEN,
   );
   if (invalidTokenResponse) return invalidTokenResponse;
+
+  if (!id) {
+    return Response.json(
+      { message: "Subscription ID is required" },
+      { status: 400 },
+    );
+  }
 
   const subscriptionService = new SubscriptionService(DB);
 
@@ -30,4 +39,6 @@ export async function GET({ locals, params, request }) {
       { status: 500 },
     );
   }
-}
+};
+
+export const GET = withPerformanceMonitoring(getHandler, 'subscriptions:get');

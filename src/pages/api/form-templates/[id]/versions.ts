@@ -1,7 +1,8 @@
 import { FormTemplateService } from "@/lib/services/form_template";
 import { validateApiTokenResponse } from "@/lib/api";
+import { withPerformanceMonitoring } from '@/lib/utils/performance-wrapper';
 
-export async function GET({ locals, params, request }: any) {
+const getHandler = async ({ locals, params, request }: any) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
 
@@ -24,9 +25,9 @@ export async function GET({ locals, params, request }: any) {
       { status: 500 },
     );
   }
-}
+};
 
-export async function POST({ locals, params, request }: any) {
+const postHandler = async ({ locals, params, request }: any) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
 
@@ -49,7 +50,12 @@ export async function POST({ locals, params, request }: any) {
       );
     }
 
-    const newVersion = await formTemplateService.createVersion(id, versionData);
+    // Create a new version by creating a new template with parent_template_id
+    const newVersion = await formTemplateService.create({
+      ...versionData,
+      parent_template_id: Number(id),
+      created_by: versionData.created_by || 1 // Default to system user if not provided
+    });
     
     return Response.json({
       message: "Template version created successfully",
@@ -65,4 +71,7 @@ export async function POST({ locals, params, request }: any) {
       { status: 500 },
     );
   }
-}
+};
+
+export const GET = withPerformanceMonitoring(getHandler, 'form-template-versions:list');
+export const POST = withPerformanceMonitoring(postHandler, 'form-template-versions:create');

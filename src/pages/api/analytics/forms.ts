@@ -1,7 +1,9 @@
 import { FormAnalyticsService } from "@/lib/services/form_analytics";
 import { validateApiTokenResponse } from "@/lib/api";
+import type { APIRoute } from "astro";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export async function GET({ locals, request }: any) {
+const getHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -124,9 +126,9 @@ export async function GET({ locals, request }: any) {
       { status: 500 },
     );
   }
-}
+};
 
-export async function POST({ locals, request }: any) {
+const postHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -136,7 +138,16 @@ export async function POST({ locals, request }: any) {
   if (invalidTokenResponse) return invalidTokenResponse;
 
   try {
-    const body = await request.json();
+    const body = await request.json() as {
+      operation: string;
+      parameters: {
+        template_id?: number;
+        submission_id?: number;
+        template_ids?: number[];
+        days?: number;
+        format?: 'json' | 'csv';
+      };
+    };
     const { operation, parameters } = body;
 
     const formAnalyticsService = new FormAnalyticsService(DB);
@@ -223,4 +234,7 @@ export async function POST({ locals, request }: any) {
       { status: 500 },
     );
   }
-}
+};
+
+export const GET = withPerformanceMonitoring(getHandler, 'analytics-forms:get');
+export const POST = withPerformanceMonitoring(postHandler, 'analytics-forms:process');

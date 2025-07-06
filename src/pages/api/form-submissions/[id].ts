@@ -1,9 +1,15 @@
 import { FormSubmissionService } from "@/lib/services/form_submission";
 import { validateApiTokenResponse } from "@/lib/api";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
+import type { APIRoute } from "astro";
 
-export async function GET({ locals, params, request }: any) {
+const getHandler: APIRoute = async ({ locals, params, request }) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
+
+  if (!id) {
+    return Response.json({ message: "Form submission ID is required" }, { status: 400 });
+  }
 
   const invalidTokenResponse = await validateApiTokenResponse(
     request,
@@ -21,9 +27,13 @@ export async function GET({ locals, params, request }: any) {
   return Response.json({ submission });
 }
 
-export async function PUT({ locals, params, request }: any) {
+const putHandler: APIRoute = async ({ locals, params, request }) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
+
+  if (!id) {
+    return Response.json({ message: "Form submission ID is required" }, { status: 400 });
+  }
 
   const invalidTokenResponse = await validateApiTokenResponse(
     request,
@@ -34,7 +44,12 @@ export async function PUT({ locals, params, request }: any) {
   const formSubmissionService = new FormSubmissionService(DB);
 
   try {
-    const body = await request.json();
+    const body = await request.json() as {
+      responses?: object;
+      status?: string;
+      completion_time_seconds?: number;
+      metadata?: object;
+    };
     const result = await formSubmissionService.update(parseInt(id, 10), body);
     
     if (!result.success) {
@@ -65,9 +80,13 @@ export async function PUT({ locals, params, request }: any) {
   }
 }
 
-export async function DELETE({ locals, params, request }: any) {
+const deleteHandler: APIRoute = async ({ locals, params, request }) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
+
+  if (!id) {
+    return Response.json({ message: "Form submission ID is required" }, { status: 400 });
+  }
 
   const invalidTokenResponse = await validateApiTokenResponse(
     request,
@@ -103,3 +122,7 @@ export async function DELETE({ locals, params, request }: any) {
     );
   }
 }
+
+export const GET = withPerformanceMonitoring(getHandler, 'form-submissions:get');
+export const PUT = withPerformanceMonitoring(putHandler, 'form-submissions:update');
+export const DELETE = withPerformanceMonitoring(deleteHandler, 'form-submissions:delete');
