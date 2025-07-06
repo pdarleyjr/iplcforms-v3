@@ -1,17 +1,21 @@
-import type { APIRoute } from "astro";
-import { validateApiTokenResponse } from "@/lib/api";
+import type { APIContext, APIRoute } from "astro";
 import { SubscriptionService } from "@/lib/services/subscription";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
 import { validateRequest, CreateSubscriptionRequest } from "@/lib/schemas/api-validation";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-const getHandler: APIRoute = async ({ locals, params, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const getHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'subscriptions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const subscriptionService = new SubscriptionService(DB);
 
@@ -26,19 +30,22 @@ const getHandler: APIRoute = async ({ locals, params, request }) => {
   }
 }
 
-const postHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const postHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.CREATE, 'subscriptions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const subscriptionService = new SubscriptionService(DB);
 
   try {
-    const body = await request.json();
+    const body = await context.request.json();
     
     // Validate request body using Zod schema
     const validation = validateRequest(CreateSubscriptionRequest, body);

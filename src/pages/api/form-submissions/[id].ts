@@ -1,21 +1,26 @@
 import { FormSubmissionService } from "@/lib/services/form_submission";
-import { validateApiTokenResponse } from "@/lib/api";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
+import { UpdateFormSubmissionRequest, validateRequest } from "@/lib/schemas/api-validation";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
-import type { APIRoute } from "astro";
+import type { APIContext, APIRoute } from "astro";
 
-const getHandler: APIRoute = async ({ locals, params, request }) => {
-  const { id } = params;
-  const { API_TOKEN, DB } = locals.runtime.env;
+const getHandler: APIRoute = async (context: APIContext) => {
+  const { id } = context.params;
+  const { DB } = (context.locals as any).runtime.env;
 
   if (!id) {
     return Response.json({ message: "Form submission ID is required" }, { status: 400 });
   }
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'form_submissions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formSubmissionService = new FormSubmissionService(DB);
   const submission = await formSubmissionService.getById(parseInt(id, 10));
@@ -27,30 +32,47 @@ const getHandler: APIRoute = async ({ locals, params, request }) => {
   return Response.json({ submission });
 }
 
-const putHandler: APIRoute = async ({ locals, params, request }) => {
-  const { id } = params;
-  const { API_TOKEN, DB } = locals.runtime.env;
+const putHandler: APIRoute = async (context: APIContext) => {
+  const { id } = context.params;
+  const { DB } = (context.locals as any).runtime.env;
 
   if (!id) {
     return Response.json({ message: "Form submission ID is required" }, { status: 400 });
   }
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.UPDATE, 'form_submissions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formSubmissionService = new FormSubmissionService(DB);
 
   try {
-    const body = await request.json() as {
+    const body = await context.request.json();
+    
+    // Validate request body using Zod schema
+    const validationResult = validateRequest(UpdateFormSubmissionRequest, body);
+    
+    if (!validationResult.success) {
+      return Response.json(
+        {
+          message: "Invalid request data",
+          errors: validationResult.errors
+        },
+        { status: 400 }
+      );
+    }
+
+    const result = await formSubmissionService.update(parseInt(id, 10), validationResult.data as {
       responses?: object;
       status?: string;
       completion_time_seconds?: number;
       metadata?: object;
-    };
-    const result = await formSubmissionService.update(parseInt(id, 10), body);
+    });
     
     if (!result.success) {
       return Response.json({ message: "Form submission not found" }, { status: 404 });
@@ -80,19 +102,22 @@ const putHandler: APIRoute = async ({ locals, params, request }) => {
   }
 }
 
-const deleteHandler: APIRoute = async ({ locals, params, request }) => {
-  const { id } = params;
-  const { API_TOKEN, DB } = locals.runtime.env;
+const deleteHandler: APIRoute = async (context: APIContext) => {
+  const { id } = context.params;
+  const { DB } = (context.locals as any).runtime.env;
 
   if (!id) {
     return Response.json({ message: "Form submission ID is required" }, { status: 400 });
   }
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.DELETE, 'form_submissions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formSubmissionService = new FormSubmissionService(DB);
 

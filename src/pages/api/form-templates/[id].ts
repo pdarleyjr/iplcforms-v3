@@ -1,21 +1,27 @@
 import { FormTemplateService } from "@/lib/services/form_template";
-import { validateApiTokenResponse } from "@/lib/api";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
+import { FormTemplateSchema, validateRequest } from "@/lib/schemas/api-validation";
 import type { APIRoute } from "astro";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-const getHandler: APIRoute = async ({ locals, params, request }) => {
+const getHandler: APIRoute = async (context) => {
+  const { locals, params } = context;
   const { id } = params;
-  const { API_TOKEN, DB } = locals.runtime.env;
+  const { DB } = (locals as any).runtime.env;
 
   if (!id) {
     return Response.json({ message: "Template ID is required" }, { status: 400 });
   }
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize for read access
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'form_templates');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formTemplateService = new FormTemplateService(DB);
   const template = await formTemplateService.getById(Number(id));
@@ -27,31 +33,40 @@ const getHandler: APIRoute = async ({ locals, params, request }) => {
   return Response.json({ template });
 };
 
-const putHandler: APIRoute = async ({ locals, params, request }) => {
+const putHandler: APIRoute = async (context) => {
+  const { locals, params, request } = context;
   const { id } = params;
-  const { API_TOKEN, DB } = locals.runtime.env;
+  const { DB } = (locals as any).runtime.env;
 
   if (!id) {
     return Response.json({ message: "Template ID is required" }, { status: 400 });
   }
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize for update access
+  const authzMiddleware = authorize(PERMISSIONS.UPDATE, 'form_templates');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
+
+  // Validate request body
+  const validationResult = await validateRequest(request, FormTemplateSchema.partial());
+  if (!validationResult.success) {
+    return Response.json({ errors: validationResult.errors }, { status: 400 });
+  }
 
   const formTemplateService = new FormTemplateService(DB);
 
   try {
-    const body = await request.json() as {
+    const template = await formTemplateService.update(Number(id), validationResult.data as {
       name?: string;
       description?: string;
       category?: string;
       form_config?: object;
       metadata?: object;
-    };
-    const template = await formTemplateService.update(Number(id), body);
+    });
     
     if (!template) {
       return Response.json({ message: "Form template not found" }, { status: 404 });
@@ -73,19 +88,23 @@ const putHandler: APIRoute = async ({ locals, params, request }) => {
   }
 };
 
-const deleteHandler: APIRoute = async ({ locals, params, request }) => {
+const deleteHandler: APIRoute = async (context) => {
+  const { locals, params } = context;
   const { id } = params;
-  const { API_TOKEN, DB } = locals.runtime.env;
+  const { DB } = (locals as any).runtime.env;
 
   if (!id) {
     return Response.json({ message: "Template ID is required" }, { status: 400 });
   }
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize for delete access
+  const authzMiddleware = authorize(PERMISSIONS.DELETE, 'form_templates');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formTemplateService = new FormTemplateService(DB);
 

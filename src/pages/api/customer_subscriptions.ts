@@ -1,5 +1,6 @@
-import { validateApiTokenResponse } from "@/lib/api";
 import { CustomerSubscriptionService } from "@/lib/services/customer_subscription";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
 import {
   CreateCustomerSubscriptionRequest,
   PaginationSchema,
@@ -7,19 +8,22 @@ import {
   validateQueryParams
 } from "@/lib/schemas/api-validation";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
-import type { APIRoute } from "astro";
+import type { APIContext, APIRoute } from "astro";
 
-const getHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const getHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'customer_subscriptions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   // Validate query parameters
-  const url = new URL(request.url);
+  const url = new URL(context.request.url);
   const queryValidation = validateQueryParams(url, PaginationSchema.partial());
   if (!queryValidation.success) {
     return Response.json(
@@ -47,18 +51,21 @@ const getHandler: APIRoute = async ({ locals, request }) => {
   }
 }
 
-const postHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const postHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.CREATE, 'customer_subscriptions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   try {
     // Parse and validate request body with Zod
-    const body = await request.json();
+    const body = await context.request.json();
     const bodyValidation = validateRequest(CreateCustomerSubscriptionRequest, body);
     
     if (!bodyValidation.success) {

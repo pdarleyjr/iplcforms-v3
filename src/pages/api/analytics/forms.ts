@@ -1,19 +1,23 @@
 import { FormAnalyticsService } from "@/lib/services/form_analytics";
-import { validateApiTokenResponse } from "@/lib/api";
-import type { APIRoute } from "astro";
+import type { APIRoute, APIContext } from "astro";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
 
-const getHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const getHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request - analytics requires READ permission on forms
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'forms');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formAnalyticsService = new FormAnalyticsService(DB);
-  const url = new URL(request.url);
+  const url = new URL(context.request.url);
 
   try {
     // Template-specific analytics
@@ -128,17 +132,20 @@ const getHandler: APIRoute = async ({ locals, request }) => {
   }
 };
 
-const postHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const postHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request - analytics operations require READ permission on forms
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'forms');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   try {
-    const body = await request.json() as {
+    const body = await context.request.json() as {
       operation: string;
       parameters: {
         template_id?: number;

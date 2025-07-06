@@ -1,21 +1,27 @@
-import { validateApiTokenResponse } from "@/lib/api";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
 import { CustomerWorkflowSchema, validateRequest, ApiResponseSchema } from "@/lib/schemas/api-validation";
-import type { APIRoute } from "astro";
+import type { APIRoute, APIContext } from "astro";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-const postHandler: APIRoute = async ({ locals, request, params }) => {
-  const { API_TOKEN, CUSTOMER_WORKFLOW } = locals.runtime.env;
+const postHandler: APIRoute = async (context: APIContext) => {
+  const { CUSTOMER_WORKFLOW } = (context.locals as any).runtime.env;
   
-  // Validate API token
-  const invalidTokenResponse = await validateApiTokenResponse(request, API_TOKEN);
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request - workflow creation requires MANAGE permission
+  const authzMiddleware = authorize(PERMISSIONS.MANAGE, 'workflows');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   try {
     // Parse request body
-    const body = await request.json() as Record<string, any>;
+    const body = await context.request.json() as Record<string, any>;
     
     // Add customer_id from URL params
-    const customer_id = params?.id ? parseInt(params.id) : body.customer_id;
+    const customer_id = context.params?.id ? parseInt(context.params.id) : body.customer_id;
     const requestData = { ...body, customer_id };
     
     // Validate request data with Zod
@@ -54,7 +60,7 @@ const postHandler: APIRoute = async ({ locals, request, params }) => {
     for (const step of workflowSteps.slice(0, 3)) { // Execute first 3 steps immediately
       if (workflowInstance && typeof (workflowInstance as any).step === 'function') {
         await (workflowInstance as any).step(step.name, async () => {
-          return await executeWorkflowStep(step, validatedCustomerId || 0, locals.runtime.env);
+          return await executeWorkflowStep(step, validatedCustomerId || 0, (context.locals as any).runtime.env);
         });
       }
     }

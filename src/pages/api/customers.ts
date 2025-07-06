@@ -1,17 +1,21 @@
 import { CustomerService } from "@/lib/services/customer";
-import { validateApiTokenResponse } from "@/lib/api";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
 import { CreateCustomerRequest, validateRequest, ApiResponseSchema } from "@/lib/schemas/api-validation";
-import type { APIRoute } from "astro";
+import type { APIContext, APIRoute } from "astro";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-const getHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const getHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'customers');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const customerService = new CustomerService(DB);
   const customers = await customerService.getAll();
@@ -26,18 +30,21 @@ const getHandler: APIRoute = async ({ locals, request }) => {
   }
 }
 
-const postHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const postHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
 
-  const invalidTokenResponse = await validateApiTokenResponse(
-    request,
-    API_TOKEN,
-  );
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.CREATE, 'customers');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   try {
     // Parse and validate request body with Zod
-    const body = await request.json();
+    const body = await context.request.json();
     const validation = validateRequest(CreateCustomerRequest, body);
     
     if (!validation.success) {

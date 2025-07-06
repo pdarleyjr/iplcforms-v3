@@ -1,13 +1,18 @@
-import type { APIRoute } from 'astro';
+import type { APIRoute, APIContext } from 'astro';
 import { WorkersPerformanceManager } from '../../lib/utils/workers-performance';
-import { validateApiTokenResponse } from '../../lib/api';
+import { authenticate, authorize } from '../../lib/middleware/rbac-middleware';
+import { PERMISSIONS } from '../../lib/utils/rbac';
 
-export const GET: APIRoute = async ({ locals, request }) => {
+export const GET: APIRoute = async (context: APIContext) => {
   try {
-    // Validate API token
-    const apiToken = locals.runtime?.env?.API_TOKEN || process.env.API_TOKEN;
-    const validationResponse = await validateApiTokenResponse(request, apiToken);
-    if (validationResponse) return validationResponse;
+    // Authenticate request
+    const authResult = await authenticate(context);
+    if (authResult instanceof Response) return authResult;
+
+    // Authorize request - only admin role can view performance metrics
+    const authzMiddleware = authorize(PERMISSIONS.READ, 'performance_metrics');
+    const authzResult = await authzMiddleware(authResult);
+    if (authzResult instanceof Response) return authzResult;
 
     // Get metrics from performance manager
     const performanceManager = WorkersPerformanceManager.getInstance();
@@ -39,14 +44,18 @@ export const GET: APIRoute = async ({ locals, request }) => {
   }
 };
 
-export const POST: APIRoute = async ({ locals, request }) => {
+export const POST: APIRoute = async (context: APIContext) => {
   try {
-    // Validate API token
-    const apiToken = locals.runtime?.env?.API_TOKEN || process.env.API_TOKEN;
-    const validationResponse = await validateApiTokenResponse(request, apiToken);
-    if (validationResponse) return validationResponse;
+    // Authenticate request
+    const authResult = await authenticate(context);
+    if (authResult instanceof Response) return authResult;
 
-    const body = await request.json() as { action: string };
+    // Authorize request - only admin role can manage performance metrics
+    const authzMiddleware = authorize(PERMISSIONS.MANAGE, 'performance_metrics');
+    const authzResult = await authzMiddleware(authResult);
+    if (authzResult instanceof Response) return authzResult;
+
+    const body = await context.request.json() as { action: string };
     const { action } = body;
 
     const performanceManager = WorkersPerformanceManager.getInstance();
@@ -65,11 +74,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
       case 'export':
         // Export metrics to KV storage if available
-        if (locals.runtime?.env?.METRICS_KV) {
+        if ((context.locals as any).runtime?.env?.METRICS_KV) {
           const metrics = performanceManager.getAllMetrics();
           const timestamp = new Date().toISOString();
           // Type assertion for KV namespace
-          const kv = locals.runtime.env.METRICS_KV as any;
+          const kv = (context.locals as any).runtime.env.METRICS_KV as any;
           await kv.put(
             `metrics-export-${timestamp}`,
             JSON.stringify(Array.from(metrics.entries())),

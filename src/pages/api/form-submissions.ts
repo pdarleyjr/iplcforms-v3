@@ -1,6 +1,7 @@
-import type { APIRoute } from "astro";
+import type { APIContext, APIRoute } from "astro";
 import { FormSubmissionService } from "@/lib/services/form_submission";
-import { validateApiTokenResponse } from "@/lib/api";
+import { authenticate, authorize } from "@/lib/middleware/rbac-middleware";
+import { PERMISSIONS } from "@/lib/utils/rbac";
 import {
   FormSubmissionFiltersSchema,
   CreateFormSubmissionRequest,
@@ -9,18 +10,23 @@ import {
 } from "@/lib/schemas/api-validation";
 import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-const getHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const getHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
   
-  // Validate API token
-  const invalidTokenResponse = await validateApiTokenResponse(request, API_TOKEN);
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.READ, 'form_submissions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formSubmissionService = new FormSubmissionService(DB);
   
   try {
     // Validate query parameters using Zod schema
-    const url = new URL(request.url);
+    const url = new URL(context.request.url);
     const filtersValidation = validateQueryParams(url, FormSubmissionFiltersSchema);
     
     if (!filtersValidation.success) {
@@ -45,17 +51,22 @@ const getHandler: APIRoute = async ({ locals, request }) => {
   }
 };
 
-const postHandler: APIRoute = async ({ locals, request }) => {
-  const { API_TOKEN, DB } = locals.runtime.env;
+const postHandler: APIRoute = async (context: APIContext) => {
+  const { DB } = (context.locals as any).runtime.env;
   
-  // Validate API token
-  const invalidTokenResponse = await validateApiTokenResponse(request, API_TOKEN);
-  if (invalidTokenResponse) return invalidTokenResponse;
+  // Authenticate request
+  const authResult = await authenticate(context);
+  if (authResult instanceof Response) return authResult;
+
+  // Authorize request
+  const authzMiddleware = authorize(PERMISSIONS.CREATE, 'form_submissions');
+  const authzResult = await authzMiddleware(authResult);
+  if (authzResult instanceof Response) return authzResult;
 
   const formSubmissionService = new FormSubmissionService(DB);
   
   try {
-    const body = await request.json();
+    const body = await context.request.json();
     
     // Validate request body using Zod schema
     const validation = validateRequest(CreateFormSubmissionRequest, body);
@@ -77,7 +88,7 @@ const postHandler: APIRoute = async ({ locals, request }) => {
       responses: validation.data.form_data,
       status: validation.data.status,
       completion_time_seconds: undefined,
-      submitted_by: validation.data.user_id ? parseInt(validation.data.user_id) : undefined,
+      submitted_by: Number(authResult.locals.customerId),
       metadata: validation.data.metadata
     };
 
