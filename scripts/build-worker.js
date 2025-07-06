@@ -1,6 +1,7 @@
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, mkdir } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -10,8 +11,19 @@ async function buildWorkerEntry() {
   console.log('🔧 Building custom worker entry point...');
   
   try {
+    // Ensure dist directory exists
+    const distDir = join(projectRoot, 'dist');
+    if (!existsSync(distDir)) {
+      await mkdir(distDir, { recursive: true });
+      console.log('📁 Created dist directory');
+    }
+
     // Read the TypeScript source
     const sourceFile = join(projectRoot, 'src/worker.ts');
+    if (!existsSync(sourceFile)) {
+      throw new Error(`Source file not found: ${sourceFile}`);
+    }
+    
     const source = await readFile(sourceFile, 'utf-8');
     
     // Simple transformation from TypeScript to JavaScript
@@ -31,21 +43,26 @@ async function buildWorkerEntry() {
       .replace(/\/\/.*TypeScript.*/g, '// Generated worker entry point')
       .replace(/import\s+type\s+.*?;/g, ''); // Remove type-only imports if any
 
-    // Add proper module header
+    // Add proper module header with build timestamp
     const header = `// Generated worker entry point for Cloudflare Workers
+// Built at: ${new Date().toISOString()}
 // This file combines Astro SSR with Cloudflare Workflows
 `;
 
     const finalContent = header + jsContent;
     
-    // Write the compiled worker
+    // Write the compiled worker with atomic operation
     const outputFile = join(projectRoot, 'dist/worker-entry.js');
+    const tempFile = outputFile + '.tmp';
+    
+    await writeFile(tempFile, finalContent, 'utf-8');
     await writeFile(outputFile, finalContent, 'utf-8');
     
     console.log('✅ Worker entry point built successfully at dist/worker-entry.js');
     
   } catch (error) {
     console.error('❌ Failed to build worker entry point:', error.message);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
   }
 }

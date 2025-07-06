@@ -44,7 +44,8 @@
   },
   "devDependencies": {
     "copyfiles": "^2.4.1",
-    "wrangler": "4.21.x"
+    "wrangler": "4.21.x",
+    "esbuild": "0.25.4"
   },
   "scripts": {
     "astro": "astro",
