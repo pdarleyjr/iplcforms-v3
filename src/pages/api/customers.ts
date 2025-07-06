@@ -2,8 +2,9 @@ import { CustomerService } from "@/lib/services/customer";
 import { validateApiTokenResponse } from "@/lib/api";
 import { CreateCustomerRequest, validateRequest, ApiResponseSchema } from "@/lib/schemas/api-validation";
 import type { APIRoute } from "astro";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export const GET: APIRoute = async ({ locals, request }) => {
+const getHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -25,7 +26,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
   }
 }
 
-export const POST: APIRoute = async ({ locals, request }) => {
+const postHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -84,3 +85,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     );
   }
 };
+
+export const GET = withPerformanceMonitoring(getHandler, 'customers:list');
+export const POST = withPerformanceMonitoring(postHandler, 'customers:create');

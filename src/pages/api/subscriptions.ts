@@ -2,8 +2,9 @@ import type { APIRoute } from "astro";
 import { validateApiTokenResponse } from "@/lib/api";
 import { SubscriptionService } from "@/lib/services/subscription";
 import { validateRequest, CreateSubscriptionRequest } from "@/lib/schemas/api-validation";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export const GET: APIRoute = async ({ locals, params, request }) => {
+const getHandler: APIRoute = async ({ locals, params, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -25,7 +26,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
   }
 }
 
-export const POST: APIRoute = async ({ locals, request }) => {
+const postHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   const invalidTokenResponse = await validateApiTokenResponse(
@@ -70,3 +71,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     );
   }
 }
+
+export const GET = withPerformanceMonitoring(getHandler, 'subscriptions:list');
+export const POST = withPerformanceMonitoring(postHandler, 'subscriptions:create');

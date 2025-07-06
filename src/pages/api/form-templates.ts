@@ -2,8 +2,9 @@ import { FormTemplateService } from "@/lib/services/form_template";
 import { validateApiTokenResponse } from "@/lib/api";
 import { CreateFormTemplateRequest, validateRequest, ApiResponseSchema, PaginationSchema, FilterSchema, validateQueryParams } from "@/lib/schemas/api-validation";
 import type { APIRoute } from "astro";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export const GET: APIRoute = async ({ locals, request }) => {
+const getHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   // Validate API token
@@ -54,7 +55,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
   }
 };
 
-export const POST: APIRoute = async ({ locals, request }) => {
+const postHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
 
   // Validate API token
@@ -117,3 +118,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     );
   }
 };
+
+export const GET = withPerformanceMonitoring(getHandler, 'form-templates:list');
+export const POST = withPerformanceMonitoring(postHandler, 'form-templates:create');

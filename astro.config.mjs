@@ -53,13 +53,6 @@ export default defineConfig({
     prefetchAll: true,
     defaultStrategy: "viewport"
   },
-  // Advanced caching strategy
-  experimental: {
-    contentCollectionCache: true,
-    optimizeHoistedScript: true,
-    clientPrerender: true,
-    globalRoutePriority: true
-  },
   vite: {
     resolve: {
       // Use react-dom/server.edge instead of react-dom/server.browser for React 19.

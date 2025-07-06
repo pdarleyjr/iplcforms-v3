@@ -1,7 +1,9 @@
 import { CustomerService } from "@/lib/services/customer";
 import { validateApiTokenResponse } from "@/lib/api";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
+import type { APIRoute } from "astro";
 
-export async function GET({ locals, params, request }) {
+const getHandler: APIRoute = async ({ locals, params, request }) => {
   const { id } = params;
   const { API_TOKEN, DB } = locals.runtime.env;
 
@@ -20,3 +22,5 @@ export async function GET({ locals, params, request }) {
 
   return Response.json({ customer: customer });
 }
+
+export const GET = withPerformanceMonitoring(getHandler, 'customers:get');

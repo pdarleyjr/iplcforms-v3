@@ -7,8 +7,9 @@ import {
   validateRequest,
   validateQueryParams
 } from "@/lib/schemas/api-validation";
+import { withPerformanceMonitoring } from "@/lib/utils/performance-wrapper";
 
-export const GET: APIRoute = async ({ locals, request }) => {
+const getHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
   
   // Validate API token
@@ -44,7 +45,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
   }
 };
 
-export const POST: APIRoute = async ({ locals, request }) => {
+const postHandler: APIRoute = async ({ locals, request }) => {
   const { API_TOKEN, DB } = locals.runtime.env;
   
   // Validate API token
@@ -102,3 +103,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     );
   }
 };
+
+export const GET = withPerformanceMonitoring(getHandler, 'form-submissions:list');
+export const POST = withPerformanceMonitoring(postHandler, 'form-submissions:create');
