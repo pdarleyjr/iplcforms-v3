@@ -27,7 +27,8 @@ export default defineConfig({
         include: [{ pattern: "/api/*" }, { pattern: "/admin/*" }, { pattern: "/forms/*" }],
         exclude: [{ pattern: "/assets/*" }, { pattern: "/_astro/*" }]
       }
-    }
+    },
+    sessionKVBindingName: 'SESSION'
   }),
   integrations: [
     react({

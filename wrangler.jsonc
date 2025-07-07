@@ -27,5 +27,11 @@
       "binding": "CUSTOMER_WORKFLOW",
       "class_name": "CustomerWorkflow"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "a4926bc00e9b438a8982889934457a579"
+    }
   ]
 }

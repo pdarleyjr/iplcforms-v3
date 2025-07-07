@@ -2,13 +2,14 @@
 -- Extend customers table for clinical roles and add permission system
 
 -- Extend customers table for clinical functionality
-ALTER TABLE customers ADD COLUMN role TEXT NOT NULL DEFAULT 'patient' 
-    CHECK(role IN ('patient', 'clinician', 'admin', 'researcher'));
-ALTER TABLE customers ADD COLUMN license_number TEXT;
-ALTER TABLE customers ADD COLUMN organization TEXT;
-ALTER TABLE customers ADD COLUMN status TEXT NOT NULL DEFAULT 'active' 
-    CHECK(status IN ('active', 'inactive', 'suspended'));
-ALTER TABLE customers ADD COLUMN last_login_at TIMESTAMP;
+-- Note: These columns already exist in the database from a previous partial migration
+-- ALTER TABLE customers ADD COLUMN role TEXT NOT NULL DEFAULT 'patient'
+--     CHECK(role IN ('patient', 'clinician', 'admin', 'researcher'));
+-- ALTER TABLE customers ADD COLUMN license_number TEXT;
+-- ALTER TABLE customers ADD COLUMN organization TEXT;
+-- ALTER TABLE customers ADD COLUMN status TEXT NOT NULL DEFAULT 'active'
+--     CHECK(status IN ('active', 'inactive', 'suspended'));
+-- ALTER TABLE customers ADD COLUMN last_login_at TIMESTAMP;
 
 -- Clinical permissions table for role-based access control
 CREATE TABLE clinical_permissions (
