@@ -1,50 +1,250 @@
 ---
+import Layout from '@/layouts/Layout.astro';
 import { buttonVariants } from '@/components/ui/button';
-import { Github, LayoutDashboard } from 'lucide-react';
-import '@/styles/globals.css'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { 
+  LayoutDashboard, 
+  Users, 
+  FileText, 
+  BarChart3, 
+  Shield, 
+  Zap,
+  Check,
+  ArrowRight,
+  Activity,
+  Stethoscope,
+  ClipboardList,
+  UserCheck
+} from 'lucide-react';
 
-const repoLink = 'https://github.com/cloudflare/templates/tree/main/saas-admin-template';
+const features = [
+  {
+    icon: Users,
+    title: 'Patient Management',
+    description: 'Comprehensive patient records, demographics, and clinical history tracking.'
+  },
+  {
+    icon: FileText,
+    title: 'Dynamic Forms',
+    description: 'Create, manage, and deploy clinical forms with real-time validation.'
+  },
+  {
+    icon: BarChart3,
+    title: 'Analytics Dashboard',
+    description: 'Track form submissions, completion rates, and clinical metrics.'
+  },
+  {
+    icon: Shield,
+    title: 'Role-Based Access',
+    description: 'Secure access control with clinical roles and permissions.'
+  },
+  {
+    icon: Activity,
+    title: 'Real-Time Monitoring',
+    description: 'Monitor patient submissions and clinical workflows in real-time.'
+  },
+  {
+    icon: Zap,
+    title: 'Fast & Scalable',
+    description: 'Built on Cloudflare Workers for global performance and reliability.'
+  }
+];
+
+const benefits = [
+  'HIPAA-compliant infrastructure',
+  'Automated clinical workflows',
+  'Multi-location support',
+  'Real-time data synchronization',
+  'Customizable form templates',
+  'Comprehensive audit trails'
+];
 ---
 
-<script is:inline>
-  const getThemePreference = () => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
-      return localStorage.getItem('theme');
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
-  const isDark = getThemePreference() === 'dark';
-  document.documentElement.classList[isDark ? 'add' : 'remove']('dark');
- 
-  if (typeof localStorage !== 'undefined') {
-    const observer = new MutationObserver(() => {
-      const isDark = document.documentElement.classList.contains('dark');
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  }
-</script>
-
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="generator" content={Astro.generator} />
-    <title>SaaS Admin Template</title>
-  </head>
-  <body>
-    <div class="flex flex-col items-center justify-center gap-4 py-20 px-8">
-      <h1 class="text-5xl font-bold">SaaS Admin Template</h1>
-      <p class="text-xl text-muted-foreground">Manage a SaaS application - customers, subscriptions - using Cloudflare Workers and D1.</p>
-      <div class="flex flex gap-4 mt-4">
-        <a class={buttonVariants()} href="/admin">
-          <LayoutDashboard /> Go to admin
-        </a>
-        <a class={buttonVariants({ variant: 'outline' })} href={repoLink}>
-          <Github /> View on GitHub
-        </a>
+<Layout title="Home">
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden">
+    <div class="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:flex lg:px-8 lg:py-20">
+      <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-xl lg:flex-shrink-0 lg:pt-8">
+        <div class="flex items-center gap-x-4 mb-8">
+          <span class="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold leading-6 text-primary">
+            Clinical Admin System
+          </span>
+          <span class="inline-flex items-center gap-x-1 text-sm text-muted-foreground">
+            <Stethoscope className="h-4 w-4" />
+            Healthcare Ready
+          </span>
+        </div>
+        <h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
+          Clinical Forms & Patient Management Platform
+        </h1>
+        <p class="mt-6 text-lg leading-8 text-muted-foreground">
+          A comprehensive healthcare administration system built for modern clinical practices. 
+          Manage patients, create dynamic forms, track submissions, and maintain compliance 
+          with an intuitive, secure platform.
+        </p>
+        <div class="mt-10 flex items-center gap-x-6">
+          <a href="/admin" class={buttonVariants({ size: 'lg' })}>
+            <LayoutDashboard className="mr-2 h-5 w-5" />
+            Access Admin Dashboard
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </a>
+          <a href="/forms" class={buttonVariants({ variant: 'outline', size: 'lg' })}>
+            <ClipboardList className="mr-2 h-5 w-5" />
+            View Forms
+          </a>
+        </div>
+      </div>
+      <div class="mx-auto mt-16 flex max-w-2xl sm:mt-24 lg:ml-10 lg:mr-0 lg:mt-0 lg:max-w-none lg:flex-none xl:ml-16">
+        <div class="max-w-3xl flex-none sm:max-w-5xl lg:max-w-none">
+          <div class="rounded-xl bg-gray-900/5 p-2 ring-1 ring-inset ring-gray-900/10 lg:-m-4 lg:rounded-2xl lg:p-4 dark:bg-gray-100/5 dark:ring-gray-100/10">
+            <Card className="shadow-2xl">
+              <CardHeader>
+                <CardTitle>Clinical Admin Dashboard</CardTitle>
+                <CardDescription>Real-time overview of your clinical operations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-2xl font-bold">1,234</p>
+                      <p className="text-xs text-muted-foreground">Active Patients</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-2xl font-bold">56</p>
+                      <p className="text-xs text-muted-foreground">Forms Created</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-2xl font-bold">98.5%</p>
+                      <p className="text-xs text-muted-foreground">Completion Rate</p>
+                    </div>
+                  </div>
+                  <div className="h-32 bg-muted/20 rounded-md flex items-center justify-center">
+                    <BarChart3 className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
-  </body>
-</html>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="py-16 bg-muted/20">
+    <div class="mx-auto max-w-7xl px-6 lg:px-8">
+      <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
+          Everything you need for clinical administration
+        </h2>
+        <p class="mt-4 text-lg leading-8 text-muted-foreground">
+          Built specifically for healthcare providers, our platform streamlines patient management and clinical workflows.
+        </p>
+      </div>
+      <div class="mx-auto mt-16 max-w-7xl">
+        <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <Card className="relative">
+              <CardHeader>
+                <feature.icon className="h-10 w-10 text-primary mb-4" />
+                <CardTitle className="text-xl">{feature.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>{feature.description}</CardDescription>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Benefits Section -->
+  <section class="py-16">
+    <div class="mx-auto max-w-7xl px-6 lg:px-8">
+      <div class="mx-auto grid max-w-2xl grid-cols-1 gap-x-8 gap-y-16 sm:gap-y-20 lg:mx-0 lg:max-w-none lg:grid-cols-2 items-center">
+        <div>
+          <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
+            Built for Healthcare Compliance
+          </h2>
+          <p class="mt-6 text-lg leading-8 text-muted-foreground">
+            Our platform is designed with healthcare regulations in mind, ensuring your 
+            patient data is secure and your workflows are compliant.
+          </p>
+          <div className="mt-8 space-y-3">
+            {benefits.map((benefit) => (
+              <div className="flex items-center gap-x-3">
+                <Check className="h-5 w-5 flex-none text-primary" />
+                <span className="text-base">{benefit}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-10">
+            <a href="/admin" class={buttonVariants()}>
+              Get Started
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </a>
+          </div>
+        </div>
+        <div className="relative">
+          <Card className="shadow-xl">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Quick Actions</CardTitle>
+                <UserCheck className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <a href="/admin/customers" className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Manage Patients</span>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </a>
+              <a href="/forms" className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Create Forms</span>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </a>
+              <a href="/admin/subscriptions" className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Activity className="h-5 w-5 text-primary" />
+                  <span className="font-medium">View Analytics</span>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </a>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 bg-primary/5">
+    <div class="mx-auto max-w-7xl px-6 lg:px-8">
+      <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
+          Ready to transform your clinical workflows?
+        </h2>
+        <p class="mx-auto mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
+          Join healthcare providers who are streamlining their patient management 
+          and clinical documentation with our comprehensive platform.
+        </p>
+        <div class="mt-10 flex items-center justify-center gap-x-6">
+          <a href="/admin" class={buttonVariants({ size: 'lg' })}>
+            <LayoutDashboard className="mr-2 h-5 w-5" />
+            Start Now
+          </a>
+          <a href="/forms" class={buttonVariants({ variant: 'ghost', size: 'lg' })}>
+            Learn More
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

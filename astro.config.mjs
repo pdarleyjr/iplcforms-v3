@@ -32,7 +32,7 @@ export default defineConfig({
   }),
   integrations: [
     react({
-      include: ["**/react/*"]
+      include: ["**/*.tsx", "**/*.jsx"]
     }),
     tailwind({
       applyBaseStyles: true
