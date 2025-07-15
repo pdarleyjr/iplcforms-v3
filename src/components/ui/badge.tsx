@@ -4,17 +4,24 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-iplc-primary/20 focus:ring-offset-2",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+          "border-transparent gradient-metallic-primary text-white shadow-[var(--iplc-shadow-sm)] hover:shadow-[var(--iplc-shadow-md)]",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border-transparent bg-iplc-neutral-200 text-iplc-neutral-700 hover:bg-iplc-neutral-200/80 shadow-[var(--iplc-shadow-sm)]",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
-        outline: "text-foreground",
+          "border-transparent bg-destructive text-destructive-foreground shadow-[var(--iplc-shadow-sm)] hover:bg-destructive/80",
+        outline: "text-foreground border-iplc-neutral-200",
+        // New IPLC metallic variants
+        gold:
+          "border-transparent gradient-metallic-gold text-iplc-primary-dark shadow-[var(--iplc-shadow-sm)] hover:shadow-[var(--iplc-shadow-md)]",
+        green:
+          "border-transparent gradient-metallic-green text-white shadow-[var(--iplc-shadow-sm)] hover:shadow-[var(--iplc-shadow-md)]",
+        navy:
+          "border-transparent gradient-metallic-navy text-white shadow-[var(--iplc-shadow-sm)] hover:shadow-[var(--iplc-shadow-md)]",
       },
     },
     defaultVariants: {

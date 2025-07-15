@@ -4,13 +4,18 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7",
+  "relative w-full rounded-lg border px-4 py-3 text-sm shadow-[var(--iplc-shadow-sm)] transition-all [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7",
   {
     variants: {
       variant: {
-        default: "bg-background text-foreground",
+        default: "bg-iplc-background border-iplc-neutral-200 text-iplc-neutral-700 [&>svg]:text-iplc-primary",
         destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+          "border-destructive/50 bg-destructive/10 text-destructive dark:border-destructive [&>svg]:text-destructive",
+        // IPLC-specific variants
+        info: "gradient-metallic-primary border-transparent text-white [&>svg]:text-white",
+        success: "gradient-metallic-green border-transparent text-white [&>svg]:text-white",
+        warning: "gradient-metallic-gold border-transparent text-iplc-primary-dark [&>svg]:text-iplc-primary-dark",
+        navy: "gradient-metallic-navy border-transparent text-white [&>svg]:text-white",
       },
     },
     defaultVariants: {

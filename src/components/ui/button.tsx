@@ -5,20 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iplc-accent-sky focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+          "gradient-metallic-primary text-white shadow-iplc-sm hover:shadow-iplc-md hover:scale-[1.02] active:scale-[0.98]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-iplc-sm hover:bg-destructive/90 hover:shadow-iplc-md",
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+          "border border-iplc-neutral-200 bg-background shadow-iplc-sm hover:bg-iplc-accent-sky/10 hover:border-iplc-accent-sky hover:shadow-iplc-md",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-iplc-accent-sky text-white shadow-iplc-sm hover:bg-iplc-accent-sky/90 hover:shadow-iplc-md",
+        ghost: "hover:bg-iplc-neutral-200/20 hover:text-iplc-primary",
+        link: "text-iplc-primary underline-offset-4 hover:underline hover:text-iplc-primary-dark",
       },
       size: {
         default: "h-9 px-4 py-2",
