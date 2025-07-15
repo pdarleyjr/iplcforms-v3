@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -58,9 +57,184 @@
 }
 @layer base {
   * {
-    @apply border-border;
+    border-color: rgb(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+  }
+}
+
+/* Define custom utilities for Tailwind v4 */
+@layer utilities {
+  .border-border {
+    border-color: rgb(var(--border));
+  }
+  .bg-primary {
+    background-color: rgb(var(--primary));
+  }
+  .bg-primary\/90 {
+    background-color: rgb(var(--primary) / 0.9);
+  }
+  .text-primary {
+    color: rgb(var(--primary));
+  }
+  .text-primary-foreground {
+    color: rgb(var(--primary-foreground));
+  }
+  .bg-secondary {
+    background-color: rgb(var(--secondary));
+  }
+  .bg-secondary\/80 {
+    background-color: rgb(var(--secondary) / 0.8);
+  }
+  .text-secondary {
+    color: rgb(var(--secondary));
+  }
+  .text-secondary-foreground {
+    color: rgb(var(--secondary-foreground));
+  }
+  .bg-destructive {
+    background-color: rgb(var(--destructive));
+  }
+  .bg-destructive\/90 {
+    background-color: rgb(var(--destructive) / 0.9);
+  }
+  .bg-destructive\/80 {
+    background-color: rgb(var(--destructive) / 0.8);
+  }
+  .text-destructive {
+    color: rgb(var(--destructive));
+  }
+  .text-destructive-foreground {
+    color: rgb(var(--destructive-foreground));
+  }
+  .bg-accent {
+    background-color: rgb(var(--accent));
+  }
+  .text-accent {
+    color: rgb(var(--accent));
+  }
+  .text-accent-foreground {
+    color: rgb(var(--accent-foreground));
+  }
+  .bg-muted {
+    background-color: rgb(var(--muted));
+  }
+  .bg-muted\/50 {
+    background-color: rgb(var(--muted) / 0.5);
+  }
+  .text-muted {
+    color: rgb(var(--muted));
+  }
+  .text-muted-foreground {
+    color: rgb(var(--muted-foreground));
+  }
+  .bg-card {
+    background-color: rgb(var(--card));
+  }
+  .bg-card\/50 {
+    background-color: rgb(var(--card) / 0.5);
+  }
+  .text-card {
+    color: rgb(var(--card));
+  }
+  .text-card-foreground {
+    color: rgb(var(--card-foreground));
+  }
+  .bg-popover {
+    background-color: rgb(var(--popover));
+  }
+  .text-popover {
+    color: rgb(var(--popover));
+  }
+  .text-popover-foreground {
+    color: rgb(var(--popover-foreground));
+  }
+  .ring-primary {
+    --tw-ring-color: rgb(var(--primary));
+  }
+  .ring-secondary {
+    --tw-ring-color: rgb(var(--secondary));
+  }
+  .ring-destructive {
+    --tw-ring-color: rgb(var(--destructive));
+  }
+  .ring-accent {
+    --tw-ring-color: rgb(var(--accent));
+  }
+  .ring-muted {
+    --tw-ring-color: rgb(var(--muted));
+  }
+  .ring-card {
+    --tw-ring-color: rgb(var(--card));
+  }
+  .ring-popover {
+    --tw-ring-color: rgb(var(--popover));
+  }
+}
+
+/* Hover utilities */
+@layer utilities {
+  .hover\:bg-primary\/90:hover {
+    background-color: rgb(var(--primary) / 0.9);
+  }
+  .hover\:bg-secondary\/80:hover {
+    background-color: rgb(var(--secondary) / 0.8);
+  }
+  .hover\:bg-destructive\/90:hover {
+    background-color: rgb(var(--destructive) / 0.9);
+  }
+  .hover\:bg-destructive\/80:hover {
+    background-color: rgb(var(--destructive) / 0.8);
+  }
+  .hover\:bg-accent:hover {
+    background-color: rgb(var(--accent));
+  }
+  .hover\:text-accent-foreground:hover {
+    color: rgb(var(--accent-foreground));
+  }
+  .hover\:bg-muted:hover {
+    background-color: rgb(var(--muted));
+  }
+  .hover\:bg-muted\/50:hover {
+    background-color: rgb(var(--muted) / 0.5);
+  }
+  .hover\:bg-card:hover {
+    background-color: rgb(var(--card));
+  }
+  .hover\:bg-popover:hover {
+    background-color: rgb(var(--popover));
+  }
+  .hover\:bg-primary:hover {
+    background-color: rgb(var(--primary));
+  }
+  .hover\:bg-secondary:hover {
+    background-color: rgb(var(--secondary));
+  }
+}
+
+/* Additional common utilities */
+@layer utilities {
+  .bg-background {
+    background-color: rgb(var(--background));
+  }
+  .text-foreground {
+    color: rgb(var(--foreground));
+  }
+  .border-input {
+    border-color: rgb(var(--input));
+  }
+  .ring-ring {
+    --tw-ring-color: rgb(var(--ring));
+  }
+  .bg-transparent {
+    background-color: transparent;
+  }
+  .from-primary {
+    --tw-gradient-from: rgb(var(--primary));
+  }
+  .to-primary {
+    --tw-gradient-to: rgb(var(--primary));
   }
 }

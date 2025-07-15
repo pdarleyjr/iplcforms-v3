@@ -5,7 +5,6 @@ import path from "path";
 
 import cloudflare from "@astrojs/cloudflare";
 import react from "@astrojs/react";
-import tailwind from "@astrojs/tailwind";
 
 // https://astro.build/config
 export default defineConfig({
@@ -33,9 +32,6 @@ export default defineConfig({
   integrations: [
     react({
       include: ["**/*.tsx", "**/*.jsx"]
-    }),
-    tailwind({
-      applyBaseStyles: true
     })
   ],
   output: "server",
@@ -47,8 +43,6 @@ export default defineConfig({
   // Build optimizations for production
   build: {
     inlineStylesheets: "auto",
-    split: true,
-    excludeMiddleware: false,
     assets: "_astro"
   },
   // Enhanced prefetch configuration

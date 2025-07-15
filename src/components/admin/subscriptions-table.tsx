@@ -224,8 +224,8 @@ export function SubscriptionsTable({ data }: DataTableProps) {
   });
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
-      <div className="p-4 border-b border-border/50">
+    <div className="rounded-lg border border-zinc-200/50 dark:border-zinc-800/50 bg-card/50 backdrop-blur-sm shadow-sm">
+      <div className="p-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-foreground">Clinical Subscription Plans</h3>
