@@ -3,6 +3,7 @@
 
 import type { SSRManifest } from 'astro';
 import { App } from 'astro/app';
+import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 
 // Import the CustomerWorkflow class for Cloudflare Workflows binding
 import { CustomerWorkflow } from './workflows/customer_workflow';
@@ -22,6 +23,22 @@ export function createExports(manifest: SSRManifest) {
         (globalThis as any).CACHE_KV = env.CACHE_KV;
         // Initialize the performance manager
         WorkersPerformanceManager.getInstance();
+      }
+
+      // Check if the request is for an asset and serve it from KV
+      try {
+        const assetResponse = await getAssetFromKV(
+          {
+            request,
+            waitUntil: ctx.waitUntil.bind(ctx),
+          },
+          {
+            ASSET_NAMESPACE: env.ASSETS,
+          }
+        );
+        return assetResponse;
+      } catch (e) {
+        // Asset not found or other error, continue to Astro SSR
       }
 
       return app.render(request, {
