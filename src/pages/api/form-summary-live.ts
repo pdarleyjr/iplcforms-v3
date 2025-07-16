@@ -3,20 +3,19 @@
 
 import type { APIRoute } from 'astro';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
 
 const supabaseUrl = import.meta.env.SUPABASE_URL;
 const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
-const openaiApiKey = import.meta.env.OPENAI_API_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey || !openaiApiKey) {
+if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing required environment variables');
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-const openai = new OpenAI({ apiKey: openaiApiKey });
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
+  const env = (locals as any).runtime.env;
+  
   try {
     // Check authentication
     const authHeader = request.headers.get('authorization');
@@ -108,18 +107,27 @@ export const POST: APIRoute = async ({ request }) => {
       userPrompt = `Please summarize the following form data:\n\n${contentToSummarize}`;
     }
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: Math.ceil(maxLength / 4), // Rough estimate of tokens from characters
-      temperature: 0.3, // Lower temperature for more consistent summaries
-    });
-
-    const summary = completion.choices[0]?.message?.content || 'Unable to generate summary';
+    // Call AI Worker service
+    const aiPrompt = {
+      systemPrompt,
+      userPrompt
+    };
+    
+    const aiResponse = await env.AI_WORKER.fetch(new Request('https://ai-worker/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(aiPrompt)
+    }));
+    
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      throw new Error(`AI Worker error: ${aiResponse.status} - ${errorText}`);
+    }
+    
+    const aiResult = await aiResponse.json();
+    const summary = aiResult.response || aiResult.text || aiResult.summary || 'Unable to generate summary';
 
     // Truncate if needed
     const truncatedSummary = summary.length > maxLength 
