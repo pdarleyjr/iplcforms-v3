@@ -18,14 +18,15 @@ interface SessionObject {
   version: number;
 }
 
-export class FormSessionDO {
-  private env: any;
-  private state: DurableObjectState;
+export class FormSessionDO implements DurableObject {
   private sessions = new Map<string, any>();
+  private ctx: DurableObjectState;
+  private env: any;
 
   constructor(state: DurableObjectState, env: any) {
-    this.state = state;
+    this.ctx = state;
     this.env = env;
+    this.sessions = new Map<string, any>();
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -55,7 +56,7 @@ export class FormSessionDO {
       
       if (!session) {
         // Fall back to durable storage
-        session = await this.state.storage.get(sessionId);
+        session = await this.ctx.storage.get(sessionId);
       }
 
       if (!session) {
@@ -103,10 +104,10 @@ export class FormSessionDO {
 
       // Store in memory and durable storage
       this.sessions.set(sessionId, session);
-      await this.state.storage.put(sessionId, session);
+      await this.ctx.storage.put(sessionId, session);
 
       // Set expiration (24 hours)
-      await this.state.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1000);
+      await this.ctx.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1000);
 
       return new Response(JSON.stringify({
         success: true,
@@ -130,7 +131,7 @@ export class FormSessionDO {
     try {
       // Remove from memory and storage
       this.sessions.delete(sessionId);
-      await this.state.storage.delete(sessionId);
+      await this.ctx.storage.delete(sessionId);
 
       return new Response(JSON.stringify({
         success: true,
@@ -153,7 +154,7 @@ export class FormSessionDO {
   async alarm(): Promise<void> {
     try {
       // Get all keys and check expiration
-      const keys = await this.state.storage.list();
+      const keys = await this.ctx.storage.list();
       const now = Date.now();
       const expiredKeys: string[] = [];
 
@@ -169,13 +170,13 @@ export class FormSessionDO {
 
       // Clean up expired sessions
       if (expiredKeys.length > 0) {
-        await this.state.storage.delete(expiredKeys);
+        await this.ctx.storage.delete(expiredKeys);
         expiredKeys.forEach(key => this.sessions.delete(key));
       }
 
       // Set next alarm if there are still active sessions
       if (keys.size > expiredKeys.length) {
-        await this.state.storage.setAlarm(Date.now() + 60 * 60 * 1000); // Check again in 1 hour
+        await this.ctx.storage.setAlarm(Date.now() + 60 * 60 * 1000); // Check again in 1 hour
       }
     } catch (error) {
       console.error('Failed to clean up expired sessions:', error);

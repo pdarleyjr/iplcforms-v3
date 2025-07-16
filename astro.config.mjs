@@ -18,7 +18,7 @@ export default defineConfig({
     },
     workerEntryPoint: {
       path: "src/worker.ts",
-      namedExports: ["CustomerWorkflow"]
+      namedExports: ["CustomerWorkflow", "FormSessionDO"]
     },
     // Enhanced Cloudflare-specific optimizations
     routes: {

@@ -38,11 +38,18 @@
     "bindings": [
       {
         "name": "FORM_SESSION",
-        "class_name": "FormSessionDO",
-        "script_name": "iplcforms-v3"
+        "class_name": "FormSessionDO"
       }
     ]
   },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "FormSessionDO"
+      ]
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "SESSION",
