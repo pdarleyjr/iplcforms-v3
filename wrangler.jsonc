@@ -28,6 +28,21 @@
       "class_name": "CustomerWorkflow"
     }
   ],
+  "services": [
+    {
+      "binding": "AI_WORKER",
+      "service": "iplc-ai"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "FORM_SESSION",
+        "class_name": "FormSessionDO",
+        "script_name": "iplcforms-v3"
+      }
+    ]
+  },
   "kv_namespaces": [
     {
       "binding": "SESSION",

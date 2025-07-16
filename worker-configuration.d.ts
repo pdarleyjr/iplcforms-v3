@@ -9,6 +9,7 @@ declare namespace Cloudflare {
 		DB: D1Database;
 		ASSETS: Fetcher;
 		CUSTOMER_WORKFLOW: Workflow;
+		AI_WORKER: Fetcher;
 	}
 }
 interface Env extends Cloudflare.Env {}

@@ -79,7 +79,7 @@ const postHandler: APIRoute = async (context) => {
     if (!validation.success) {
       return new Response(JSON.stringify({
         error: 'Invalid request data',
-        details: validation.error.errors
+        details: validation.error.issues
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }

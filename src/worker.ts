@@ -8,6 +8,9 @@ import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 // Import the CustomerWorkflow class for Cloudflare Workflows binding
 import { CustomerWorkflow } from './workflows/customer_workflow';
 
+// Import FormSessionDO for autosave functionality
+import { FormSessionDO } from './durable-objects/FormSessionDO';
+
 // Import WorkersPerformanceManager for performance monitoring
 import { WorkersPerformanceManager } from './lib/utils/workers-performance';
 
@@ -51,5 +54,6 @@ export function createExports(manifest: SSRManifest) {
   return {
     default: handler,
     CustomerWorkflow: CustomerWorkflow,
+    FormSessionDO: FormSessionDO,
   };
 }

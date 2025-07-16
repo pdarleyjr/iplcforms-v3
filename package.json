@@ -43,13 +43,18 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.60.0",
+    "sortablejs": "^1.15.6",
     "tailwind-merge": "3.3.1",
     "tailwindcss": "^4.1.11",
     "tailwindcss-animate": "1.0.7",
     "zod": "^4.0.5"
   },
   "devDependencies": {
+    "@axe-core/cli": "^4.8.3",
+    "@lhci/cli": "^0.12.0",
+    "@playwright/test": "^1.41.0",
     "@tailwindcss/postcss": "^4.1.11",
+    "@types/sortablejs": "^1.15.8",
     "esbuild": "^0.25.6",
     "wrangler": "^4.24.3"
   },
@@ -67,6 +72,9 @@
     "migrate": "node scripts/migrate.js --apply",
     "migrate:dry-run": "node scripts/migrate.js --dry-run",
     "migrate:test": "node scripts/test-migrations.js",
-    "db:setup": "npm run migrate && npm run migrate:test"
+    "db:setup": "npm run migrate && npm run migrate:test",
+    "test:ipad": "npx playwright test tests/form-builder-ipad.spec.ts",
+    "test:lighthouse": "lhci autorun",
+    "test:axe": "axe http://localhost:4321/forms/new --tags wcag2aa,wcag21aa --exit"
   }
 }

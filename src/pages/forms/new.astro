@@ -2,7 +2,6 @@
 import Layout from '@/layouts/Layout.astro';
 import { Button } from '@/components/ui/button';
 import { FormBuilder } from '@/components/form-builder/FormBuilder';
-import { ComponentPalette } from '@/components/form-builder/ComponentPalette';
 ---
 
 <Layout title="Create New Form">
@@ -17,31 +16,19 @@ import { ComponentPalette } from '@/components/form-builder/ComponentPalette';
       </Button>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      <!-- Component Palette -->
-      <div class="lg:col-span-1">
-        <div class="sticky top-6">
-          <h3 class="text-lg font-semibold mb-4">Components</h3>
-          <ComponentPalette client:only="react" />
-        </div>
-      </div>
-
-      <!-- Form Builder -->
-      <div class="lg:col-span-3">
-        <div class="border rounded-lg">
-          <FormBuilder 
-            client:only="react"
-            mode="create"
-            onSave={(template) => {
-              // Handle form save
-              window.location.href = '/forms';
-            }}
-            onCancel={() => {
-              window.location.href = '/forms';
-            }}
-          />
-        </div>
-      </div>
+    <!-- Form Builder now contains the ComponentPalette internally -->
+    <div class="w-full">
+      <FormBuilder
+        client:only="react"
+        mode="create"
+        onSave={(template) => {
+          // Handle form save
+          window.location.href = '/forms';
+        }}
+        onCancel={() => {
+          window.location.href = '/forms';
+        }}
+      />
     </div>
   </div>
 

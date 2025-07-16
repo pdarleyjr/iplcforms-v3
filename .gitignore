@@ -12,6 +12,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.log
 
 # environment variables
 .env
@@ -24,7 +25,26 @@ pnpm-debug.log*
 .idea/
 
 # wrangler files
-.wrangler
+.wrangler/
 .dev.vars
+
+# test reports and results
+playwright-report/
+test-results/
+lighthouserc.js
+
+# development documentation
+API_DOCUMENTATION.md
+arch-form-builder.md
+CHANGELOG-formbuilder.md
+DEPLOYMENT_AUDIT_REPORT.md
+DEPLOYMENT_SETUP_GUIDE.md
+design-spec-metallic-iplc.md
+implementation-plan.md
+PHASE1_DATABASE_SCHEMA_EXTENSION.md
+PHASE2_ADVANCED_FORM_BUILDER.md
+research-formbuilder.md
+
+# workspace files
 iplcforms-v3.code-workspace
 PROJECT_SUMMARY.md

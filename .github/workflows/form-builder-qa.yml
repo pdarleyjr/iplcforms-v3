@@ -1,0 +1,228 @@
+name: Form Builder QA Pipeline
+# Automated testing for form builder enhancements
+# Runs Lighthouse (mobile performance) and Playwright (iPad testing)
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/components/form-builder/**'
+      - 'src/pages/forms/**'
+      - 'src/durable-objects/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/components/form-builder/**'
+      - 'src/pages/forms/**'
+      - 'src/durable-objects/**'
+
+env:
+  NODE_VERSION: '20'
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  # Build and deploy to preview environment
+  build-and-deploy:
+    name: Build & Deploy Preview
+    runs-on: ubuntu-latest
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (Preview)
+        id: deploy
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: iplcforms-v3
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # Lighthouse Performance Testing (Mobile Focus)
+  lighthouse-audit:
+    name: Lighthouse Mobile Audit
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.12.x
+
+      - name: Run Lighthouse CI
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+        run: |
+          lhci autorun \
+            --upload.target=temporary-public-storage \
+            --collect.url="${{ needs.build-and-deploy.outputs.preview-url }}/forms/new" \
+            --collect.settings.chromeFlags="--no-sandbox" \
+            --collect.settings.preset="mobile" \
+            --assert.preset="lighthouse:no-pwa" \
+            --assert.assertions.categories:performance=0.8 \
+            --assert.assertions.categories:accessibility=0.9 \
+            --assert.assertions."largest-contentful-paint"=2500 \
+            --assert.assertions."cumulative-layout-shift"=0.1
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-results
+          path: |
+            .lighthouseci/
+            lighthouse-*.html
+          retention-days: 30
+
+  # Playwright E2E Testing (iPad Focus)
+  playwright-tests:
+    name: Playwright iPad Tests
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps webkit chromium
+
+      - name: Run Playwright tests
+        env:
+          BASE_URL: ${{ needs.build-and-deploy.outputs.preview-url }}
+        run: npx playwright test --config=playwright.config.ts
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 30
+
+  # Accessibility Testing with Axe
+  accessibility-audit:
+    name: Accessibility Audit
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install axe-core CLI
+        run: npm install -g @axe-core/cli
+
+      - name: Run Axe accessibility tests
+        run: |
+          axe ${{ needs.build-and-deploy.outputs.preview-url }}/forms/new \
+            --exit \
+            --save axe-results.json \
+            --tags wcag2a,wcag2aa,wcag21aa
+
+      - name: Upload Axe results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: axe-results
+          path: axe-results.json
+          retention-days: 30
+
+  # Performance monitoring and reporting
+  performance-summary:
+    name: Performance Summary
+    needs: [lighthouse-audit, playwright-tests, accessibility-audit]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate Performance Report
+        run: |
+          echo "## 🚀 Form Builder QA Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📱 Mobile Performance (Lighthouse)" >> $GITHUB_STEP_SUMMARY
+          echo "- Target LCP: <2.5s" >> $GITHUB_STEP_SUMMARY
+          echo "- Target CLS: <0.1" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance Score: ≥80%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 iPad Testing (Playwright)" >> $GITHUB_STEP_SUMMARY
+          echo "- Drag & Drop functionality" >> $GITHUB_STEP_SUMMARY
+          echo "- Component palette interactions" >> $GITHUB_STEP_SUMMARY
+          echo "- Form builder operations" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ♿ Accessibility (Axe)" >> $GITHUB_STEP_SUMMARY
+          echo "- WCAG 2.1 AA compliance" >> $GITHUB_STEP_SUMMARY
+          echo "- Keyboard navigation" >> $GITHUB_STEP_SUMMARY
+          echo "- Screen reader compatibility" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: number,
+              body: `## 🧪 Form Builder QA Pipeline Results
+              
+              ✅ **Build & Deploy**: Completed
+              📱 **Lighthouse Mobile**: Check artifacts for detailed results
+              🎯 **Playwright iPad**: Check artifacts for test results  
+              ♿ **Accessibility**: Check artifacts for Axe results
+              
+              **Preview URL**: ${{ needs.build-and-deploy.outputs.preview-url }}
+              
+              View detailed reports in the [Actions tab](${context.payload.repository.html_url}/actions/runs/${context.runId}).`
+            });

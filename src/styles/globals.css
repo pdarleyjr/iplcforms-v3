@@ -227,3 +227,60 @@
     box-shadow: var(--iplc-shadow-sm);
   }
 }
+
+/* SortableJS styles for form builder */
+.sortable-ghost {
+  opacity: 0.4;
+  background-color: #f3f4f6;
+}
+
+.sortable-chosen {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.sortable-drag {
+  opacity: 0.9;
+  cursor: move;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  transform: rotate(2deg);
+}
+
+/* iOS/iPad optimizations */
+@media (pointer: coarse) {
+  .drag-handle {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Prevent iOS zoom on form inputs */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  textarea,
+  select {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* Form builder specific styles */
+.form-builder-container {
+  min-height: 600px;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+/* Prevent text selection during drag */
+.sortable-chosen,
+.sortable-ghost,
+.sortable-drag {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
