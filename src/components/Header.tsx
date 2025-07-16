@@ -11,9 +11,6 @@ export function Header({ currentPath }: { currentPath: string }) {
   // Only show navigation links when in admin section
   const isAdminSection = currentPath.startsWith('/admin') || currentPath.startsWith('/forms');
   
-  // Debug: log the current path
-  console.log('Current path:', currentPath, 'Is admin section:', isAdminSection);
-  
   return (
     <div className="relative border-b border-gray-200/30 bg-white iplc-shadow-sm">
       {/* Metallic gradient accent bar */}
@@ -27,15 +24,11 @@ export function Header({ currentPath }: { currentPath: string }) {
             className="group relative flex items-center space-x-2 pr-4 lg:pr-6 transition-transform hover:scale-105"
             aria-label="IPLC Home"
           >
-            <div className="relative">
-              <img
-                src="/iplclogo1.png"
-                alt="IPLC Logo"
-                className="h-8 w-auto drop-shadow-sm"
-              />
-              {/* Subtle glow effect on hover */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#219FD9]/20 to-[#27599F]/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </div>
+            <img
+              src="/iplclogo1.png"
+              alt="IPLC Logo"
+              className="h-8 w-auto drop-shadow-sm"
+            />
             <span className="hidden sm:block text-lg font-semibold gradient-metallic-primary bg-clip-text text-transparent">
               IPLC Forms
             </span>
