@@ -11,6 +11,9 @@ export function Header({ currentPath }: { currentPath: string }) {
   // Only show navigation links when in admin section
   const isAdminSection = currentPath.startsWith('/admin') || currentPath.startsWith('/forms');
   
+  // Debug: log the current path
+  console.log('Current path:', currentPath, 'Is admin section:', isAdminSection);
+  
   return (
     <div className="relative border-b border-gray-200/30 bg-white iplc-shadow-sm">
       {/* Metallic gradient accent bar */}
