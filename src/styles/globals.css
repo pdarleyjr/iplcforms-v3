@@ -1,25 +1,112 @@
-@import "tailwindcss/preflight";
-@tailwind utilities;
+@import "tailwindcss";
 
+/* Tailwind CSS v4 Configuration */
+@theme {
+  /* IPLC Color System */
+  --color-iplc-primary: #27599F;
+  --color-iplc-primary-dark: #153F81;
+  --color-iplc-accent-sky: #219FD9;
+  --color-iplc-accent-gold: #F9C04D;
+  --color-iplc-accent-green: #80C97B;
+  --color-iplc-neutral-700: #92969C;
+  --color-iplc-neutral-200: #C9D4D5;
+  --color-iplc-background: #FFFFFF;
+  
+  /* Default colors for compatibility */
+  --color-background: #FFFFFF;
+  --color-foreground: #111827;
+  --color-border: #e5e7eb;
+  --color-gray-900: #111827;
+  --color-gray-800: #1f2937;
+  --color-gray-700: #374151;
+  --color-gray-600: #4b5563;
+  --color-gray-500: #6b7280;
+  --color-gray-400: #9ca3af;
+  --color-gray-300: #d1d5db;
+  --color-gray-200: #e5e7eb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-50: #f9fafb;
+  
+  /* IPLC Metallic Gradients */
+  --gradient-metallic-primary: linear-gradient(135deg, #27599F 0%, #153F81 45%, #219FD9 100%);
+  --gradient-metallic-gold: linear-gradient(90deg, #F9C04D 0%, #FFF5D1 60%, #F9C04D 100%);
+  --gradient-metallic-green: radial-gradient(circle at 30% 30%, #80C97B 0%, #A5D6A1 50%, #5FAE59 100%);
+  --gradient-metallic-navy: linear-gradient(180deg, #153F81 0%, #0A2754 50%, #1E4B8F 100%);
+  
+  /* IPLC Shadow System */
+  --shadow-iplc-sm: 0 1px 3px rgba(21, 63, 129, 0.12), 0 1px 2px rgba(21, 63, 129, 0.24);
+  --shadow-iplc-md: 0 4px 6px rgba(21, 63, 129, 0.1), 0 1px 3px rgba(21, 63, 129, 0.08);
+  --shadow-iplc-lg: 0 10px 15px rgba(21, 63, 129, 0.15), 0 4px 6px rgba(21, 63, 129, 0.1);
+  --shadow-iplc-xl: 0 20px 25px rgba(21, 63, 129, 0.15), 0 10px 10px rgba(21, 63, 129, 0.04);
+}
+
+/* Base Styles */
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: theme(--color-border);
+  }
+  
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: theme(--color-background);
+    color: theme(--color-foreground);
+    margin: 0;
+    padding: 0;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.2;
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  
+  h1 {
+    font-size: 2.5rem;
+  }
+  
+  h2 {
+    font-size: 2rem;
+  }
+  
+  h3 {
+    font-size: 1.75rem;
+  }
+  
+  h4 {
+    font-size: 1.5rem;
+  }
+  
+  h5 {
+    font-size: 1.25rem;
+  }
+  
+  h6 {
+    font-size: 1rem;
+  }
+}
+
+/* CSS Variables for JavaScript usage */
 @layer base {
   :root {
-    /* IPLC Color System - HSL format for Tailwind CSS compatibility */
-    --iplc-primary: 214 58% 39%; /* #27599F - Primary buttons, links, brand elements */
-    --iplc-primary-dark: 218 69% 30%; /* #153F81 - Hover states, pressed buttons */
-    --iplc-accent-sky: 196 65% 49%; /* #219FD9 - Secondary actions, info states */
-    --iplc-accent-gold: 46 94% 64%; /* #F9C04D - Success states, highlights */
-    --iplc-accent-green: 116 42% 64%; /* #80C97B - Success confirmations */
-    --iplc-neutral-700: 240 4% 59%; /* #92969C - Text, borders, subtle elements */
-    --iplc-neutral-200: 185 14% 83%; /* #C9D4D5 - Backgrounds, dividers */
-    --iplc-background: 0 0% 100%; /* #FFFFFF - Main backgrounds */
+    /* IPLC Color System - HSL format for compatibility */
+    --iplc-primary: 214 58% 39%;
+    --iplc-primary-dark: 218 69% 30%;
+    --iplc-accent-sky: 196 65% 49%;
+    --iplc-accent-gold: 46 94% 64%;
+    --iplc-accent-green: 116 42% 64%;
+    --iplc-neutral-700: 240 4% 59%;
+    --iplc-neutral-200: 185 14% 83%;
+    --iplc-background: 0 0% 100%;
     
-    /* IPLC Metallic Gradients */
+    /* IPLC Metallic Gradients (CSS Variables) */
     --iplc-gradient-primary: linear-gradient(135deg, #27599F 0%, #153F81 45%, #219FD9 100%);
     --iplc-gradient-gold: linear-gradient(90deg, #F9C04D 0%, #FFF5D1 60%, #F9C04D 100%);
     --iplc-gradient-green: radial-gradient(circle at 30% 30%, #80C97B 0%, #A5D6A1 50%, #5FAE59 100%);
     --iplc-gradient-navy: linear-gradient(180deg, #153F81 0%, #0A2754 50%, #1E4B8F 100%);
     
-    /* IPLC Shadow System */
+    /* IPLC Shadow System (CSS Variables) */
     --iplc-shadow-sm: 0 1px 3px rgba(21, 63, 129, 0.12), 0 1px 2px rgba(21, 63, 129, 0.24);
     --iplc-shadow-md: 0 4px 6px rgba(21, 63, 129, 0.1), 0 1px 3px rgba(21, 63, 129, 0.08);
     --iplc-shadow-lg: 0 10px 15px rgba(21, 63, 129, 0.15), 0 4px 6px rgba(21, 63, 129, 0.1);
@@ -32,19 +119,19 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 214 58% 39%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    --accent: 196 65% 49%;
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 214 58% 39%;
     --radius: 0.5rem;
   }
   
@@ -55,28 +142,19 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
+    --primary: 214 58% 39%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 196 65% 49%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }
 
@@ -96,5 +174,56 @@
   
   .gradient-metallic-navy {
     background: var(--iplc-gradient-navy);
+  }
+  
+  .iplc-shadow-sm {
+    box-shadow: var(--iplc-shadow-sm);
+  }
+  
+  .iplc-shadow-md {
+    box-shadow: var(--iplc-shadow-md);
+  }
+  
+  .iplc-shadow-lg {
+    box-shadow: var(--iplc-shadow-lg);
+  }
+  
+  .iplc-shadow-xl {
+    box-shadow: var(--iplc-shadow-xl);
+  }
+}
+
+/* Component Classes */
+@layer components {
+  .iplc-button-primary {
+    @apply px-4 py-2 rounded-lg font-medium text-white transition-all duration-200;
+    background: var(--iplc-gradient-primary);
+    box-shadow: var(--iplc-shadow-md);
+  }
+  
+  .iplc-button-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--iplc-shadow-lg);
+  }
+  
+  .iplc-button-primary:active {
+    transform: translateY(0);
+    box-shadow: var(--iplc-shadow-sm);
+  }
+  
+  .iplc-button-gold {
+    @apply px-4 py-2 rounded-lg font-medium text-gray-900 transition-all duration-200;
+    background: var(--iplc-gradient-gold);
+    box-shadow: var(--iplc-shadow-md);
+  }
+  
+  .iplc-button-gold:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--iplc-shadow-lg);
+  }
+  
+  .iplc-button-gold:active {
+    transform: translateY(0);
+    box-shadow: var(--iplc-shadow-sm);
   }
 }
