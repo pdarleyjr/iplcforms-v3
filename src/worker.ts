@@ -10,6 +10,7 @@ import { CustomerWorkflow } from './workflows/customer_workflow';
 
 // Import FormSessionDO for autosave functionality
 import { FormSessionDO } from './durable-objects/FormSessionDO';
+export { FormSessionDO };
 
 // Import WorkersPerformanceManager for performance monitoring
 import { WorkersPerformanceManager } from './lib/utils/workers-performance';
