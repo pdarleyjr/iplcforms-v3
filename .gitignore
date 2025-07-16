@@ -34,6 +34,7 @@ test-results/
 lighthouserc.js
 
 # development documentation
+ai-summary-form-element-design.md
 API_DOCUMENTATION.md
 arch-form-builder.md
 CHANGELOG-formbuilder.md
@@ -44,6 +45,7 @@ implementation-plan.md
 PHASE1_DATABASE_SCHEMA_EXTENSION.md
 PHASE2_ADVANCED_FORM_BUILDER.md
 research-formbuilder.md
+tech-design-customizable-iplc-logo.md
 
 # workspace files
 iplcforms-v3.code-workspace

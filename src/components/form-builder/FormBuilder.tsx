@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Save, Settings, Eye, Plus, Trash2, GripVertical, Cloud, CloudOff, Loader2, Sparkles } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -20,12 +21,14 @@ import { useFormLock } from "@/hooks/useFormLock";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Lock } from "lucide-react";
 import { FormSummary } from "./FormSummary";
+import { AISummaryElement } from "./components/AISummaryElement";
 
 const templateFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required"),
   clinical_context: z.string().min(2, "Clinical context is required"),
+  showIplcLogo: z.boolean(),
 });
 
 type TemplateFormValues = z.infer<typeof templateFormSchema>;
@@ -105,6 +108,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
           description: form.getValues("description"),
           category: form.getValues("category"),
           clinical_context: form.getValues("clinical_context"),
+          showIplcLogo: form.getValues("showIplcLogo"),
         }
       });
     }
@@ -185,6 +189,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
       description: template?.description || "",
       category: template?.category || "",
       clinical_context: template?.clinical_context || "",
+      showIplcLogo: template?.metadata?.showIplcLogo ?? true,
     },
   });
   
@@ -201,18 +206,15 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     return () => subscription.unsubscribe();
   }, [form, components, autoSave]);
 
-  const handleDrop = useCallback((event: React.DragEvent, targetIndex?: number) => {
-    event.preventDefault();
-    
-    if (!draggedComponent) return;
-
+  const addComponent = useCallback((component: FormComponent, targetIndex?: number) => {
+    console.log('FormBuilder: addComponent called with', component);
     const newComponents = [...components];
     const insertIndex = targetIndex !== undefined ? targetIndex : newComponents.length;
     
     // Add new component with unique ID
     const newComponent: FormComponent = {
-      ...draggedComponent,
-      id: `${draggedComponent.type}_${Date.now()}`,
+      ...component,
+      id: component.id || `${component.type}_${Date.now()}`,
       order: insertIndex,
     };
 
@@ -223,10 +225,24 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
       comp.order = index;
     });
 
+    console.log('FormBuilder: setting components to', newComponents);
     setComponents(newComponents);
+  }, [components]);
+
+  const handleDrop = useCallback((event: React.DragEvent, targetIndex?: number) => {
+    event.preventDefault();
+    
+    if (!draggedComponent) return;
+
+    addComponent(draggedComponent, targetIndex);
     setDraggedComponent(null);
     setDragOverIndex(null);
-  }, [draggedComponent, components]);
+  }, [draggedComponent, addComponent]);
+
+  const handleComponentClick = useCallback((component: FormComponent) => {
+    console.log('FormBuilder: handleComponentClick called with', component);
+    addComponent(component);
+  }, [addComponent]);
 
   const handleDragOver = useCallback((event: React.DragEvent, index: number) => {
     event.preventDefault();
@@ -274,6 +290,10 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
         category: data.category,
         clinical_context: data.clinical_context,
         schema: { components },
+        metadata: {
+          ...template?.metadata,
+          showIplcLogo: data.showIplcLogo,
+        },
         status: template?.status || 'draft',
         version: template ? template.version + 1 : 1,
         created_by: 1, // TODO: Get from auth context
@@ -313,6 +333,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
       <div className="w-80 border-r bg-card">
         <ComponentPalette
           onComponentDrag={setDraggedComponent}
+          onComponentClick={handleComponentClick}
         />
       </div>
 
@@ -474,6 +495,27 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                         )}
                       />
 
+                      <FormField
+                        control={form.control}
+                        name="showIplcLogo"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Show IPLC Logo</FormLabel>
+                              <div className="text-sm text-muted-foreground">
+                                Display the IPLC logo in the top-left corner of final form outputs
+                              </div>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
                       <Button className="w-full" type="submit">
                         <Save className="mr-2 h-4 w-4" />
                         Save Template
@@ -489,9 +531,10 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
         {/* Canvas Content */}
         <div className="flex-1 overflow-auto p-6">
           {previewMode ? (
-            <FormPreview 
+            <FormPreview
               components={components}
               title={form.getValues("name") || "Form Preview"}
+              showIplcLogo={form.getValues("showIplcLogo")}
             />
           ) : (
             <div
@@ -529,8 +572,8 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
-                          <div className="drag-handle cursor-move p-1 hover:bg-gray-100 rounded">
-                            <GripVertical className="h-4 w-4 text-gray-400" />
+                          <div className="drag-handle cursor-move p-3 hover:bg-gray-100 rounded" style={{ minWidth: '44px', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <GripVertical className="h-5 w-5 text-gray-400" />
                           </div>
                         </div>
                       </div>
@@ -541,6 +584,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                           component={component}
                           onUpdate={(updates) => updateComponent(index, updates)}
                           isEditing={true}
+                          allComponents={components}
                         />
                       </div>
                     </div>
@@ -564,16 +608,17 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     </div>
   );
 }
-
 // Component renderer for displaying and editing form components
-function ComponentRenderer({ 
-  component, 
-  onUpdate, 
-  isEditing = false 
-}: { 
-  component: FormComponent; 
+function ComponentRenderer({
+  component,
+  onUpdate,
+  isEditing = false,
+  allComponents = []
+}: {
+  component: FormComponent;
   onUpdate?: (updates: Partial<FormComponent>) => void;
   isEditing?: boolean;
+  allComponents?: FormComponent[];
 }) {
   const handleLabelChange = (label: string) => {
     onUpdate?.({ label });
@@ -769,48 +814,57 @@ function ComponentRenderer({
           )}
         </div>
       );
+case "scale":
+  return (
+    <div className="space-y-2">
+      {isEditing ? (
+        <Input
+          value={component.label}
+          onChange={(e) => handleLabelChange(e.target.value)}
+          className="font-medium border-dashed"
+          placeholder="Enter scale label"
+        />
+      ) : (
+        <label className="text-sm font-medium">{component.label}</label>
+      )}
+      <div className="flex items-center space-x-2">
+        <span className="text-xs text-gray-500">
+          {component.props?.min || 1}
+        </span>
+        <input
+          type="range"
+          min={component.props?.min || 1}
+          max={component.props?.max || 10}
+          disabled={!isEditing}
+          className="flex-1"
+        />
+        <span className="text-xs text-gray-500">
+          {component.props?.max || 10}
+        </span>
+      </div>
+      {component.props?.required && (
+        <span className="text-xs text-red-500">* Required</span>
+      )}
+    </div>
+  );
 
-    case "scale":
-      return (
-        <div className="space-y-2">
-          {isEditing ? (
-            <Input
-              value={component.label}
-              onChange={(e) => handleLabelChange(e.target.value)}
-              className="font-medium border-dashed"
-              placeholder="Enter scale label"
-            />
-          ) : (
-            <label className="text-sm font-medium">{component.label}</label>
-          )}
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-gray-500">
-              {component.props?.min || 1}
-            </span>
-            <input
-              type="range"
-              min={component.props?.min || 1}
-              max={component.props?.max || 10}
-              disabled={!isEditing}
-              className="flex-1"
-            />
-            <span className="text-xs text-gray-500">
-              {component.props?.max || 10}
-            </span>
-          </div>
-          {component.props?.required && (
-            <span className="text-xs text-red-500">* Required</span>
-          )}
-        </div>
-      );
+case "ai_summary":
+  return (
+    <AISummaryElement
+      component={component}
+      onUpdate={onUpdate}
+      isEditing={isEditing}
+      allComponents={allComponents}
+    />
+  );
 
-    default:
-      return (
-        <div className="p-4 border border-dashed border-gray-300 rounded">
-          <p className="text-sm text-gray-500">
-            Unknown component type: {component.type}
-          </p>
-        </div>
-      );
+default:
+  return (
+    <div className="p-4 border border-dashed border-gray-300 rounded">
+      <p className="text-sm text-gray-500">
+        Unknown component type: {component.type}
+      </p>
+    </div>
+  );
   }
 }

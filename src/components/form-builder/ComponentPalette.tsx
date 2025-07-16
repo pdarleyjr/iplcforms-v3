@@ -4,20 +4,20 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Type, 
-  FileText, 
-  ChevronDown, 
-  CheckSquare, 
-  Circle, 
-  Calendar, 
-  Hash, 
-  BarChart3 
+import {
+  Type,
+  FileText,
+  ChevronDown,
+  CheckSquare,
+  Circle,
+  Calendar,
+  Hash,
+  BarChart3,
+  Sparkles
 } from 'lucide-react';
-
 interface ComponentPaletteItem {
   id: string;
-  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale';
+  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' | 'ai_summary';
   label: string;
   icon: React.ReactNode;
   description: string;
@@ -88,6 +88,14 @@ const componentItems: ComponentPaletteItem[] = [
     icon: <BarChart3 className="h-4 w-4" />,
     description: 'Numerical rating scale',
     category: 'Advanced'
+  },
+  {
+    id: 'ai_summary',
+    type: 'ai_summary',
+    label: 'AI Summary',
+    icon: <Sparkles className="h-4 w-4" />,
+    description: 'AI-generated summary of selected form data',
+    category: 'Advanced'
   }
 ];
 
@@ -100,11 +108,12 @@ const categoryColors = {
 interface ComponentPaletteProps {
   className?: string;
   onComponentDrag?: (component: any) => void;
+  onComponentClick?: (component: any) => void;
 }
 
-export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = '', onComponentDrag }) => {
-  const handleDragStart = (e: React.DragEvent, item: ComponentPaletteItem) => {
-    const component = {
+export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = '', onComponentDrag, onComponentClick }) => {
+  const createComponent = (item: ComponentPaletteItem) => {
+    return {
       type: item.type,
       label: item.label,
       id: `${item.type}_${Date.now()}`,
@@ -122,9 +131,22 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
         ...(item.type === 'scale' ? {
           min: 1,
           max: 10
+        } : {}),
+        ...(item.type === 'ai_summary' ? {
+          aiSummaryConfig: {
+            autoSelectFields: false,
+            defaultPrompt: '',
+            maxLength: 500,
+            includeMedicalContext: true,
+            sourceFieldLabels: true
+          }
         } : {})
       }
     };
+  };
+
+  const handleDragStart = (e: React.DragEvent, item: ComponentPaletteItem) => {
+    const component = createComponent(item);
     
     // Call the onComponentDrag callback if provided
     if (onComponentDrag) {
@@ -136,6 +158,19 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  const handleClick = (e: React.MouseEvent, item: ComponentPaletteItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('ComponentPalette: handleClick called for', item.type);
+    if (onComponentClick) {
+      const component = createComponent(item);
+      console.log('ComponentPalette: calling onComponentClick with', component);
+      onComponentClick(component);
+    } else {
+      console.log('ComponentPalette: onComponentClick not provided');
+    }
+  };
+
   const groupedComponents = componentItems.reduce((acc, item) => {
     if (!acc[item.category]) {
       acc[item.category] = [];
@@ -145,7 +180,7 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
   }, {} as Record<string, ComponentPaletteItem[]>);
 
   return (
-    <div className={`w-72 bg-white border-r border-gray-200 h-full overflow-y-auto ${className}`}>
+    <div className={`component-palette w-72 bg-white border-r border-gray-200 h-full overflow-y-auto ${className}`}>
       <div className="p-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900">Components</h3>
         <p className="text-sm text-gray-600 mt-1">Drag components to add to your form</p>
@@ -168,6 +203,16 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
                   className="cursor-move hover:shadow-md transition-shadow duration-200 border-2 border-transparent hover:border-blue-200"
                   draggable
                   onDragStart={(e) => handleDragStart(e, item)}
+                  onClick={(e) => handleClick(e, item)}
+                  data-component-type={item.type}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleClick(e as any, item);
+                    }
+                  }}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">

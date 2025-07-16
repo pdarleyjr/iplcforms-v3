@@ -52,11 +52,10 @@ export function useFormAutosave({
         },
         body: JSON.stringify({
           sessionId,
-          formId,
-          userId,
+          formData: data,
+          templateId: parseInt(formId, 10),
           userName,
-          data,
-          lastSaved: new Date().toISOString()
+          timestamp: new Date().toISOString()
         }),
         signal: abortControllerRef.current.signal
       });
@@ -154,12 +153,8 @@ export function useFormAutosave({
     status,
     deleteSession: async () => {
       try {
-        await fetch('/api/form-sessions', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ sessionId })
+        await fetch(`/api/form-sessions?sessionId=${sessionId}`, {
+          method: 'DELETE'
         });
         
         // Also delete from IndexedDB

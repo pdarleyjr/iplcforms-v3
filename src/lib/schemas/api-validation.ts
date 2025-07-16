@@ -40,7 +40,7 @@ export const CustomerSubscriptionSchema = z.object({
 // Form Builder Schemas
 export const FormComponentSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(['text_input', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'scale']),
+  type: z.enum(['text_input', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'scale', 'ai_summary']),
   label: z.string().min(1, "Label is required").max(200),
   order: z.number().min(0),
   props: z.object({
@@ -62,6 +62,13 @@ export const FormComponentSchema = z.object({
       value: z.any(),
       operator: z.enum(['equals', 'not_equals', 'contains', 'greater_than', 'less_than']),
     }).optional(),
+    // AI Summary specific props
+    ai_summary: z.object({
+      auto_select_fields: z.boolean().optional(),
+      default_prompt: z.string().max(1000).optional(),
+      max_length: z.number().min(50).max(2000).optional(),
+      include_medical_context: z.boolean().optional(),
+    }).optional(),
   }).optional(),
 });
 
@@ -75,10 +82,12 @@ export const FormTemplateSchema = z.object({
   schema: z.object({
     components: z.array(FormComponentSchema),
   }),
-  ui_schema: z.record(z.any()).optional(),
-  scoring_config: z.record(z.any()).optional(),
-  permissions: z.record(z.any()).optional(),
-  metadata: z.record(z.any()).optional(),
+  ui_schema: z.record(z.string(), z.any()).optional(),
+  scoring_config: z.record(z.string(), z.any()).optional(),
+  permissions: z.record(z.string(), z.any()).optional(),
+  metadata: z.object({
+    showIplcLogo: z.boolean().optional(),
+  }).catchall(z.any()).optional(),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
   created_by: z.number().positive().optional(),
   updated_by: z.number().positive().optional(),
@@ -90,9 +99,9 @@ export const FormSubmissionSchema = z.object({
   id: z.number().optional(),
   template_id: z.number().positive("Template ID is required"),
   user_id: z.string().optional(),
-  form_data: z.record(z.any()),
+  form_data: z.record(z.string(), z.any()),
   calculated_score: z.number().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   status: z.enum(['draft', 'submitted', 'reviewed', 'approved', 'deleted']).default('draft'),
   submission_date: z.string().datetime().optional(),
   created_at: z.string().optional(),
@@ -120,14 +129,14 @@ export const UserPermissionSchema = z.object({
 // Workflow Schemas
 export const WorkflowEventSchema = z.object({
   type: z.string().min(1),
-  data: z.record(z.any()),
+  data: z.record(z.string(), z.any()),
   timestamp: z.string().datetime().optional(),
 });
 
 export const CustomerWorkflowSchema = z.object({
   customer_id: z.number().positive("Customer ID is required"),
   workflow_type: z.enum(['onboarding', 'assessment', 'treatment', 'follow_up']).default('onboarding'),
-  parameters: z.record(z.any()).optional(),
+  parameters: z.record(z.string(), z.any()).optional(),
 });
 
 // API Request/Response Schemas
@@ -256,7 +265,7 @@ export const validateRequest = <T>(schema: z.ZodSchema<T>, data: unknown): { suc
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        errors: error.errors.map(err => `${err.path.join('.')}: ${err.message}`)
+        errors: error.issues.map((err: any) => `${err.path.join('.')}: ${err.message}`)
       };
     }
     return {

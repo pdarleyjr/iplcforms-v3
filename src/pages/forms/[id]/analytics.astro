@@ -205,7 +205,7 @@ const formatDate = (dateString: string) => {
                     {submission.status}
                   </Badge>
                   <Button variant="outline" size="sm">
-                    View
+                    <a href={`/forms/${id}/submissions/${submission.id}`}>View</a>
                   </Button>
                 </div>
               </div>

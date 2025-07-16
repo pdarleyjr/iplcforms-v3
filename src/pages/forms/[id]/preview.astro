@@ -5,7 +5,7 @@ import Layout from '@/layouts/Layout.astro';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FormPreview } from '@/components/form-builder/FormPreview';
+import { LiveFormRenderer } from '@/components/form-builder/LiveFormRenderer';
 import { FormTemplateService } from '@/lib/services/form_template';
 
 const { id } = Astro.params;
@@ -97,22 +97,16 @@ const formatDate = (dateString: string) => {
     <!-- Form Preview -->
     <Card>
       <CardHeader>
-        <CardTitle>Live Preview</CardTitle>
+        <CardTitle>Live Form</CardTitle>
         <CardDescription>
-          This is how your form will appear to users
+          Complete this form as a user would - data will be saved as a submission
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div class="bg-gray-50 p-6 rounded-lg">
-          <FormPreview 
+          <LiveFormRenderer
             client:only="react"
             template={template}
-            showSubmitButton={true}
-            onSubmit={(formData) => {
-              // Handle preview submission
-              alert('This is a preview - form submission would be processed here');
-              console.log('Preview form data:', formData);
-            }}
           />
         </div>
       </CardContent>

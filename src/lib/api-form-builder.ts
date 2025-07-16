@@ -5,7 +5,8 @@ export interface FormComponent {
   id: string;
   type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' |
         'clinical_scale' | 'assistance_level' | 'demographics' | 'standardized_test' | 'oral_motor' |
-        'language_sample' | 'sensory_processing' | 'goals_planning' | 'clinical_signature' | 'cpt_code';
+        'language_sample' | 'sensory_processing' | 'goals_planning' | 'clinical_signature' | 'cpt_code' |
+        'ai_summary';
   label: string;
   order: number;
   props?: {
@@ -58,6 +59,21 @@ export interface FormComponent {
     cptCodes?: string[];
     includeBilling?: boolean;
     includeJustification?: boolean;
+    // AI Summary specific properties
+    aiSummaryConfig?: {
+      autoSelectFields?: boolean;
+      defaultPrompt?: string;
+      maxLength?: number;
+      includeMedicalContext?: boolean;
+      sourceFieldLabels?: boolean;
+    };
+    // Runtime state (not persisted in template)
+    aiSummaryData?: {
+      content?: string;
+      generatedAt?: string;
+      sourceFields?: string[];
+      sourceData?: Record<string, any>;
+    };
   };
 }
 
@@ -72,7 +88,10 @@ export interface FormTemplate {
   ui_schema?: any;
   scoring_config?: any;
   permissions?: any;
-  metadata?: any;
+  metadata?: {
+    showIplcLogo?: boolean;
+    [key: string]: any; // Allow other metadata properties
+  };
   status: 'draft' | 'active' | 'archived';
   created_at?: string;
   updated_at?: string;
@@ -82,13 +101,29 @@ export interface FormSubmission {
   id?: number;
   template_id: number;
   user_id?: string;
-  form_data: any;
+  form_data: {
+    [fieldId: string]: any;
+    // AI Summary fields will store structured data:
+    // {
+    //   content: string;
+    //   generatedAt: string;
+    //   sourceFields: string[];
+    //   sourceData: Record<string, any>;
+    // }
+  };
   calculated_score?: number;
   metadata?: any;
   status: 'draft' | 'submitted' | 'reviewed' | 'approved' | 'deleted';
   submission_date?: string;
   created_at?: string;
   updated_at?: string;
+  ai_summaries?: Array<{
+    elementId: string;
+    content: string;
+    generatedAt: string;
+    sourceFields: string[];
+    metadata?: any;
+  }>;
 }
 
 // API Response Types

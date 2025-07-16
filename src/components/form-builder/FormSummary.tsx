@@ -145,7 +145,7 @@ export function FormSummary({
             </Button>
           </div>
           <CardDescription>
-            AI-generated overview of your form structure and content
+            AI-generated overview
           </CardDescription>
         </CardHeader>
         

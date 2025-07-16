@@ -10,19 +10,40 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { FormComponent } from '@/lib/api-form-builder';
 import { Calendar, Eye } from 'lucide-react';
+import { AISummaryElement } from './components/AISummaryElement';
 
 interface FormPreviewProps {
   components: FormComponent[];
   title: string;
   description?: string;
   className?: string;
+  showIplcLogo?: boolean; // New prop
 }
 
-export const FormPreview: React.FC<FormPreviewProps> = ({ 
-  components, 
-  title, 
+// LogoHeader component for conditional IPLC logo rendering
+const LogoHeader: React.FC<{ show: boolean }> = ({ show }) => {
+  if (!show) return null;
+  
+  return (
+    <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
+      <img
+        src="/iplclogo1.png"
+        alt="IPLC Logo"
+        className="h-8 w-auto drop-shadow-sm"
+      />
+      <div className="text-xs text-gray-400">
+        Form powered by IPLC
+      </div>
+    </div>
+  );
+};
+
+export const FormPreview: React.FC<FormPreviewProps> = ({
+  components,
+  title,
   description = '',
-  className = '' 
+  className = '',
+  showIplcLogo
 }) => {
   // Sort components by order
   const sortedComponents = [...components].sort((a, b) => a.order - b.order);
@@ -190,6 +211,17 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
           </div>
         );
 
+      case 'ai_summary':
+        return (
+          <div key={component.id}>
+            <AISummaryElement
+              component={component}
+              isEditing={false}
+              allComponents={components}
+            />
+          </div>
+        );
+
       default:
         return (
           <div key={component.id} className="space-y-2">
@@ -218,6 +250,9 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
       {/* Preview Content */}
       <div className="p-6">
         <div className="max-w-2xl mx-auto">
+          {/* IPLC Logo Header - NEW */}
+          <LogoHeader show={showIplcLogo ?? true} />
+          
           {/* Form Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">

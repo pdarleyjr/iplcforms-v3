@@ -21,6 +21,7 @@ import { FormBuilder } from '@/components/form-builder/FormBuilder';
       <FormBuilder
         client:only="react"
         mode="create"
+        data-testid="form-builder"
         onSave={(template) => {
           // Handle form save
           window.location.href = '/forms';
