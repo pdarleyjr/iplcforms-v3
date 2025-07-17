@@ -25,11 +25,9 @@ const OutputLogoHeader: React.FC<{ show: boolean; mode: string }> = ({ show, mod
   
   return (
     <header className="flex justify-between items-center p-6 border-b border-gray-200 bg-white">
-      <img
-        src="/iplclogo1.png"
-        alt="IPLC Logo"
-        className="h-8 w-auto drop-shadow-sm"
-      />
+      <div className="text-2xl font-bold">
+        FormPro
+      </div>
       <div className="text-xs text-gray-500 flex items-center gap-2">
         {mode === 'submission' && (
           <div className="flex items-center gap-1">

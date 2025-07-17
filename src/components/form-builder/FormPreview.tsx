@@ -29,11 +29,9 @@ const LogoHeader: React.FC<{ show: boolean }> = ({ show }) => {
   
   return (
     <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
-      <img
-        src="/iplclogo1.png"
-        alt="IPLC Logo"
-        className="h-8 w-auto drop-shadow-sm"
-      />
+      <div className="text-2xl font-bold">
+        FormPro
+      </div>
       <div className="text-xs text-gray-400">
         Form powered by IPLC
       </div>

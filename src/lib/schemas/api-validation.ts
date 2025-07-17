@@ -40,9 +40,11 @@ export const CustomerSubscriptionSchema = z.object({
 // Form Builder Schemas
 export const FormComponentSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(['text_input', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'scale', 'ai_summary', 'title_subtitle', 'line_separator']),
+  type: z.enum(['text_input', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'scale', 'ai_summary', 'title_subtitle', 'line_separator', 'evaluation_section']),
   label: z.string().min(1, "Label is required").max(200),
   order: z.number().min(0),
+  sectionId: z.string().optional(), // For evaluation_section components
+  collapsed: z.boolean().optional(), // For evaluation_section components
   props: z.object({
     required: z.boolean().optional(),
     placeholder: z.string().max(200).optional(),

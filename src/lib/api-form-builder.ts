@@ -6,9 +6,11 @@ export interface FormComponent {
   type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' |
         'clinical_scale' | 'assistance_level' | 'demographics' | 'standardized_test' | 'oral_motor' |
         'language_sample' | 'sensory_processing' | 'goals_planning' | 'clinical_signature' | 'cpt_code' |
-        'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator';
+        'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator' | 'evaluation_section';
   label: string;
   order: number;
+  sectionId?: string; // For evaluation_section components
+  collapsed?: boolean; // For evaluation_section components
   props?: {
     required?: boolean;
     placeholder?: string;

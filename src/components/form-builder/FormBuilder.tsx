@@ -18,6 +18,7 @@ import * as z from "zod";
 import Sortable from "sortablejs";
 import { ComponentPalette } from "./ComponentPalette";
 import { FormPreview } from "./FormPreview";
+import { EvaluationSectionsModule } from "./EvaluationSectionsModule";
 import { createFormTemplate, updateFormTemplate, getFormTemplates, type TemplateSearchParams } from "@/lib/api-form-builder";
 import type { FormTemplate, FormComponent } from "@/lib/api-form-builder";
 import { useFormAutosave } from "@/hooks/useFormAutosave";
@@ -64,6 +65,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [draggedComponent, setDraggedComponent] = useState<FormComponent | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'components' | 'evaluation'>('components');
   
   // Load Template state
   const [availableTemplates, setAvailableTemplates] = useState<FormTemplate[]>([]);
@@ -438,11 +440,25 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   return (
     <div className="form-builder-container flex h-screen bg-background">
       {/* Component Palette Sidebar */}
-      <div className="w-80 border-r bg-card">
-        <ComponentPalette
-          onComponentDrag={setDraggedComponent}
-          onComponentClick={handleComponentClick}
-        />
+      <div className="w-80 border-r bg-card flex flex-col">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'components' | 'evaluation')} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 p-1 mx-4 mt-4">
+            <TabsTrigger value="components">Components</TabsTrigger>
+            <TabsTrigger value="evaluation">Evaluation Sections</TabsTrigger>
+          </TabsList>
+          <TabsContent value="components" className="flex-1 mt-0">
+            <ComponentPalette
+              onComponentDrag={setDraggedComponent}
+              onComponentClick={handleComponentClick}
+            />
+          </TabsContent>
+          <TabsContent value="evaluation" className="flex-1 mt-0">
+            <EvaluationSectionsModule
+              onSectionDrag={setDraggedComponent}
+              onComponentClick={handleComponentClick}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Main Canvas Area */}
@@ -1480,6 +1496,280 @@ case "line_separator":
       onPropsChange={(newProps) => onUpdate && onUpdate({ props: newProps })}
     />
   );
+
+case "evaluation_section": {
+  // Import the evaluation sections config to render the fields
+  const evaluationSections = require('./evaluation-sections-config.json').evaluationSections;
+  const section = evaluationSections.find((s: any) => s.id === component.sectionId);
+  
+  if (!section) {
+    return (
+      <div className="p-4 border border-red-300 rounded bg-red-50">
+        <p className="text-sm text-red-600">
+          Evaluation section not found: {component.sectionId}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 p-4 border-2 border-blue-200 rounded-lg bg-blue-50/50">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-blue-900">{component.label}</h3>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">{section.discipline}</Badge>
+          {component.collapsed && (
+            <Badge variant="secondary" className="text-xs">Collapsed</Badge>
+          )}
+        </div>
+      </div>
+      
+      {section.description && (
+        <p className="text-sm text-gray-600">{section.description}</p>
+      )}
+      
+      <div className="space-y-3 mt-4">
+        {section.fields.map((field: any, fieldIndex: number) => {
+          // Render each field based on its type
+          switch (field.type) {
+            case 'section_header':
+              return (
+                <div key={fieldIndex} className={`mt-${field.level === 1 ? '4' : '3'} mb-2 pt-${field.level === 1 ? '4' : '3'} ${fieldIndex > 0 ? 'border-t border-blue-200' : ''}`}>
+                  <h4 className={`text-${field.level === 1 ? 'lg' : 'md'} font-semibold text-gray-800`}>{field.label}</h4>
+                </div>
+              );
+              
+            case 'subsection':
+              return (
+                <div key={fieldIndex} className="mt-3 mb-2">
+                  <h5 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{field.label}</h5>
+                </div>
+              );
+              
+            case 'text':
+              return (
+                <div key={fieldIndex} className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Input
+                    placeholder={`Enter ${field.label.toLowerCase()}`}
+                    disabled={!isEditing}
+                    className="text-sm"
+                  />
+                </div>
+              );
+              
+            case 'textarea':
+              return (
+                <div key={fieldIndex} className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Textarea
+                    placeholder={`Enter ${field.label.toLowerCase()}`}
+                    rows={field.rows || 3}
+                    disabled={!isEditing}
+                    className="text-sm"
+                  />
+                </div>
+              );
+              
+            case 'select':
+              return (
+                <div key={fieldIndex} className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Select disabled={!isEditing}>
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options?.map((option: string, optIndex: number) => (
+                        <SelectItem key={optIndex} value={option}>{option}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+              
+            case 'date':
+              return (
+                <div key={fieldIndex} className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Input
+                    type="date"
+                    disabled={!isEditing}
+                    className="text-sm"
+                  />
+                </div>
+              );
+              
+            case 'number':
+              return (
+                <div key={fieldIndex} className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Input
+                    type="number"
+                    min={field.min}
+                    max={field.max}
+                    step={field.step}
+                    placeholder={`Enter ${field.label.toLowerCase()}`}
+                    disabled={!isEditing}
+                    className="text-sm"
+                  />
+                </div>
+              );
+              
+            case 'rating_scale':
+              return (
+                <div key={fieldIndex} className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">{field.label}</label>
+                  <div className="flex items-center space-x-2">
+                    {field.scale.map((value: number, scaleIndex: number) => (
+                      <div key={scaleIndex} className="flex flex-col items-center">
+                        <button
+                          type="button"
+                          disabled={!isEditing}
+                          className={`w-8 h-8 rounded-full border-2 ${
+                            isEditing ? 'hover:bg-blue-100 hover:border-blue-400' : ''
+                          } border-gray-300 text-xs font-medium`}
+                        >
+                          {value}
+                        </button>
+                        {field.labels && field.labels[scaleIndex] && (
+                          <span className="text-xs text-gray-500 mt-1 text-center max-w-[60px]">
+                            {field.labels[scaleIndex]}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+              
+            case 'checkbox_group':
+              return (
+                <div key={fieldIndex} className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">{field.label}</label>
+                  <div className="space-y-1 pl-2">
+                    {field.options?.map((option: string, optIndex: number) => (
+                      <div key={optIndex} className="flex items-center space-x-2">
+                        <Checkbox disabled={!isEditing} id={`${field.id}_${optIndex}`} />
+                        <label
+                          htmlFor={`${field.id}_${optIndex}`}
+                          className="text-sm text-gray-600 cursor-pointer"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+              
+            case 'rating_grid':
+            case 'assistance_grid':
+              return (
+                <div key={fieldIndex} className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">{field.label}</label>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="text-left text-xs font-medium text-gray-600 p-2"></th>
+                          {field.columns.map((col: string, colIndex: number) => (
+                            <th key={colIndex} className="text-center text-xs font-medium text-gray-600 p-2 min-w-[80px]">
+                              {col}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {field.rows.map((row: string, rowIndex: number) => (
+                          <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : ''}>
+                            <td className="text-sm text-gray-700 p-2 font-medium">{row}</td>
+                            {field.columns.map((col: string, colIndex: number) => (
+                              <td key={colIndex} className="text-center p-2">
+                                <input
+                                  type="radio"
+                                  name={`${field.id}_${rowIndex}`}
+                                  disabled={!isEditing}
+                                  className="h-4 w-4"
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+              
+            case 'repeating_group':
+              return (
+                <div key={fieldIndex} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700">{field.label}</label>
+                    {isEditing && (
+                      <Button size="sm" variant="outline" className="text-xs">
+                        <Plus className="h-3 w-3 mr-1" />
+                        {field.addButtonLabel || 'Add Item'}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="border border-gray-200 rounded p-3 bg-gray-50">
+                    <div className="space-y-2">
+                      {field.fields.map((subField: any, subIndex: number) => (
+                        <div key={subIndex} className="text-sm">
+                          <span className="font-medium text-gray-600">{subField.label}</span>
+                          <span className="text-gray-400 ml-2">({subField.type})</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      This section allows multiple entries
+                    </p>
+                  </div>
+                </div>
+              );
+              
+            default:
+              return (
+                <div key={fieldIndex} className="pl-4 border-l-2 border-blue-200">
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-700">{field.label}</span>
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                    <div className="text-xs text-gray-500 mt-1">Type: {field.type}</div>
+                  </div>
+                </div>
+              );
+          }
+        })}
+      </div>
+      
+      {isEditing && (
+        <div className="mt-4 pt-4 border-t border-blue-200">
+          <p className="text-xs text-blue-700">
+            This evaluation section contains {section.fields.length} fields.
+            Use the Property Grid to customize individual field properties.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 default:
   return (

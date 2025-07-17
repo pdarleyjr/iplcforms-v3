@@ -1,0 +1,654 @@
+{
+  "evaluationSections": [
+    {
+      "id": "initial_evaluation",
+      "type": "evaluation_panel",
+      "label": "Initial Evaluation Section",
+      "category": "Initial Assessment",
+      "discipline": "Both",
+      "icon": "ClipboardList",
+      "description": "Comprehensive initial evaluation with all key assessment areas",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Initial Evaluation",
+          "level": 1
+        },
+        {
+          "type": "date",
+          "id": "evaluation_date",
+          "label": "Date of Evaluation",
+          "required": true
+        },
+        {
+          "type": "select",
+          "id": "evaluation_setting",
+          "label": "Evaluation Setting",
+          "options": ["Clinic", "Home", "School", "Hospital", "Telehealth"],
+          "required": true
+        },
+        {
+          "type": "text",
+          "id": "referral_source",
+          "label": "Referral Source",
+          "required": true
+        },
+        {
+          "type": "textarea",
+          "id": "reason_for_referral",
+          "label": "Reason for Referral",
+          "rows": 3,
+          "required": true
+        },
+        {
+          "type": "subsection",
+          "label": "Background Information"
+        },
+        {
+          "type": "textarea",
+          "id": "medical_history_summary",
+          "label": "Medical History Summary",
+          "rows": 4
+        },
+        {
+          "type": "textarea",
+          "id": "previous_therapy",
+          "label": "Previous Therapy Services",
+          "rows": 3
+        }
+      ]
+    },
+    {
+      "id": "cognitive_linguistic_eval",
+      "type": "evaluation_panel",
+      "label": "Cognitive-Linguistic Evaluation",
+      "category": "Cognitive Assessment",
+      "discipline": "SLP",
+      "icon": "Brain",
+      "description": "Comprehensive cognitive and linguistic assessment section",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Cognitive-Linguistic Assessment",
+          "level": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Attention & Concentration"
+        },
+        {
+          "type": "rating_scale",
+          "id": "sustained_attention",
+          "label": "Sustained Attention",
+          "scale": [1, 2, 3, 4, 5, 6, 7],
+          "labels": ["Severely Impaired", "Moderately Impaired", "Mildly Impaired", "WFL"]
+        },
+        {
+          "type": "rating_scale",
+          "id": "divided_attention",
+          "label": "Divided Attention",
+          "scale": [1, 2, 3, 4, 5, 6, 7],
+          "labels": ["Severely Impaired", "Moderately Impaired", "Mildly Impaired", "WFL"]
+        },
+        {
+          "type": "textarea",
+          "id": "attention_observations",
+          "label": "Clinical Observations",
+          "rows": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Memory"
+        },
+        {
+          "type": "checkbox_group",
+          "id": "memory_types_assessed",
+          "label": "Memory Types Assessed",
+          "options": [
+            "Immediate Memory",
+            "Short-term Memory",
+            "Long-term Memory",
+            "Working Memory",
+            "Procedural Memory",
+            "Semantic Memory"
+          ]
+        },
+        {
+          "type": "textarea",
+          "id": "memory_findings",
+          "label": "Memory Assessment Findings",
+          "rows": 3
+        },
+        {
+          "type": "subsection",
+          "label": "Executive Function"
+        },
+        {
+          "type": "rating_grid",
+          "id": "executive_function_skills",
+          "label": "Executive Function Skills",
+          "rows": [
+            "Planning",
+            "Organization",
+            "Problem-solving",
+            "Cognitive flexibility",
+            "Self-monitoring"
+          ],
+          "columns": ["Intact", "Mild Impairment", "Moderate Impairment", "Severe Impairment"]
+        }
+      ]
+    },
+    {
+      "id": "motor_skills_eval",
+      "type": "evaluation_panel",
+      "label": "Motor Skills Evaluation",
+      "category": "Motor Assessment",
+      "discipline": "OT",
+      "icon": "Hand",
+      "description": "Comprehensive fine and gross motor assessment",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Motor Skills Assessment",
+          "level": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Fine Motor Skills"
+        },
+        {
+          "type": "rating_scale",
+          "id": "grip_strength",
+          "label": "Grip Strength",
+          "scale": [1, 2, 3, 4, 5],
+          "labels": ["Very Weak", "Weak", "Fair", "Good", "Normal"]
+        },
+        {
+          "type": "rating_scale",
+          "id": "pinch_strength",
+          "label": "Pinch Strength",
+          "scale": [1, 2, 3, 4, 5],
+          "labels": ["Very Weak", "Weak", "Fair", "Good", "Normal"]
+        },
+        {
+          "type": "checkbox_group",
+          "id": "fine_motor_tasks",
+          "label": "Fine Motor Task Performance",
+          "options": [
+            "Button manipulation",
+            "Zipper use",
+            "Writing/drawing",
+            "Cutting with scissors",
+            "Small object manipulation",
+            "Bilateral coordination"
+          ]
+        },
+        {
+          "type": "subsection",
+          "label": "Gross Motor Skills"
+        },
+        {
+          "type": "rating_grid",
+          "id": "gross_motor_abilities",
+          "label": "Gross Motor Abilities",
+          "rows": [
+            "Balance (static)",
+            "Balance (dynamic)",
+            "Coordination",
+            "Strength",
+            "Endurance",
+            "Motor planning"
+          ],
+          "columns": ["Age Appropriate", "Mild Delay", "Moderate Delay", "Severe Delay"]
+        },
+        {
+          "type": "textarea",
+          "id": "motor_observations",
+          "label": "Clinical Observations",
+          "rows": 3
+        }
+      ]
+    },
+    {
+      "id": "communication_eval",
+      "type": "evaluation_panel",
+      "label": "Communication Evaluation",
+      "category": "Communication Assessment",
+      "discipline": "SLP",
+      "icon": "MessageSquare",
+      "description": "Comprehensive speech and language evaluation",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Communication Assessment",
+          "level": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Receptive Language"
+        },
+        {
+          "type": "rating_scale",
+          "id": "auditory_comprehension",
+          "label": "Auditory Comprehension",
+          "scale": [1, 2, 3, 4, 5, 6, 7],
+          "labels": ["Severely Impaired", "Moderately Impaired", "Mildly Impaired", "WFL"]
+        },
+        {
+          "type": "checkbox_group",
+          "id": "comprehension_levels",
+          "label": "Comprehension Demonstrated At",
+          "options": [
+            "Single words",
+            "Simple phrases",
+            "Simple sentences",
+            "Complex sentences",
+            "Paragraphs",
+            "Conversation"
+          ]
+        },
+        {
+          "type": "subsection",
+          "label": "Expressive Language"
+        },
+        {
+          "type": "select",
+          "id": "primary_communication_mode",
+          "label": "Primary Mode of Communication",
+          "options": [
+            "Verbal",
+            "Nonverbal/Gestures",
+            "AAC Device",
+            "Writing",
+            "Mixed modes"
+          ]
+        },
+        {
+          "type": "number",
+          "id": "mlu_words",
+          "label": "Mean Length of Utterance (words)",
+          "min": 0,
+          "max": 20,
+          "step": 0.1
+        },
+        {
+          "type": "textarea",
+          "id": "language_sample_notes",
+          "label": "Language Sample Notes",
+          "rows": 4
+        },
+        {
+          "type": "subsection",
+          "label": "Speech Production"
+        },
+        {
+          "type": "rating_scale",
+          "id": "speech_intelligibility",
+          "label": "Speech Intelligibility",
+          "scale": [1, 2, 3, 4, 5],
+          "labels": ["Unintelligible", "25%", "50%", "75%", "100%"]
+        },
+        {
+          "type": "checkbox_group",
+          "id": "speech_errors",
+          "label": "Speech Error Patterns",
+          "options": [
+            "Substitutions",
+            "Omissions",
+            "Distortions",
+            "Additions",
+            "Inconsistent errors"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "adl_eval",
+      "type": "evaluation_panel", 
+      "label": "ADL/IADL Evaluation",
+      "category": "Functional Assessment",
+      "discipline": "OT",
+      "icon": "ClipboardList",
+      "description": "Activities of Daily Living assessment",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Activities of Daily Living Assessment",
+          "level": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Basic ADLs"
+        },
+        {
+          "type": "assistance_grid",
+          "id": "basic_adl_performance",
+          "label": "Basic ADL Performance",
+          "rows": [
+            "Bathing",
+            "Dressing",
+            "Grooming",
+            "Toileting",
+            "Feeding",
+            "Functional mobility"
+          ],
+          "columns": [
+            "Independent",
+            "Modified Independent",
+            "Supervision",
+            "Minimal Assist",
+            "Moderate Assist",
+            "Maximal Assist",
+            "Dependent"
+          ]
+        },
+        {
+          "type": "subsection",
+          "label": "Instrumental ADLs"
+        },
+        {
+          "type": "assistance_grid",
+          "id": "iadl_performance",
+          "label": "IADL Performance",
+          "rows": [
+            "Meal preparation",
+            "Medication management",
+            "Money management",
+            "Shopping",
+            "Home management",
+            "Community mobility"
+          ],
+          "columns": [
+            "Independent",
+            "Needs Cues",
+            "Needs Assistance",
+            "Unable",
+            "N/A"
+          ]
+        },
+        {
+          "type": "textarea",
+          "id": "adl_adaptive_equipment",
+          "label": "Adaptive Equipment Used/Needed",
+          "rows": 2
+        }
+      ]
+    },
+    {
+      "id": "standardized_testing",
+      "type": "evaluation_panel",
+      "label": "Standardized Testing Results",
+      "category": "Testing Results",
+      "discipline": "Both",
+      "icon": "Award",
+      "description": "Standardized assessment results section",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Standardized Testing",
+          "level": 2
+        },
+        {
+          "type": "repeating_group",
+          "id": "test_results",
+          "label": "Test Results",
+          "addButtonLabel": "Add Test",
+          "fields": [
+            {
+              "type": "text",
+              "id": "test_name",
+              "label": "Test Name",
+              "required": true
+            },
+            {
+              "type": "date",
+              "id": "test_date",
+              "label": "Test Date"
+            },
+            {
+              "type": "number",
+              "id": "raw_score",
+              "label": "Raw Score"
+            },
+            {
+              "type": "number",
+              "id": "standard_score",
+              "label": "Standard Score"
+            },
+            {
+              "type": "number",
+              "id": "percentile",
+              "label": "Percentile Rank",
+              "min": 0,
+              "max": 100
+            },
+            {
+              "type": "text",
+              "id": "age_equivalent",
+              "label": "Age Equivalent"
+            },
+            {
+              "type": "textarea",
+              "id": "test_observations",
+              "label": "Test Observations",
+              "rows": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "clinical_impressions",
+      "type": "evaluation_panel",
+      "label": "Clinical Impressions & Recommendations",
+      "category": "Summary",
+      "discipline": "Both",
+      "icon": "FileText",
+      "description": "Clinical impressions and treatment recommendations",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Clinical Impressions & Recommendations",
+          "level": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Summary of Findings"
+        },
+        {
+          "type": "textarea",
+          "id": "strengths",
+          "label": "Client Strengths",
+          "rows": 3,
+          "required": true
+        },
+        {
+          "type": "textarea",
+          "id": "areas_of_concern",
+          "label": "Areas of Concern",
+          "rows": 3,
+          "required": true
+        },
+        {
+          "type": "subsection",
+          "label": "Diagnosis/Clinical Impressions"
+        },
+        {
+          "type": "textarea",
+          "id": "clinical_impressions",
+          "label": "Clinical Impressions",
+          "rows": 4,
+          "required": true
+        },
+        {
+          "type": "text",
+          "id": "primary_diagnosis",
+          "label": "Primary Diagnosis (ICD-10)"
+        },
+        {
+          "type": "repeating_group",
+          "id": "secondary_diagnoses",
+          "label": "Secondary Diagnoses",
+          "addButtonLabel": "Add Diagnosis",
+          "fields": [
+            {
+              "type": "text",
+              "id": "diagnosis_code",
+              "label": "ICD-10 Code"
+            },
+            {
+              "type": "text",
+              "id": "diagnosis_description",
+              "label": "Description"
+            }
+          ]
+        },
+        {
+          "type": "subsection",
+          "label": "Recommendations"
+        },
+        {
+          "type": "select",
+          "id": "recommendation_for_services",
+          "label": "Recommendation for Services",
+          "options": [
+            "Recommend therapy services",
+            "Do not recommend therapy at this time",
+            "Recommend re-evaluation in 6 months",
+            "Recommend consultation only"
+          ],
+          "required": true
+        },
+        {
+          "type": "checkbox_group",
+          "id": "recommended_frequency",
+          "label": "Recommended Frequency (if applicable)",
+          "options": [
+            "1x per week",
+            "2x per week",
+            "3x per week",
+            "1x per month",
+            "Consultative basis"
+          ]
+        },
+        {
+          "type": "textarea",
+          "id": "treatment_recommendations",
+          "label": "Specific Treatment Recommendations",
+          "rows": 4
+        },
+        {
+          "type": "textarea",
+          "id": "additional_recommendations",
+          "label": "Additional Recommendations (referrals, home program, etc.)",
+          "rows": 3
+        }
+      ]
+    },
+    {
+      "id": "reassessment_section",
+      "type": "evaluation_panel",
+      "label": "Reassessment/Progress Review",
+      "category": "Progress Monitoring",
+      "discipline": "Both",
+      "icon": "TrendingUp",
+      "description": "Periodic reassessment and progress monitoring",
+      "fields": [
+        {
+          "type": "section_header",
+          "label": "Reassessment/Progress Review",
+          "level": 2
+        },
+        {
+          "type": "date",
+          "id": "reassessment_date",
+          "label": "Date of Reassessment",
+          "required": true
+        },
+        {
+          "type": "select",
+          "id": "reassessment_type",
+          "label": "Type of Review",
+          "options": [
+            "30-day review",
+            "90-day review",
+            "Annual review",
+            "Discharge assessment",
+            "Other"
+          ]
+        },
+        {
+          "type": "subsection",
+          "label": "Progress Summary"
+        },
+        {
+          "type": "repeating_group",
+          "id": "goal_progress",
+          "label": "Goal Progress",
+          "addButtonLabel": "Add Goal",
+          "fields": [
+            {
+              "type": "textarea",
+              "id": "goal_description",
+              "label": "Goal",
+              "rows": 2
+            },
+            {
+              "type": "select",
+              "id": "progress_status",
+              "label": "Progress Status",
+              "options": [
+                "Goal Met",
+                "Progressing - Continue",
+                "Progressing - Modify",
+                "No Progress - Discontinue",
+                "Regression"
+              ]
+            },
+            {
+              "type": "textarea",
+              "id": "progress_notes",
+              "label": "Progress Notes",
+              "rows": 2
+            }
+          ]
+        },
+        {
+          "type": "rating_scale",
+          "id": "overall_progress",
+          "label": "Overall Progress Rating",
+          "scale": [1, 2, 3, 4, 5],
+          "labels": ["No Progress", "Minimal", "Fair", "Good", "Excellent"]
+        },
+        {
+          "type": "textarea",
+          "id": "barriers_to_progress",
+          "label": "Barriers to Progress (if any)",
+          "rows": 2
+        },
+        {
+          "type": "subsection",
+          "label": "Updated Recommendations"
+        },
+        {
+          "type": "select",
+          "id": "service_recommendation_update",
+          "label": "Updated Service Recommendation",
+          "options": [
+            "Continue current services",
+            "Increase frequency",
+            "Decrease frequency",
+            "Discharge from services",
+            "Transition to consultative model"
+          ]
+        },
+        {
+          "type": "textarea",
+          "id": "updated_treatment_plan",
+          "label": "Updated Treatment Plan",
+          "rows": 3
+        }
+      ]
+    }
+  ]
+}
