@@ -11,6 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import type { FormComponent } from '@/lib/api-form-builder';
 import { Calendar, Eye } from 'lucide-react';
 import { AISummaryElement } from './components/AISummaryElement';
+import { TitleElement } from './components/TitleElement';
+import SubtitleElement from './components/SubtitleElement';
+import SeparatorElement from './components/SeparatorElement';
 
 interface FormPreviewProps {
   components: FormComponent[];
@@ -222,6 +225,15 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
           </div>
         );
 
+      case 'title_subtitle':
+        return <TitleElement key={component.id} component={component} />;
+
+      case 'subtitle':
+        return <SubtitleElement key={component.id} props={component.props as any} />;
+
+      case 'line_separator':
+        return <SeparatorElement key={component.id} props={component.props as any} />;
+
       default:
         return (
           <div key={component.id} className="space-y-2">
@@ -255,9 +267,9 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
           
           {/* Form Header */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {title || 'Untitled Form'}
-            </h1>
+            </h2>
             {description && (
               <p className="text-gray-600">
                 {description}
