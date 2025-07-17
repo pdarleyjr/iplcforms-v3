@@ -60,9 +60,26 @@ export class FormSessionDO implements DurableObject {
       }
 
       if (!session) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: 'Session not found' 
+        // For new sessions (like form_new_...), return an empty session
+        // This allows the client to start working with a new form
+        if (sessionId.startsWith('form_new_')) {
+          return new Response(JSON.stringify({
+            success: true,
+            session: {
+              sessionId,
+              formData: {},
+              metadata: {},
+              components: [],
+              version: 0
+            }
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Session not found'
         }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' }

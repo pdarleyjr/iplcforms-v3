@@ -242,18 +242,29 @@ export function useFormLock({
   useEffect(() => {
     const handleUnload = () => {
       if (lockHashRef.current) {
-        // Use sendBeacon for reliable unload requests
-        navigator.sendBeacon('/api/form-locks', JSON.stringify({
+        // Use fetch with keepalive for reliable unload requests
+        // sendBeacon doesn't support DELETE method properly
+        fetch('/api/form-locks', {
           method: 'DELETE',
-          formId,
-          lockHash: lockHashRef.current
-        }));
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            formId,
+            lockHash: lockHashRef.current
+          }),
+          keepalive: true // This ensures the request completes even if the page unloads
+        }).catch(() => {
+          // Ignore errors during unload
+        });
       }
     };
     
     window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('unload', handleUnload);
     return () => {
       window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('unload', handleUnload);
     };
   }, [formId]);
   
