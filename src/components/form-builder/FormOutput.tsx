@@ -272,9 +272,9 @@ export const FormOutput: React.FC<FormOutputProps> = ({
           {/* Form Header */}
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h2 className="text-3xl font-bold text-gray-900">
                 {template.name || 'Untitled Form'}
-              </h1>
+              </h2>
               {mode === 'submission' && (
                 <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
                   <CheckCircle className="w-3 h-3 mr-1" />

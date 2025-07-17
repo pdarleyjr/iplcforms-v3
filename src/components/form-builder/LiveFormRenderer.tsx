@@ -446,9 +446,9 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
           <div className="max-w-2xl mx-auto">
             {/* Form Header */}
             <div className="mb-8">
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 {template.name || 'Untitled Form'}
-              </h1>
+              </h2>
               {template.description && (
                 <p className="text-gray-600">
                   {template.description}
