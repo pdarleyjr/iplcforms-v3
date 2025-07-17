@@ -13,25 +13,17 @@ export function Header({ currentPath }: { currentPath: string }) {
   
   return (
     <div className="relative border-b border-gray-200/30 bg-white iplc-shadow-sm">
-      {/* Metallic gradient accent bar */}
-      <div className="absolute inset-x-0 top-0 h-1 gradient-metallic-primary" />
-      
       <nav className="flex items-center justify-between mx-6 h-16">
         <div className="flex items-center space-x-4 lg:space-x-6">
-          {/* Logo with metallic hover effect */}
+          {/* Brand text with metallic hover effect */}
           <a
             href="/"
-            className="group relative flex items-center space-x-2 pr-4 lg:pr-6 transition-transform hover:scale-105"
-            aria-label="IPLC Home"
+            className="group relative flex items-center pr-4 lg:pr-6 transition-transform hover:scale-105"
+            aria-label="FormPro Home"
           >
-            <img
-              src="/iplclogo1.png"
-              alt="IPLC Logo"
-              className="h-8 w-auto drop-shadow-sm"
-            />
-            <span className="hidden sm:block text-lg font-semibold gradient-metallic-primary bg-clip-text text-transparent">
-              IPLC Forms
-            </span>
+            <h1 className="text-2xl font-bold gradient-metallic-primary bg-clip-text text-transparent">
+              FormPro
+            </h1>
           </a>
           
           {/* Only show navigation links in admin section */}
