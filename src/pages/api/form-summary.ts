@@ -95,7 +95,7 @@ Format the summary using markdown with clear sections.`
     // Store summary in database
     const now = new Date().toISOString();
     await env.DB.prepare(
-      'UPDATE forms SET summary = ?, updated_at = ? WHERE id = ?'
+      'UPDATE form_templates SET summary = ?, updated_at = ? WHERE id = ?'
     ).bind(summary, now, formId).run();
     
     return new Response(JSON.stringify({
@@ -137,7 +137,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     }
     
     const result = await env.DB.prepare(
-      'SELECT summary, updated_at FROM forms WHERE id = ?'
+      'SELECT summary, updated_at FROM form_templates WHERE id = ?'
     ).bind(formId).first();
     
     if (!result || !result.summary) {

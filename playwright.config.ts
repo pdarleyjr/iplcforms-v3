@@ -46,7 +46,7 @@ export default defineConfig({
     {
       name: 'chromium-desktop',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: ['**/form-builder-desktop.spec.ts', '**/duplicate-palette.spec.ts']
+      testMatch: ['**/form-builder-desktop.spec.ts', '**/duplicate-palette.spec.ts', '**/form-builder-enhancements.spec.ts']
     },
 
     {
