@@ -12,7 +12,12 @@
   },
   "upload_source_maps": true,
   "vars": {
-    "EXAMPLE_VALUE": "example_value"
+    "API_TOKEN": "test-api-token-development",
+    "SUPABASE_URL": "https://your-project.supabase.co",
+    "SUPABASE_ANON_KEY": "your-supabase-anon-key-here",
+    "CLOUDFLARE_ACCOUNT_ID": "your-cloudflare-account-id-here",
+    "CLOUDFLARE_D1_TOKEN": "your-cloudflare-d1-token-here",
+    "CLOUDFLARE_DATABASE_ID": "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a"
   },
   "d1_databases": [
     {

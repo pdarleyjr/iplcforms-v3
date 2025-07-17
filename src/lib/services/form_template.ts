@@ -14,21 +14,32 @@ export const FORM_TEMPLATE_QUERIES = {
   `,
   INSERT_TEMPLATE: `
     INSERT INTO form_templates (
-      name, description, category, form_config, metadata, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      name, description, category, subcategory, clinical_context, schema, ui_schema,
+      scoring_config, permissions, metadata, tags, clinical_codes, target_audience,
+      estimated_completion_time, change_log, collaborators, usage_stats, status,
+      created_by, updated_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   UPDATE_TEMPLATE: `
     UPDATE form_templates
-    SET name = ?, description = ?, category = ?, form_config = ?,
-        metadata = ?, updated_at = CURRENT_TIMESTAMP
+    SET name = ?, description = ?, category = ?, subcategory = ?, clinical_context = ?,
+        schema = ?, ui_schema = ?, scoring_config = ?, permissions = ?, metadata = ?,
+        tags = ?, clinical_codes = ?, target_audience = ?, estimated_completion_time = ?,
+        change_log = ?, collaborators = ?, usage_stats = ?, status = ?, updated_by = ?,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `,
   DELETE_TEMPLATE: `UPDATE form_templates SET is_active = false WHERE id = ?`,
-  GET_BY_ID: `WHERE ft.id = ? GROUP BY ft.id`,
+  GET_BY_ID: `WHERE ft.id = ? AND ft.is_active = true GROUP BY ft.id`,
   GET_BY_CATEGORY: `WHERE ft.category = ? AND ft.is_active = true GROUP BY ft.id`,
+  GET_BY_SUBCATEGORY: `WHERE ft.subcategory = ? AND ft.is_active = true GROUP BY ft.id`,
   GET_BY_STATUS: `WHERE ft.is_published = ? AND ft.is_active = true GROUP BY ft.id`,
+  GET_BY_ORGANIZATION: `WHERE ft.created_by IN (SELECT id FROM customers WHERE organization_id = ?) AND ft.is_active = true GROUP BY ft.id`,
   GET_VERSIONS: `WHERE ft.parent_template_id = ? OR ft.id = ? GROUP BY ft.id ORDER BY ft.version DESC`,
-  SEARCH: `WHERE (ft.name LIKE ? OR ft.description LIKE ?) AND ft.is_active = true GROUP BY ft.id`,
+  SEARCH: `WHERE (ft.name LIKE ? OR ft.description LIKE ? OR ft.clinical_context LIKE ?) AND ft.is_active = true GROUP BY ft.id`,
+  SEARCH_TAGS: `WHERE JSON_EXTRACT(ft.tags, '$') LIKE ? AND ft.is_active = true GROUP BY ft.id`,
+  FILTER_BY_TARGET_AUDIENCE: `WHERE JSON_EXTRACT(ft.target_audience, '$') LIKE ? AND ft.is_active = true GROUP BY ft.id`,
+  FILTER_BY_COMPLETION_TIME: `WHERE ft.estimated_completion_time <= ? AND ft.is_active = true GROUP BY ft.id`,
   
   // Analytics and aggregation queries
   TEMPLATE_ANALYTICS: `
@@ -74,6 +85,87 @@ export const FORM_TEMPLATE_QUERIES = {
     WHERE ft.is_active = true
     GROUP BY ft.category
     ORDER BY template_count DESC
+  `,
+
+  // Collection management queries
+  CREATE_COLLECTION: `
+    INSERT INTO form_template_collections (name, description, created_by, metadata)
+    VALUES (?, ?, ?, ?)
+  `,
+  UPDATE_COLLECTION: `
+    UPDATE form_template_collections
+    SET name = ?, description = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `,
+  DELETE_COLLECTION: `DELETE FROM form_template_collections WHERE id = ?`,
+  GET_COLLECTIONS: `
+    SELECT
+      ftc.*,
+      COUNT(ftci.template_id) as template_count
+    FROM form_template_collections ftc
+    LEFT JOIN form_template_collection_items ftci ON ftc.id = ftci.collection_id
+    GROUP BY ftc.id
+    ORDER BY ftc.updated_at DESC
+  `,
+  GET_COLLECTION_BY_ID: `
+    SELECT
+      ftc.*,
+      COUNT(ftci.template_id) as template_count
+    FROM form_template_collections ftc
+    LEFT JOIN form_template_collection_items ftci ON ftc.id = ftci.collection_id
+    WHERE ftc.id = ?
+    GROUP BY ftc.id
+  `,
+  ADD_TEMPLATE_TO_COLLECTION: `
+    INSERT INTO form_template_collection_items (collection_id, template_id, added_by)
+    VALUES (?, ?, ?)
+  `,
+  REMOVE_TEMPLATE_FROM_COLLECTION: `
+    DELETE FROM form_template_collection_items
+    WHERE collection_id = ? AND template_id = ?
+  `,
+  GET_COLLECTION_TEMPLATES: `
+    SELECT
+      ft.*,
+      c.name as created_by_name,
+      c.email as created_by_email,
+      ftci.added_at,
+      COUNT(fs.id) as submission_count
+    FROM form_template_collection_items ftci
+    JOIN form_templates ft ON ftci.template_id = ft.id
+    LEFT JOIN customers c ON ft.created_by = c.id
+    LEFT JOIN form_submissions fs ON ft.id = fs.template_id
+    WHERE ftci.collection_id = ? AND ft.is_active = true
+    GROUP BY ft.id
+    ORDER BY ftci.added_at DESC
+  `,
+
+  // Enhanced analytics queries
+  GET_FACETS: `
+    SELECT
+      'categories' as facet_type,
+      category as value,
+      COUNT(*) as count
+    FROM form_templates
+    WHERE is_active = true
+    GROUP BY category
+    UNION ALL
+    SELECT
+      'subcategories' as facet_type,
+      subcategory as value,
+      COUNT(*) as count
+    FROM form_templates
+    WHERE is_active = true AND subcategory IS NOT NULL
+    GROUP BY subcategory
+    UNION ALL
+    SELECT
+      'organizations' as facet_type,
+      CAST(c.organization_id as TEXT) as value,
+      COUNT(*) as count
+    FROM form_templates ft
+    JOIN customers c ON ft.created_by = c.id
+    WHERE ft.is_active = true AND c.organization_id IS NOT NULL
+    GROUP BY c.organization_id
   `
 };
 
@@ -82,12 +174,44 @@ const processTemplateResults = (connectionManager: D1ConnectionManager) => {
     return rows.map((row) => {
       const template = { ...row };
       
-      // Use optimized JSON parsing
+      // Use optimized JSON parsing for existing fields
       if (template.form_config) {
         template.form_config = connectionManager.parseJSON(template.form_config);
       }
       if (template.metadata) {
         template.metadata = connectionManager.parseJSON(template.metadata);
+      }
+
+      // Parse new JSON fields
+      if (template.schema) {
+        template.schema = connectionManager.parseJSON(template.schema);
+      }
+      if (template.ui_schema) {
+        template.ui_schema = connectionManager.parseJSON(template.ui_schema);
+      }
+      if (template.scoring_config) {
+        template.scoring_config = connectionManager.parseJSON(template.scoring_config);
+      }
+      if (template.permissions) {
+        template.permissions = connectionManager.parseJSON(template.permissions);
+      }
+      if (template.tags) {
+        template.tags = connectionManager.parseJSON(template.tags);
+      }
+      if (template.clinical_codes) {
+        template.clinical_codes = connectionManager.parseJSON(template.clinical_codes);
+      }
+      if (template.target_audience) {
+        template.target_audience = connectionManager.parseJSON(template.target_audience);
+      }
+      if (template.change_log) {
+        template.change_log = connectionManager.parseJSON(template.change_log);
+      }
+      if (template.collaborators) {
+        template.collaborators = connectionManager.parseJSON(template.collaborators);
+      }
+      if (template.usage_stats) {
+        template.usage_stats = connectionManager.parseJSON(template.usage_stats);
       }
 
       // Add creator info
@@ -135,8 +259,15 @@ export class FormTemplateService {
 
   async getAll(filters?: {
     category?: string;
+    subcategory?: string;
     status?: boolean;
     search?: string;
+    tags?: string[];
+    organization?: number;
+    target_audience?: string;
+    max_completion_time?: number;
+    sort_by?: 'updated_at' | 'created_at' | 'name' | 'submission_count';
+    sort_order?: 'asc' | 'desc';
     page?: number;
     per_page?: number;
   }) {
@@ -147,22 +278,65 @@ export class FormTemplateService {
       cacheKey,
       async () => {
         let query = FORM_TEMPLATE_QUERIES.BASE_SELECT;
+        let whereConditions: string[] = ['ft.is_active = true'];
         let bindParams: any[] = [];
-        
+
+        // Build WHERE conditions based on filters
         if (filters?.category) {
-          query += ` ${FORM_TEMPLATE_QUERIES.GET_BY_CATEGORY}`;
+          whereConditions.push('ft.category = ?');
           bindParams.push(filters.category);
-        } else if (filters?.status !== undefined) {
-          query += ` ${FORM_TEMPLATE_QUERIES.GET_BY_STATUS}`;
-          bindParams.push(filters.status);
-        } else if (filters?.search) {
-          query += ` ${FORM_TEMPLATE_QUERIES.SEARCH}`;
-          bindParams.push(`%${filters.search}%`, `%${filters.search}%`);
-        } else {
-          query += ` WHERE ft.is_active = true GROUP BY ft.id`;
         }
 
-        query += ` ORDER BY ft.updated_at DESC`;
+        if (filters?.subcategory) {
+          whereConditions.push('ft.subcategory = ?');
+          bindParams.push(filters.subcategory);
+        }
+
+        if (filters?.status !== undefined) {
+          whereConditions.push('ft.is_published = ?');
+          bindParams.push(filters.status);
+        }
+
+        if (filters?.search) {
+          whereConditions.push('(ft.name LIKE ? OR ft.description LIKE ? OR ft.clinical_context LIKE ?)');
+          bindParams.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
+        }
+
+        if (filters?.tags && filters.tags.length > 0) {
+          const tagConditions = filters.tags.map(() => 'JSON_EXTRACT(ft.tags, "$") LIKE ?').join(' OR ');
+          whereConditions.push(`(${tagConditions})`);
+          filters.tags.forEach(tag => {
+            bindParams.push(`%"${tag}"%`);
+          });
+        }
+
+        if (filters?.organization) {
+          whereConditions.push('ft.created_by IN (SELECT id FROM customers WHERE organization_id = ?)');
+          bindParams.push(filters.organization);
+        }
+
+        if (filters?.target_audience) {
+          whereConditions.push('JSON_EXTRACT(ft.target_audience, "$") LIKE ?');
+          bindParams.push(`%"${filters.target_audience}"%`);
+        }
+
+        if (filters?.max_completion_time) {
+          whereConditions.push('ft.estimated_completion_time <= ?');
+          bindParams.push(filters.max_completion_time);
+        }
+
+        // Add WHERE clause
+        query += ` WHERE ${whereConditions.join(' AND ')} GROUP BY ft.id`;
+
+        // Add sorting
+        const sortBy = filters?.sort_by || 'updated_at';
+        const sortOrder = filters?.sort_order || 'desc';
+        
+        if (sortBy === 'submission_count') {
+          query += ` ORDER BY submission_count ${sortOrder.toUpperCase()}`;
+        } else {
+          query += ` ORDER BY ft.${sortBy} ${sortOrder.toUpperCase()}`;
+        }
 
         // Add pagination
         if (filters?.page && filters?.per_page) {
@@ -204,27 +378,75 @@ export class FormTemplateService {
     name: string;
     description?: string;
     category: string;
-    form_config: object;
+    subcategory?: string;
+    clinical_context?: string;
+    schema?: object;
+    ui_schema?: object;
+    scoring_config?: object;
+    permissions?: object;
     metadata?: object;
+    tags?: string[];
+    clinical_codes?: object;
+    target_audience?: string[];
+    estimated_completion_time?: number;
+    change_log?: object[];
+    collaborators?: object[];
+    usage_stats?: object;
+    status?: string;
     created_by: number;
+    updated_by?: number;
+    // Legacy form_config support
+    form_config?: object;
   }) {
     const {
       name,
       description,
       category,
-      form_config,
+      subcategory,
+      clinical_context,
+      schema,
+      ui_schema,
+      scoring_config,
+      permissions,
       metadata,
+      tags,
+      clinical_codes,
+      target_audience,
+      estimated_completion_time,
+      change_log,
+      collaborators,
+      usage_stats,
+      status,
       created_by,
+      updated_by,
+      form_config, // Legacy support
     } = templateData;
+
+    // Use form_config as schema if schema not provided (legacy support)
+    const finalSchema = schema || form_config;
 
     const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.INSERT_TEMPLATE)
       .bind(
         name,
         description || null,
         category,
-        JSON.stringify(form_config),
+        subcategory || null,
+        clinical_context || null,
+        JSON.stringify(finalSchema || {}),
+        JSON.stringify(ui_schema || {}),
+        JSON.stringify(scoring_config || {}),
+        JSON.stringify(permissions || {}),
         JSON.stringify(metadata || {}),
-        created_by
+        JSON.stringify(tags || []),
+        JSON.stringify(clinical_codes || {}),
+        JSON.stringify(target_audience || []),
+        estimated_completion_time || null,
+        JSON.stringify(change_log || []),
+        JSON.stringify(collaborators || []),
+        JSON.stringify(usage_stats || {}),
+        status || 'draft',
+        created_by,
+        updated_by || created_by
       )
       .run();
 
@@ -244,8 +466,24 @@ export class FormTemplateService {
     name?: string;
     description?: string;
     category?: string;
-    form_config?: object;
+    subcategory?: string;
+    clinical_context?: string;
+    schema?: object;
+    ui_schema?: object;
+    scoring_config?: object;
+    permissions?: object;
     metadata?: object;
+    tags?: string[];
+    clinical_codes?: object;
+    target_audience?: string[];
+    estimated_completion_time?: number;
+    change_log?: object[];
+    collaborators?: object[];
+    usage_stats?: object;
+    status?: string;
+    updated_by?: number;
+    // Legacy form_config support
+    form_config?: object;
   }) {
     // First get the existing template
     const existing = await this.getById(id);
@@ -257,17 +495,49 @@ export class FormTemplateService {
       name = existing.name,
       description = existing.description,
       category = existing.category,
-      form_config = existing.form_config,
+      subcategory = existing.subcategory,
+      clinical_context = existing.clinical_context,
+      schema = existing.schema,
+      ui_schema = existing.ui_schema,
+      scoring_config = existing.scoring_config,
+      permissions = existing.permissions,
       metadata = existing.metadata,
+      tags = existing.tags,
+      clinical_codes = existing.clinical_codes,
+      target_audience = existing.target_audience,
+      estimated_completion_time = existing.estimated_completion_time,
+      change_log = existing.change_log,
+      collaborators = existing.collaborators,
+      usage_stats = existing.usage_stats,
+      status = existing.status,
+      updated_by,
+      form_config, // Legacy support
     } = templateData;
+
+    // Use form_config as schema if provided (legacy support)
+    const finalSchema = form_config ? form_config : schema;
 
     const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.UPDATE_TEMPLATE)
       .bind(
         name,
         description,
         category,
-        JSON.stringify(form_config),
+        subcategory,
+        clinical_context,
+        JSON.stringify(finalSchema),
+        JSON.stringify(ui_schema),
+        JSON.stringify(scoring_config),
+        JSON.stringify(permissions),
         JSON.stringify(metadata),
+        JSON.stringify(tags),
+        JSON.stringify(clinical_codes),
+        JSON.stringify(target_audience),
+        estimated_completion_time,
+        JSON.stringify(change_log),
+        JSON.stringify(collaborators),
+        JSON.stringify(usage_stats),
+        status,
+        updated_by || existing.created_by,
         id
       )
       .run();
@@ -523,5 +793,248 @@ export class FormTemplateService {
       },
       5 * 60 // 5 minutes cache
     );
+  }
+
+  // Collection Management Methods
+  async createCollection(collectionData: {
+    name: string;
+    description?: string;
+    created_by: number;
+    metadata?: object;
+  }) {
+    const { name, description, created_by, metadata } = collectionData;
+
+    const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.CREATE_COLLECTION)
+      .bind(name, description || null, created_by, JSON.stringify(metadata || {}))
+      .run();
+
+    if (!response.success) {
+      throw new Error("Failed to create collection");
+    }
+
+    return { success: true, collectionId: response.meta.last_row_id };
+  }
+
+  async updateCollection(id: number, collectionData: {
+    name?: string;
+    description?: string;
+    metadata?: object;
+  }) {
+    const { name, description, metadata } = collectionData;
+
+    const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.UPDATE_COLLECTION)
+      .bind(name, description, JSON.stringify(metadata), id)
+      .run();
+
+    if (!response.success) {
+      throw new Error("Failed to update collection");
+    }
+
+    return { success: true };
+  }
+
+  async deleteCollection(id: number) {
+    const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.DELETE_COLLECTION)
+      .bind(id)
+      .run();
+
+    if (!response.success) {
+      throw new Error("Failed to delete collection");
+    }
+
+    return { success: true };
+  }
+
+  async getCollections() {
+    const cacheKey = 'template_collections';
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.GET_COLLECTIONS).all();
+
+        if (response.success) {
+          return response.results.map(collection => ({
+            ...collection,
+            metadata: typeof collection.metadata === 'string' ? this.connectionManager.parseJSON(collection.metadata) : (collection.metadata || {})
+          }));
+        }
+        return [];
+      },
+      10 * 60 // 10 minutes cache
+    );
+  }
+
+  async getCollectionById(id: number) {
+    const cacheKey = `collection:${id}`;
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.GET_COLLECTION_BY_ID)
+          .bind(id)
+          .first();
+
+        if (response) {
+          return {
+            ...response,
+            metadata: typeof response.metadata === 'string' ? this.connectionManager.parseJSON(response.metadata) : (response.metadata || {})
+          };
+        }
+        return null;
+      },
+      10 * 60 // 10 minutes cache
+    );
+  }
+
+  async addTemplateToCollection(collectionId: number, templateId: number, addedBy: number) {
+    const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.ADD_TEMPLATE_TO_COLLECTION)
+      .bind(collectionId, templateId, addedBy)
+      .run();
+
+    if (!response.success) {
+      throw new Error("Failed to add template to collection");
+    }
+
+    // Clear collection caches
+    this.connectionManager.clearSpecificCaches([
+      `collection:${collectionId}`,
+      'template_collections'
+    ]);
+
+    return { success: true };
+  }
+
+  async removeTemplateFromCollection(collectionId: number, templateId: number) {
+    const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.REMOVE_TEMPLATE_FROM_COLLECTION)
+      .bind(collectionId, templateId)
+      .run();
+
+    if (!response.success) {
+      throw new Error("Failed to remove template from collection");
+    }
+
+    // Clear collection caches
+    this.connectionManager.clearSpecificCaches([
+      `collection:${collectionId}`,
+      'template_collections'
+    ]);
+
+    return { success: true };
+  }
+
+  async getCollectionTemplates(collectionId: number) {
+    const cacheKey = `collection:${collectionId}:templates`;
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.GET_COLLECTION_TEMPLATES)
+          .bind(collectionId)
+          .all();
+
+        if (response.success) {
+          return processTemplateResults(this.connectionManager)(response.results);
+        }
+        return [];
+      },
+      5 * 60 // 5 minutes cache
+    );
+  }
+
+  // Enhanced Analytics and Faceted Search
+  async getFacets() {
+    const cacheKey = 'template_facets';
+    
+    return this.connectionManager.executeWithCache(
+      cacheKey,
+      async () => {
+        const response = await this.connectionManager.prepare(FORM_TEMPLATE_QUERIES.GET_FACETS).all();
+
+        if (response.success) {
+          const facets: Record<string, Array<{ value: string; count: number }>> = {
+            categories: [],
+            subcategories: [],
+            organizations: []
+          };
+
+          response.results.forEach((row: any) => {
+            if (row.facet_type && row.value && row.count > 0) {
+              facets[row.facet_type] = facets[row.facet_type] || [];
+              facets[row.facet_type].push({
+                value: row.value,
+                count: row.count
+              });
+            }
+          });
+
+          return facets;
+        }
+        return { categories: [], subcategories: [], organizations: [] };
+      },
+      15 * 60 // 15 minutes cache for facets
+    );
+  }
+
+  async getTemplateWithTotalCount(filters?: any) {
+    // Get both templates and total count for pagination
+    const templates = await this.getAll(filters);
+    
+    // Get total count without pagination
+    const countFilters = { ...filters };
+    delete countFilters.page;
+    delete countFilters.per_page;
+    
+    const allTemplates = await this.getAll(countFilters);
+    const totalCount = allTemplates.length;
+
+    return {
+      templates,
+      total_count: totalCount,
+      page: filters?.page || 1,
+      per_page: filters?.per_page || 20,
+      total_pages: Math.ceil(totalCount / (filters?.per_page || 20))
+    };
+  }
+
+  async updateUsageStats(templateId: number, statsUpdate: {
+    views?: number;
+    submissions?: number;
+    completions?: number;
+    avg_completion_time?: number;
+  }) {
+    const existing = await this.getById(templateId);
+    if (!existing) {
+      throw new Error("Template not found");
+    }
+
+    const currentStats = existing.usage_stats || {};
+    const updatedStats = {
+      ...currentStats,
+      views: (currentStats.views || 0) + (statsUpdate.views || 0),
+      submissions: (currentStats.submissions || 0) + (statsUpdate.submissions || 0),
+      completions: (currentStats.completions || 0) + (statsUpdate.completions || 0),
+      avg_completion_time: statsUpdate.avg_completion_time || currentStats.avg_completion_time,
+      last_updated: new Date().toISOString()
+    };
+
+    const response = await this.connectionManager.prepare(`
+      UPDATE form_templates
+      SET usage_stats = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(JSON.stringify(updatedStats), templateId).run();
+
+    if (!response.success) {
+      throw new Error("Failed to update usage stats");
+    }
+
+    // Clear relevant caches
+    this.connectionManager.clearSpecificCaches([
+      `template:${templateId}`,
+      'templates:all:',
+      'popular_templates'
+    ]);
+
+    return { success: true };
   }
 }

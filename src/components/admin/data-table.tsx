@@ -1,5 +1,5 @@
 import {
-  Table,
+  Table as UITable,
   TableBody,
   TableCell,
   TableHead,
@@ -7,12 +7,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import type { Table } from "@tanstack/react-table";
+import type { Table as ReactTable } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 
-export function DataTable({ table }: { table: Table }) {
+interface DataTableProps<TData> {
+  table: ReactTable<TData>;
+}
+
+export function DataTable<TData>({ table }: DataTableProps<TData>) {
   return (
-    <Table>
+    <UITable>
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
@@ -45,12 +49,12 @@ export function DataTable({ table }: { table: Table }) {
           ))
         ) : (
           <TableRow>
-            <TableCell colSpan={columns.length} className="h-24 text-center">
+            <TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
               No results.
             </TableCell>
           </TableRow>
         )}
       </TableBody>
-    </Table>
+    </UITable>
   );
 }

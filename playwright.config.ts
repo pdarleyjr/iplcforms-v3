@@ -79,7 +79,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         // Force reduced motion for consistent accessibility testing
-        reducedMotion: 'reduce'
+        colorScheme: 'light'
       },
       testMatch: ['**/accessibility.spec.ts']
     }

@@ -4,7 +4,7 @@ export const prerender = false;
 import Layout from '@/layouts/Layout.astro';
 import { CustomerService } from "@/lib/services/customer";
 
-const { API_TOKEN, DB } = Astro.locals.env;
+const { API_TOKEN, DB } = Astro.locals.env || {};
 
 const customerService = new CustomerService(DB);
 const customers = await customerService.getAll();

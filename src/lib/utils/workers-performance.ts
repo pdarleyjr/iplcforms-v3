@@ -5,10 +5,12 @@
 
 import { getD1Manager } from '../services/d1-connection-manager';
 
-// Define global KV namespace types
+// Define global KV namespace types - using interface to avoid redeclaration
 declare global {
-  var METRICS_KV: KVNamespace | undefined;
-  var CACHE_KV: KVNamespace | undefined;
+  interface CloudflareWorkerGlobalScope {
+    METRICS_KV?: KVNamespace;
+    CACHE_KV?: KVNamespace;
+  }
 }
 
 export interface PerformanceMetrics {
@@ -114,8 +116,8 @@ export class WorkersPerformanceManager {
 
     // Store metrics in KV if available
     try {
-      if (globalThis.METRICS_KV) {
-        await globalThis.METRICS_KV.put(
+      if ((globalThis as any).METRICS_KV) {
+        await (globalThis as any).METRICS_KV.put(
           `metrics:${requestId}`,
           JSON.stringify(metrics),
           { expirationTtl: 86400 } // 24 hours
@@ -448,8 +450,8 @@ export class WorkersPerformanceManager {
 
   private async getFromCache(key: string): Promise<any> {
     try {
-      if (globalThis.CACHE_KV) {
-        const cached = await globalThis.CACHE_KV.get(key, 'json');
+      if ((globalThis as any).CACHE_KV) {
+        const cached = await (globalThis as any).CACHE_KV.get(key, 'json');
         return cached;
       }
     } catch (error) {
@@ -460,8 +462,8 @@ export class WorkersPerformanceManager {
 
   private async setInCache(key: string, value: any, ttl: number): Promise<void> {
     try {
-      if (globalThis.CACHE_KV) {
-        await globalThis.CACHE_KV.put(
+      if ((globalThis as any).CACHE_KV) {
+        await (globalThis as any).CACHE_KV.put(
           key,
           JSON.stringify(value),
           { expirationTtl: ttl }

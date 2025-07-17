@@ -3,18 +3,22 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Save, Settings, Eye, Plus, Trash2, GripVertical, Cloud, CloudOff, Loader2, Sparkles } from "lucide-react";
+import { Save, Settings, Eye, Plus, Trash2, GripVertical, Cloud, CloudOff, Loader2, Sparkles, Users, Clock, Tag, Palette, Share2, FolderPlus, Search, Filter, Grid, List, Download, Calendar, Star, ChevronDown } from "lucide-react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Sortable from "sortablejs";
 import { ComponentPalette } from "./ComponentPalette";
 import { FormPreview } from "./FormPreview";
-import { createFormTemplate, updateFormTemplate } from "@/lib/api-form-builder";
+import { createFormTemplate, updateFormTemplate, getFormTemplates, type TemplateSearchParams } from "@/lib/api-form-builder";
 import type { FormTemplate, FormComponent } from "@/lib/api-form-builder";
 import { useFormAutosave } from "@/hooks/useFormAutosave";
 import { useFormLock } from "@/hooks/useFormLock";
@@ -22,13 +26,24 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Lock } from "lucide-react";
 import { FormSummary } from "./FormSummary";
 import { AISummaryElement } from "./components/AISummaryElement";
+import TitleElement from "./components/TitleElement";
+import SubtitleElement from "./components/SubtitleElement";
+import SeparatorElement from "./components/SeparatorElement";
 
 const templateFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required"),
+  subcategory: z.string().optional(),
   clinical_context: z.string().min(2, "Clinical context is required"),
+  tags: z.string().optional(), // Comma-separated tags
+  targetAudience: z.array(z.string()).optional(),
+  estimatedCompletionTime: z.number().min(1).max(180).optional(), // minutes
   showIplcLogo: z.boolean(),
+  logoPosition: z.enum(['top-left', 'top-right', 'top-center']),
+  primaryColor: z.string().optional(),
+  fontFamily: z.string().optional(),
+  isPublic: z.boolean(),
 });
 
 type TemplateFormValues = z.infer<typeof templateFormSchema>;
@@ -46,8 +61,19 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   );
   const [previewMode, setPreviewMode] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [draggedComponent, setDraggedComponent] = useState<FormComponent | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  
+  // Load Template state
+  const [availableTemplates, setAvailableTemplates] = useState<FormTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'updated_at' | 'usage_count' | 'rating'>('updated_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const formListRef = useRef<HTMLDivElement>(null);
   const sortableInstanceRef = useRef<Sortable | null>(null);
@@ -188,8 +214,16 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
       name: template?.name || "",
       description: template?.description || "",
       category: template?.category || "",
+      subcategory: (template?.metadata as any)?.subcategory || "",
       clinical_context: template?.clinical_context || "",
+      tags: (template?.metadata as any)?.tags?.join(', ') || "",
+      targetAudience: (template?.metadata as any)?.targetAudience || [],
+      estimatedCompletionTime: (template?.metadata as any)?.estimatedCompletionTime || 15,
       showIplcLogo: template?.metadata?.showIplcLogo ?? true,
+      logoPosition: (template?.metadata as any)?.logoPosition || 'top-left',
+      primaryColor: (template?.metadata as any)?.customStyling?.primaryColor || "#007bff",
+      fontFamily: (template?.metadata as any)?.customStyling?.fontFamily || "system",
+      isPublic: (template?.metadata as any)?.isPublic ?? false,
     },
   });
   
@@ -279,6 +313,80 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     newComponents[index] = { ...newComponents[index], ...updates };
     setComponents(newComponents);
   }, [components]);
+
+  // Load templates function
+  const loadTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    try {
+      const url = new URL(window.location.href);
+      const searchParams: TemplateSearchParams = {
+        search: searchQuery || undefined,
+        category: selectedCategory || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        status: 'active', // Only show active templates
+        limit: 50,
+      };
+
+      const response = await getFormTemplates(url.origin, apiToken, searchParams);
+      if (response.success) {
+        setAvailableTemplates(response.templates);
+      }
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [apiToken, searchQuery, selectedCategory, selectedTags, sortBy, sortOrder]);
+
+  // Load templates when dialog opens or search parameters change
+  useEffect(() => {
+    if (loadTemplateOpen) {
+      loadTemplates();
+    }
+  }, [loadTemplateOpen, loadTemplates]);
+
+  // Handle template selection
+  const handleTemplateSelect = (selectedTemplate: FormTemplate) => {
+    if (selectedTemplate.schema?.components) {
+      setComponents(selectedTemplate.schema.components);
+      
+      // Update form values with template data
+      form.reset({
+        name: selectedTemplate.name,
+        description: selectedTemplate.description || "",
+        category: selectedTemplate.category || "",
+        subcategory: (selectedTemplate.metadata as any)?.subcategory || "",
+        clinical_context: selectedTemplate.clinical_context || "",
+        tags: (selectedTemplate.metadata as any)?.tags?.join(', ') || "",
+        targetAudience: (selectedTemplate.metadata as any)?.targetAudience || [],
+        estimatedCompletionTime: (selectedTemplate.metadata as any)?.estimatedCompletionTime || 15,
+        showIplcLogo: selectedTemplate.metadata?.showIplcLogo ?? true,
+        logoPosition: (selectedTemplate.metadata as any)?.logoPosition || 'top-left',
+        primaryColor: (selectedTemplate.metadata as any)?.customStyling?.primaryColor || "#007bff",
+        fontFamily: (selectedTemplate.metadata as any)?.customStyling?.fontFamily || "system",
+        isPublic: (selectedTemplate.metadata as any)?.isPublic ?? false,
+      });
+      
+      setLoadTemplateOpen(false);
+    }
+  };
+
+  // Get unique categories and tags for filtering
+  const availableCategories = useMemo(() => {
+    const categories = new Set(availableTemplates.map(t => t.category));
+    return Array.from(categories).filter(Boolean);
+  }, [availableTemplates]);
+
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>();
+    availableTemplates.forEach(template => {
+      const templateTags = (template.metadata as any)?.tags || [];
+      templateTags.forEach((tag: string) => tags.add(tag));
+    });
+    return Array.from(tags);
+  }, [availableTemplates]);
 
   const onSubmit = async (data: TemplateFormValues) => {
     try {
@@ -396,6 +504,15 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setLoadTemplateOpen(true)}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Load Template
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowSummary(true)}
               >
                 <Sparkles className="mr-2 h-4 w-4" />
@@ -412,117 +529,339 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
               </Button>
               
               <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Form Template Settings</DialogTitle>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Name</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Enter form name" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Description</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Enter form description"
-                                {...field}
+               <DialogTrigger asChild>
+                 <Button variant="outline" size="sm">
+                   <Settings className="mr-2 h-4 w-4" />
+                   Settings
+                 </Button>
+               </DialogTrigger>
+               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Save Template</DialogTitle>
+                    </DialogHeader>
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <Tabs defaultValue="basic" className="w-full">
+                          <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                            <TabsTrigger value="metadata">Metadata</TabsTrigger>
+                            <TabsTrigger value="styling">Styling</TabsTrigger>
+                            <TabsTrigger value="sharing">Sharing</TabsTrigger>
+                          </TabsList>
+                          
+                          <TabsContent value="basic" className="space-y-4 mt-6">
+                            <FormField
+                              control={form.control}
+                              name="name"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Template Name</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Enter template name" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="description"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Description</FormLabel>
+                                  <FormControl>
+                                    <Textarea placeholder="Enter template description" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="category"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Category</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select a category" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="assessment">Assessment</SelectItem>
+                                        <SelectItem value="treatment">Treatment</SelectItem>
+                                        <SelectItem value="progress">Progress Notes</SelectItem>
+                                        <SelectItem value="evaluation">Evaluation</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
                               />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="category"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Category</FormLabel>
-                            <FormControl>
-                              <select
-                                {...field}
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              >
-                                <option value="assessment">Assessment</option>
-                                <option value="intake">Intake</option>
-                                <option value="treatment">Treatment</option>
-                                <option value="outcome">Outcome</option>
-                                <option value="other">Other</option>
-                              </select>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="clinical_context"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Clinical Context</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Describe the clinical context and purpose"
-                                {...field}
+                              <FormField
+                                control={form.control}
+                                name="subcategory"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Subcategory</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="e.g., Initial Assessment" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
                               />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="showIplcLogo"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Show IPLC Logo</FormLabel>
-                              <div className="text-sm text-muted-foreground">
-                                Display the IPLC logo in the top-left corner of final form outputs
-                              </div>
                             </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
+                            <FormField
+                              control={form.control}
+                              name="clinical_context"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Clinical Context</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="e.g., Speech Therapy, Occupational Therapy" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TabsContent>
+  
+                          <TabsContent value="metadata" className="space-y-4 mt-6">
+                            <FormField
+                              control={form.control}
+                              name="tags"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="flex items-center gap-2">
+                                    <Tag className="w-4 h-4" />
+                                    Tags
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Enter tags separated by commas" {...field} />
+                                  </FormControl>
+                                  <FormDescription>
+                                    Separate multiple tags with commas (e.g., pediatric, assessment, standardized)
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="targetAudience"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="flex items-center gap-2">
+                                    <Users className="w-4 h-4" />
+                                    Target Audience
+                                  </FormLabel>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {['SLP', 'OT', 'PT', 'Psychologist', 'Social Worker', 'Case Manager'].map((audience) => (
+                                      <div key={audience} className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={audience}
+                                          checked={field.value?.includes(audience) || false}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              field.onChange([...(field.value || []), audience]);
+                                            } else {
+                                              field.onChange(field.value?.filter((item: string) => item !== audience) || []);
+                                            }
+                                          }}
+                                        />
+                                        <label htmlFor={audience} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                          {audience}
+                                        </label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="estimatedCompletionTime"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4" />
+                                    Estimated Completion Time (minutes)
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      max="180"
+                                      placeholder="15"
+                                      {...field}
+                                      onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TabsContent>
+  
+                          <TabsContent value="styling" className="space-y-4 mt-6">
+                            <FormField
+                              control={form.control}
+                              name="showIplcLogo"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                  <div className="space-y-0.5">
+                                    <FormLabel className="text-base">Show IPLC Logo</FormLabel>
+                                    <FormDescription>
+                                      Display the IPLC logo on the form
+                                    </FormDescription>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            {form.watch('showIplcLogo') && (
+                              <FormField
+                                control={form.control}
+                                name="logoPosition"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Logo Position</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select logo position" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="top-left">Top Left</SelectItem>
+                                        <SelectItem value="top-center">Top Center</SelectItem>
+                                        <SelectItem value="top-right">Top Right</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
                               />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <Button className="w-full" type="submit">
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Template
-                      </Button>
-                    </form>
-                  </Form>
-                </DialogContent>
+                            )}
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="primaryColor"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="flex items-center gap-2">
+                                      <Palette className="w-4 h-4" />
+                                      Primary Color
+                                    </FormLabel>
+                                    <FormControl>
+                                      <div className="flex gap-2">
+                                        <Input
+                                          type="color"
+                                          className="w-12 h-10 p-1 border-2"
+                                          {...field}
+                                        />
+                                        <Input
+                                          type="text"
+                                          placeholder="#007bff"
+                                          {...field}
+                                        />
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="fontFamily"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Font Family</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select font family" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="system">System Default</SelectItem>
+                                        <SelectItem value="Arial">Arial</SelectItem>
+                                        <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                                        <SelectItem value="Georgia">Georgia</SelectItem>
+                                        <SelectItem value="Verdana">Verdana</SelectItem>
+                                        <SelectItem value="Calibri">Calibri</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </TabsContent>
+  
+                          <TabsContent value="sharing" className="space-y-4 mt-6">
+                            <FormField
+                              control={form.control}
+                              name="isPublic"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                  <div className="space-y-0.5">
+                                    <FormLabel className="text-base flex items-center gap-2">
+                                      <Share2 className="w-4 h-4" />
+                                      Public Template
+                                    </FormLabel>
+                                    <FormDescription>
+                                      Make this template available to other users in your organization
+                                    </FormDescription>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            {form.watch('isPublic') && (
+                              <div className="rounded-lg border p-4 bg-blue-50">
+                                <h4 className="text-sm font-medium text-blue-900 mb-2">Public Template Benefits</h4>
+                                <ul className="text-sm text-blue-700 space-y-1">
+                                  <li>• Other users can discover and use your template</li>
+                                  <li>• Contributes to the organization's template library</li>
+                                  <li>• Can be rated and reviewed by other users</li>
+                                  <li>• Usage analytics will be tracked</li>
+                                </ul>
+                              </div>
+                            )}
+                          </TabsContent>
+                        </Tabs>
+  
+                        <div className="flex justify-end space-x-2 pt-4 border-t">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSettingsOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit">
+                            <Save className="mr-2 h-4 w-4" />
+                            Save Template
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </DialogContent>
               </Dialog>
             </div>
           </div>
@@ -595,6 +934,272 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
           )}
         </div>
       </div>
+      
+      {/* Load Template Dialog */}
+      <Dialog open={loadTemplateOpen} onOpenChange={setLoadTemplateOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Load Template</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex flex-col gap-4 h-[70vh]">
+            {/* Search and Filter Controls */}
+            <div className="flex flex-col gap-4 border-b pb-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search templates..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              {/* Filter Controls */}
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Category Filter */}
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Categories</SelectItem>
+                    {availableCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {/* Tags Filter */}
+                <Select value={selectedTags.join(',')} onValueChange={(value) => setSelectedTags(value ? value.split(',') : [])}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Filter by tags" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Tags</SelectItem>
+                    {availableTags.map((tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        {tag}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {/* Sort Controls */}
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'name' | 'created_at' | 'updated_at' | 'usage_count' | 'rating')}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="created_at">Date Created</SelectItem>
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="usage_count">Popularity</SelectItem>
+                    <SelectItem value="rating">Rating</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </Button>
+                
+                {/* View Toggle */}
+                <div className="flex ml-auto">
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                  >
+                    <Grid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Active Filters Display */}
+              {(selectedCategory || selectedTags.length > 0 || searchQuery) && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-gray-600">Active filters:</span>
+                  {searchQuery && (
+                    <Badge variant="secondary" className="gap-1">
+                      Search: {searchQuery}
+                      <button onClick={() => setSearchQuery('')}>×</button>
+                    </Badge>
+                  )}
+                  {selectedCategory && (
+                    <Badge variant="secondary" className="gap-1">
+                      Category: {selectedCategory}
+                      <button onClick={() => setSelectedCategory('')}>×</button>
+                    </Badge>
+                  )}
+                  {selectedTags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1">
+                      Tag: {tag}
+                      <button onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}>×</button>
+                    </Badge>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategory('');
+                      setSelectedTags([]);
+                    }}
+                  >
+                    Clear all
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            {/* Templates Grid/List */}
+            <div className="flex-1 overflow-auto">
+              {templatesLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-600">Loading templates...</p>
+                  </div>
+                </div>
+              ) : availableTemplates.length === 0 ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="text-center">
+                    <p className="text-gray-600 mb-2">No templates found</p>
+                    <p className="text-sm text-gray-500">Try adjusting your search criteria</p>
+                  </div>
+                </div>
+              ) : (
+                <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
+                  {availableTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      className={`border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${
+                        viewMode === 'list' ? 'flex items-center gap-4' : ''
+                      }`}
+                      onClick={() => handleTemplateSelect(template)}
+                    >
+                      {viewMode === 'grid' ? (
+                        <>
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="font-medium truncate">{template.name}</h3>
+                            {template.metadata?.is_featured && (
+                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                            )}
+                          </div>
+                          
+                          {template.description && (
+                            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                              {template.description}
+                            </p>
+                          )}
+                          
+                          <div className="space-y-2">
+                            {template.metadata?.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {template.metadata.category}
+                              </Badge>
+                            )}
+                            
+                            {template.metadata?.tags && template.metadata.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {template.metadata.tags.slice(0, 3).map((tag: string) => (
+                                  <Badge key={tag} variant="secondary" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                                {template.metadata.tags.length > 3 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    +{template.metadata.tags.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {template.created_at && new Date(template.created_at).toLocaleDateString()}
+                              </span>
+                              {template.metadata?.usage_count && (
+                                <span>{template.metadata.usage_count} uses</span>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium">{template.name}</h3>
+                              {template.metadata?.is_featured && (
+                                <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                              )}
+                              {template.metadata?.category && (
+                                <Badge variant="outline" className="text-xs">
+                                  {template.metadata.category}
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {template.description && (
+                              <p className="text-sm text-gray-600 mb-2">{template.description}</p>
+                            )}
+                            
+                            {template.metadata?.tags && template.metadata.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {template.metadata.tags.slice(0, 5).map((tag: string) => (
+                                  <Badge key={tag} variant="secondary" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                                {template.metadata.tags.length > 5 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    +{template.metadata.tags.length - 5}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500 mb-1">
+                              {template.created_at && new Date(template.created_at).toLocaleDateString()}
+                            </div>
+                            {template.metadata?.usage_count && (
+                              <div className="text-xs text-gray-500">
+                                {template.metadata.usage_count} uses
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex justify-end border-t pt-4">
+            <Button variant="outline" onClick={() => setLoadTemplateOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       {/* AI Summary Modal */}
       <FormSummary
@@ -855,6 +1460,33 @@ case "ai_summary":
       onUpdate={onUpdate}
       isEditing={isEditing}
       allComponents={allComponents}
+    />
+  );
+
+case "title_subtitle":
+  return (
+    <TitleElement
+      component={component}
+      onUpdate={onUpdate}
+      isEditing={isEditing}
+    />
+  );
+
+case "subtitle":
+  return (
+    <SubtitleElement
+      props={component.props as any}
+      isSelected={isEditing}
+      onPropsChange={(newProps) => onUpdate && onUpdate({ props: newProps })}
+    />
+  );
+
+case "line_separator":
+  return (
+    <SeparatorElement
+      props={component.props as any}
+      isSelected={isEditing}
+      onPropsChange={(newProps) => onUpdate && onUpdate({ props: newProps })}
     />
   );
 

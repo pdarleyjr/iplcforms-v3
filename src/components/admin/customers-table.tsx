@@ -61,7 +61,7 @@ const columns: ColumnDef<Customer, any>[] = [
             href={`/admin/customers/${info.row.original.id}`}
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-semibold">
-              {info.getValue().split(' ').map(n => n[0]).join('')}
+              {info.getValue().split(' ').map((n: string) => n[0]).join('')}
             </div>
             <span>{info.getValue()}</span>
           </a>

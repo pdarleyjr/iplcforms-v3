@@ -9,7 +9,7 @@ import { SubscriptionService } from '@/lib/services/subscription';
 import { CustomerSubscriptionService } from '@/lib/services/customer_subscription';
 import { FormTemplateService } from '@/lib/services/form_template';
 
-const { DB } = Astro.locals.env;
+const { DB } = Astro.locals.env || {};
 
 const customerService = new CustomerService(DB);
 const subscriptionService = new SubscriptionService(DB);

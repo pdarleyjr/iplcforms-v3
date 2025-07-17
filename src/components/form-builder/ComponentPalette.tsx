@@ -13,15 +13,18 @@ import {
   Calendar,
   Hash,
   BarChart3,
-  Sparkles
+  Sparkles,
+  Heading,
+  Heading2,
+  Minus
 } from 'lucide-react';
 interface ComponentPaletteItem {
   id: string;
-  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' | 'ai_summary';
+  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' | 'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator';
   label: string;
   icon: React.ReactNode;
   description: string;
-  category: 'Basic' | 'Selection' | 'Advanced';
+  category: 'Basic' | 'Selection' | 'Advanced' | 'Content';
 }
 
 const componentItems: ComponentPaletteItem[] = [
@@ -96,13 +99,38 @@ const componentItems: ComponentPaletteItem[] = [
     icon: <Sparkles className="h-4 w-4" />,
     description: 'AI-generated summary of selected form data',
     category: 'Advanced'
+  },
+  {
+    id: 'title_subtitle',
+    type: 'title_subtitle',
+    label: 'Title',
+    icon: <Heading className="h-4 w-4" />,
+    description: 'Main heading with typography controls',
+    category: 'Content'
+  },
+  {
+    id: 'subtitle',
+    type: 'subtitle',
+    label: 'Subtitle',
+    icon: <Heading2 className="h-4 w-4" />,
+    description: 'Secondary heading with styling options',
+    category: 'Content'
+  },
+  {
+    id: 'line_separator',
+    type: 'line_separator',
+    label: 'Separator',
+    icon: <Minus className="h-4 w-4" />,
+    description: 'Visual line separator with style options',
+    category: 'Content'
   }
 ];
 
 const categoryColors = {
   'Basic': 'bg-blue-100 text-blue-800',
   'Selection': 'bg-green-100 text-green-800',
-  'Advanced': 'bg-purple-100 text-purple-800'
+  'Advanced': 'bg-purple-100 text-purple-800',
+  'Content': 'bg-orange-100 text-orange-800'
 };
 
 interface ComponentPaletteProps {
@@ -140,6 +168,38 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
             includeMedicalContext: true,
             sourceFieldLabels: true
           }
+        } : {}),
+        ...(item.type === 'title_subtitle' ? {
+          text: 'Main Title',
+          level: 'h1',
+          fontFamily: 'system',
+          fontSize: '3xl',
+          fontWeight: 'bold',
+          color: '#1f2937',
+          alignment: 'left',
+          marginTop: 0,
+          marginBottom: 16,
+          enableMarkdown: false
+        } : {}),
+        ...(item.type === 'subtitle' ? {
+          text: 'Subtitle text',
+          level: 'h3',
+          fontFamily: 'system',
+          fontSize: 'lg',
+          fontWeight: 'medium',
+          color: '#6b7280',
+          alignment: 'left',
+          marginTop: 8,
+          marginBottom: 12,
+          enableMarkdown: false
+        } : {}),
+        ...(item.type === 'line_separator' ? {
+          style: 'solid',
+          thickness: 1,
+          color: '#e5e7eb',
+          width: 100,
+          marginTop: 16,
+          marginBottom: 16
         } : {})
       }
     };

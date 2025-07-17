@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormTemplateService } from '@/lib/services/form_template';
 
-const { DB } = Astro.locals.env;
+const { DB } = Astro.locals.env || {};
 const formTemplateService = new FormTemplateService(DB);
 
 const templates = await formTemplateService.getAll();

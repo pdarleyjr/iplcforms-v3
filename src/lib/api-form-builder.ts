@@ -6,7 +6,7 @@ export interface FormComponent {
   type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' |
         'clinical_scale' | 'assistance_level' | 'demographics' | 'standardized_test' | 'oral_motor' |
         'language_sample' | 'sensory_processing' | 'goals_planning' | 'clinical_signature' | 'cpt_code' |
-        'ai_summary';
+        'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator';
   label: string;
   order: number;
   props?: {
@@ -74,6 +74,20 @@ export interface FormComponent {
       sourceFields?: string[];
       sourceData?: Record<string, any>;
     };
+    // Title/Subtitle Element properties
+    text?: string;
+    fontSize?: string;
+    fontWeight?: string;
+    color?: string;
+    alignment?: string;
+    marginTop?: number;
+    marginBottom?: number;
+    headingLevel?: string;
+    enableMarkdown?: boolean;
+    // Line Separator properties
+    style?: string;
+    thickness?: number;
+    width?: number;
   };
 }
 
@@ -161,9 +175,42 @@ interface AnalyticsResponse extends ApiResponse<any> {
   insights?: any;
 }
 
+// Enhanced search parameters interface for template queries
+export interface TemplateSearchParams {
+  search?: string;
+  category?: string;
+  subcategory?: string;
+  tags?: string[];
+  clinical_context?: string;
+  status?: 'draft' | 'active' | 'archived';
+  created_by?: number;
+  is_public?: boolean;
+  target_audience?: string[];
+  sort_by?: 'name' | 'created_at' | 'updated_at' | 'usage_count' | 'rating';
+  sort_order?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
 // Form Template API Functions
-export const getFormTemplates = async (baseUrl: string, apiToken: string) => {
-  const response = await fetch(`${baseUrl}/api/form-templates`, {
+export const getFormTemplates = async (baseUrl: string, apiToken: string, params?: TemplateSearchParams) => {
+  const url = new URL(`${baseUrl}/api/form-templates`);
+  
+  // Add search parameters if provided
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          // Handle array parameters (tags, target_audience)
+          value.forEach(item => url.searchParams.append(key, item.toString()));
+        } else {
+          url.searchParams.append(key, value.toString());
+        }
+      }
+    });
+  }
+  
+  const response = await fetch(url.toString(), {
     headers: {
       Authorization: `Bearer ${apiToken}`,
     },
@@ -174,12 +221,16 @@ export const getFormTemplates = async (baseUrl: string, apiToken: string) => {
     return {
       templates: data.templates,
       success: true,
+      total: data.total || data.templates.length,
+      hasMore: data.hasMore || false,
     };
   } else {
     console.error("Failed to fetch form templates");
     return {
       templates: [],
       success: false,
+      total: 0,
+      hasMore: false,
     };
   }
 };

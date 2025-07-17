@@ -40,7 +40,7 @@ export const CustomerSubscriptionSchema = z.object({
 // Form Builder Schemas
 export const FormComponentSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(['text_input', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'scale', 'ai_summary']),
+  type: z.enum(['text_input', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'scale', 'ai_summary', 'title_subtitle', 'line_separator']),
   label: z.string().min(1, "Label is required").max(200),
   order: z.number().min(0),
   props: z.object({
@@ -69,6 +69,29 @@ export const FormComponentSchema = z.object({
       max_length: z.number().min(50).max(2000).optional(),
       include_medical_context: z.boolean().optional(),
     }).optional(),
+    // Title/Subtitle specific props
+    title_subtitle: z.object({
+      text: z.string().max(500),
+      level: z.enum(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']).default('h2'),
+      fontFamily: z.enum(['system', 'serif', 'sans-serif', 'monospace']).default('system'),
+      fontSize: z.enum(['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl']).default('base'),
+      fontWeight: z.enum(['normal', 'medium', 'semibold', 'bold']).default('normal'),
+      color: z.string().regex(/^#[0-9A-F]{6}$/i).default('#000000'),
+      alignment: z.enum(['left', 'center', 'right']).default('left'),
+      marginTop: z.number().min(0).max(100).default(0),
+      marginBottom: z.number().min(0).max(100).default(0),
+      enableMarkdown: z.boolean().default(false),
+    }).optional(),
+    // Line Separator specific props
+    line_separator: z.object({
+      thickness: z.number().min(1).max(10).default(1),
+      color: z.string().regex(/^#[0-9A-F]{6}$/i).default('#CCCCCC'),
+      style: z.enum(['solid', 'dashed', 'dotted']).default('solid'),
+      width: z.number().min(10).max(100).default(100),
+      alignment: z.enum(['left', 'center', 'right']).default('center'),
+      marginTop: z.number().min(0).max(100).default(10),
+      marginBottom: z.number().min(0).max(100).default(10),
+    }).optional(),
   }).optional(),
 });
 
@@ -77,6 +100,7 @@ export const FormTemplateSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(200),
   description: z.string().max(1000).optional(),
   category: z.enum(['assessment', 'intake', 'treatment', 'outcome', 'research', 'other']),
+  subcategory: z.string().max(100).optional(),
   clinical_context: z.string().min(2, "Clinical context is required").max(1000),
   version: z.number().min(1).default(1),
   schema: z.object({
@@ -88,6 +112,35 @@ export const FormTemplateSchema = z.object({
   metadata: z.object({
     showIplcLogo: z.boolean().optional(),
   }).catchall(z.any()).optional(),
+  // Enhanced metadata fields
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  clinical_codes: z.object({
+    icd10: z.array(z.string()).optional(),
+    snomed: z.array(z.string()).optional(),
+    loinc: z.array(z.string()).optional(),
+    custom: z.record(z.string(), z.array(z.string())).optional(),
+  }).optional(),
+  target_audience: z.array(z.enum(['adult', 'pediatric', 'geriatric', 'adolescent', 'all_ages'])).optional(),
+  estimated_completion_time: z.number().min(1).max(480).optional(), // 1 minute to 8 hours
+  change_log: z.array(z.object({
+    version: z.number().min(1),
+    date: z.string().datetime(),
+    changes: z.string().max(1000),
+    changed_by: z.number().positive(),
+  })).optional(),
+  collaborators: z.array(z.object({
+    user_id: z.number().positive(),
+    role: z.enum(['editor', 'reviewer', 'viewer']),
+    added_at: z.string().datetime(),
+    added_by: z.number().positive(),
+  })).optional(),
+  usage_stats: z.object({
+    total_submissions: z.number().min(0).default(0),
+    unique_users: z.number().min(0).default(0),
+    last_used: z.string().datetime().optional(),
+    avg_completion_time: z.number().min(0).optional(),
+    completion_rate: z.number().min(0).max(100).optional(),
+  }).optional(),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
   created_by: z.number().positive().optional(),
   updated_by: z.number().positive().optional(),
@@ -106,6 +159,29 @@ export const FormSubmissionSchema = z.object({
   submission_date: z.string().datetime().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
+});
+
+// Template Collection Schemas
+export const FormTemplateCollectionSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(2, "Collection name must be at least 2 characters").max(200),
+  description: z.string().max(1000).optional(),
+  organization_id: z.number().positive().optional(),
+  is_public: z.boolean().default(false),
+  metadata: z.record(z.string(), z.any()).optional(),
+  created_by: z.number().positive().optional(),
+  updated_by: z.number().positive().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+});
+
+export const FormTemplateCollectionItemSchema = z.object({
+  id: z.number().optional(),
+  collection_id: z.number().positive("Collection ID is required"),
+  template_id: z.number().positive("Template ID is required"),
+  order_index: z.number().min(0).default(0),
+  added_by: z.number().positive().optional(),
+  added_at: z.string().optional(),
 });
 
 // Clinical RBAC Schemas
@@ -152,15 +228,32 @@ export const CreateCustomerSubscriptionRequest = CustomerSubscriptionSchema.omit
   updated_at: true 
 });
 
-export const CreateFormTemplateRequest = FormTemplateSchema.omit({ 
-  id: true, 
-  created_at: true, 
-  updated_at: true 
+export const CreateFormTemplateRequest = FormTemplateSchema.omit({
+  id: true,
+  created_at: true,
+  updated_at: true
 });
-export const UpdateFormTemplateRequest = FormTemplateSchema.partial().omit({ 
-  id: true, 
-  created_at: true, 
-  updated_at: true 
+export const UpdateFormTemplateRequest = FormTemplateSchema.partial().omit({
+  id: true,
+  created_at: true,
+  updated_at: true
+});
+
+// Collection Request Schemas
+export const CreateCollectionRequest = FormTemplateCollectionSchema.omit({
+  id: true,
+  created_at: true,
+  updated_at: true
+});
+export const UpdateCollectionRequest = FormTemplateCollectionSchema.partial().omit({
+  id: true,
+  created_at: true,
+  updated_at: true
+});
+
+export const AddTemplateToCollectionRequest = FormTemplateCollectionItemSchema.omit({
+  id: true,
+  added_at: true
 });
 
 export const CreateFormSubmissionRequest = FormSubmissionSchema.omit({
@@ -205,6 +298,33 @@ export const FilterSchema = z.object({
   date_to: z.string().datetime().optional(),
 });
 
+// Enhanced Form Template Query Filters
+export const FormTemplateFiltersSchema = z.object({
+  search: z.string().max(200).optional(),
+  category: z.enum(['assessment', 'intake', 'treatment', 'outcome', 'research', 'other']).optional(),
+  subcategory: z.string().max(100).optional(),
+  tags: z.array(z.string().max(50)).optional(),
+  organization: z.coerce.number().positive().optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  target_audience: z.enum(['adult', 'pediatric', 'geriatric', 'adolescent', 'all_ages']).optional(),
+  clinical_codes: z.object({
+    icd10: z.array(z.string()).optional(),
+    snomed: z.array(z.string()).optional(),
+    loinc: z.array(z.string()).optional(),
+  }).optional(),
+  created_by: z.coerce.number().positive().optional(),
+  updated_since: z.string().datetime().optional(),
+  min_completion_time: z.coerce.number().min(1).optional(),
+  max_completion_time: z.coerce.number().min(1).optional(),
+  has_collaborators: z.coerce.boolean().optional(),
+  collection_id: z.coerce.number().positive().optional(),
+  sort_by: z.enum(['name', 'created_at', 'updated_at', 'usage_count', 'completion_time']).default('updated_at'),
+  sort_order: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().min(1).default(1),
+  per_page: z.coerce.number().min(1).max(100).default(20),
+  include_facets: z.coerce.boolean().default(false),
+});
+
 export const AnalyticsQuerySchema = z.object({
   template_id: z.coerce.number().positive().optional(),
   date_range: z.enum(['7d', '30d', '90d', '1y']).default('30d'),
@@ -227,6 +347,58 @@ export const ApiResponseSchema = z.object({
   }).optional(),
 });
 
+// Enhanced Template Response Schemas
+export const FacetSchema = z.object({
+  name: z.string(),
+  values: z.array(z.object({
+    value: z.string(),
+    count: z.number(),
+    label: z.string().optional(),
+  })),
+});
+
+export const GetTemplatesResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    templates: z.array(FormTemplateSchema),
+    pagination: z.object({
+      page: z.number(),
+      per_page: z.number(),
+      total: z.number(),
+      pages: z.number(),
+    }),
+    facets: z.array(FacetSchema).optional(),
+    aggregations: z.object({
+      total_templates: z.number(),
+      categories: z.record(z.string(), z.number()),
+      avg_completion_time: z.number().optional(),
+      most_used_tags: z.array(z.object({
+        tag: z.string(),
+        count: z.number(),
+      })).optional(),
+    }).optional(),
+  }),
+  message: z.string().optional(),
+});
+
+export const GetTemplateResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    template: FormTemplateSchema,
+    related_templates: z.array(FormTemplateSchema.pick({
+      id: true,
+      name: true,
+      category: true,
+      description: true,
+    })).optional(),
+    usage_analytics: z.object({
+      recent_submissions: z.number(),
+      performance_metrics: z.record(z.string(), z.any()),
+    }).optional(),
+  }),
+  message: z.string().optional(),
+});
+
 // Type exports for use throughout the application
 export type Customer = z.infer<typeof CustomerSchema>;
 export type Subscription = z.infer<typeof SubscriptionSchema>;
@@ -234,6 +406,8 @@ export type CustomerSubscription = z.infer<typeof CustomerSubscriptionSchema>;
 export type FormComponent = z.infer<typeof FormComponentSchema>;
 export type FormTemplate = z.infer<typeof FormTemplateSchema>;
 export type FormSubmission = z.infer<typeof FormSubmissionSchema>;
+export type FormTemplateCollection = z.infer<typeof FormTemplateCollectionSchema>;
+export type FormTemplateCollectionItem = z.infer<typeof FormTemplateCollectionItemSchema>;
 export type Role = z.infer<typeof RoleSchema>;
 export type UserPermission = z.infer<typeof UserPermissionSchema>;
 export type WorkflowEvent = z.infer<typeof WorkflowEventSchema>;
@@ -250,6 +424,17 @@ export type UpdateFormSubmissionRequest = z.infer<typeof UpdateFormSubmissionReq
 export type FormSubmissionFilters = z.infer<typeof FormSubmissionFiltersSchema>;
 export type CreateCustomerWorkflowRequest = z.infer<typeof CreateCustomerWorkflowRequest>;
 export type UpdateCustomerWorkflowRequest = z.infer<typeof UpdateCustomerWorkflowRequest>;
+
+// Enhanced Form Template Types
+export type FormTemplateFilters = z.infer<typeof FormTemplateFiltersSchema>;
+export type CreateCollectionRequest = z.infer<typeof CreateCollectionRequest>;
+export type UpdateCollectionRequest = z.infer<typeof UpdateCollectionRequest>;
+export type AddTemplateToCollectionRequest = z.infer<typeof AddTemplateToCollectionRequest>;
+
+// Response Types
+export type Facet = z.infer<typeof FacetSchema>;
+export type GetTemplatesResponse = z.infer<typeof GetTemplatesResponseSchema>;
+export type GetTemplateResponse = z.infer<typeof GetTemplateResponseSchema>;
 
 export type PaginationQuery = z.infer<typeof PaginationSchema>;
 export type FilterQuery = z.infer<typeof FilterSchema>;

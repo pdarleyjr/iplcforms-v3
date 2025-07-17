@@ -15,7 +15,7 @@ if (!id || !submissionId) {
   return Astro.redirect('/forms');
 }
 
-const { DB } = Astro.locals.env;
+const { DB } = Astro.locals.env || {};
 const formTemplateService = new FormTemplateService(DB);
 const formSubmissionService = new FormSubmissionService(DB);
 

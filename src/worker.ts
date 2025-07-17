@@ -45,8 +45,33 @@ export function createExports(manifest: SSRManifest) {
         // Asset not found or other error, continue to Astro SSR
       }
 
+      // Create a properly structured environment object for Astro.locals.env
+      const astroEnv = {
+        // Environment variables from .dev.vars
+        API_TOKEN: env.API_TOKEN,
+        SUPABASE_URL: env.SUPABASE_URL,
+        SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY,
+        CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+        CLOUDFLARE_D1_TOKEN: env.CLOUDFLARE_D1_TOKEN,
+        CLOUDFLARE_DATABASE_ID: env.CLOUDFLARE_DATABASE_ID,
+        
+        // Cloudflare bindings
+        DB: env.DB,
+        SESSION: env.SESSION,
+        FORM_SESSION: env.FORM_SESSION,
+        CUSTOMER_WORKFLOW: env.CUSTOMER_WORKFLOW,
+        AI_WORKER: env.AI_WORKER,
+        ASSETS: env.ASSETS,
+        METRICS_KV: env.METRICS_KV,
+        CACHE_KV: env.CACHE_KV
+      };
+
       return app.render(request, {
-        locals: { env, ctx }
+        locals: {
+          runtime: { env },
+          ctx,
+          env: astroEnv
+        }
       });
     }
   };

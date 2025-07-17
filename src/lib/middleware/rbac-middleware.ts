@@ -17,7 +17,17 @@ export async function authenticate(
   context: APIContext
 ): Promise<AuthenticatedContext | Response> {
   const { request, locals } = context;
-  const env = (locals as any).runtime.env;
+  const env = (locals as any)?.runtime?.env;
+  
+  if (!env) {
+    return new Response(
+      JSON.stringify({ error: 'Runtime environment not available' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
   
   // Check for customer ID in headers
   const customerId = request.headers.get('X-Customer-ID');

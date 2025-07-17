@@ -12,6 +12,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { FormComponent, FormTemplate } from '@/lib/api-form-builder';
 import { Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { AISummaryElement } from './components/AISummaryElement';
+import TitleElement from './components/TitleElement';
+import SubtitleElement from './components/SubtitleElement';
+import SeparatorElement from './components/SeparatorElement';
 
 interface LiveFormRendererProps {
   template: FormTemplate;
@@ -365,6 +368,53 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
               </div>
             </div>
             {errorElement}
+          </div>
+        );
+
+      case 'title_subtitle':
+        return (
+          <div key={id}>
+            <TitleElement
+              component={component}
+              isEditing={false}
+            />
+          </div>
+        );
+      case 'subtitle':
+        return (
+          <div key={id}>
+            <SubtitleElement
+              props={{
+                text: (props as any).text || label || 'Subtitle',
+                level: (props as any).level || 'h3',
+                fontFamily: (props as any).fontFamily || 'system',
+                fontSize: (props as any).fontSize || 'lg',
+                fontWeight: (props as any).fontWeight || 'medium',
+                color: (props as any).color || '#6B7280',
+                alignment: (props as any).alignment || 'left',
+                marginTop: (props as any).marginTop || 8,
+                marginBottom: (props as any).marginBottom || 12,
+                enableMarkdown: (props as any).enableMarkdown || false
+              }}
+              isSelected={false}
+            />
+          </div>
+        );
+
+      case 'line_separator':
+        return (
+          <div key={id}>
+            <SeparatorElement
+              props={{
+                style: (props as any).style || 'solid',
+                thickness: (props as any).thickness || 1,
+                color: (props as any).color || '#E5E7EB',
+                width: (props as any).width || 100,
+                marginTop: (props as any).marginTop || 16,
+                marginBottom: (props as any).marginBottom || 16
+              }}
+              isSelected={false}
+            />
           </div>
         );
 

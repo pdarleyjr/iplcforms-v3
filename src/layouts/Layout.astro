@@ -6,8 +6,10 @@ import ApiTokenMissingCard from '@/components/admin/api-token-missing-card';
 
 const currentPath = Astro.url.pathname;
 const title = Astro.props.title || 'SaaS Admin Template';
-const { API_TOKEN } = Astro.locals.env;
-const apiTokenSet = API_TOKEN && API_TOKEN !== '';
+// Handle undefined env gracefully for development
+const env = Astro.locals.env || {};
+const API_TOKEN = env.API_TOKEN || process.env.API_TOKEN || 'dev_fallback_token';
+const apiTokenSet = API_TOKEN && API_TOKEN !== '' && API_TOKEN !== 'dev_fallback_token';
 ---
 
 <script is:inline>

@@ -40,7 +40,7 @@ const getHandler: APIRoute = async (context: APIContext) => {
     }
 
     const filters = filtersValidation.data;
-    const submissions = await formSubmissionService.getAll(filters);
+    const submissions = await formSubmissionService.getAll(filters as any);
     return Response.json({ submissions });
   } catch (error) {
     console.error('Error loading form submissions:', error);

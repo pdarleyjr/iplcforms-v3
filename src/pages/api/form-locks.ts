@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     
     // Check if form is already locked
     const existingLock = await env.DB.prepare(
-      'SELECT user_name, lock_hash, last_saved FROM forms WHERE id = ?'
+      'SELECT user_name, lock_hash, last_saved FROM form_templates WHERE id = ?'
     ).bind(formId).first();
     
     if (existingLock && existingLock.lock_hash) {
@@ -71,7 +71,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     
     // Acquire or takeover lock
     await env.DB.prepare(
-      'UPDATE forms SET user_name = ?, lock_hash = ?, last_saved = ? WHERE id = ?'
+      'UPDATE form_templates SET user_name = ?, lock_hash = ?, last_saved = ? WHERE id = ?'
     ).bind(userName, lockHash, now, formId).run();
     
     return new Response(JSON.stringify({
@@ -128,7 +128,7 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
     
     // Only unlock if the lock hash matches
     const result = await env.DB.prepare(
-      'UPDATE forms SET lock_hash = NULL, user_name = NULL WHERE id = ? AND lock_hash = ?'
+      'UPDATE form_templates SET lock_hash = NULL, user_name = NULL WHERE id = ? AND lock_hash = ?'
     ).bind(formId, lockHash).run();
     
     if (result.meta.changes === 0) {
@@ -188,7 +188,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     }
     
     const lock = await env.DB.prepare(
-      'SELECT user_name, lock_hash, last_saved FROM forms WHERE id = ?'
+      'SELECT user_name, lock_hash, last_saved FROM form_templates WHERE id = ?'
     ).bind(formId).first();
     
     if (!lock || !lock.lock_hash) {
