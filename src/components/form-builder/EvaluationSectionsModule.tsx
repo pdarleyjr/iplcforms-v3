@@ -107,6 +107,17 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
   onComponentClick,
   selectedDiscipline = 'Both'
 }) => {
+  // Debug logging to verify component mount and prop existence
+  React.useEffect(() => {
+    console.log('EvaluationSectionsModule mounted at', new Date().toISOString());
+    console.log('Props received:', {
+      hasOnSectionDrag: !!onSectionDrag,
+      hasOnComponentClick: !!onComponentClick,
+      onComponentClickType: typeof onComponentClick,
+      selectedDiscipline
+    });
+  }, []);
+
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   
   const sections = evaluationSectionsConfig.evaluationSections as EvaluationSection[];
@@ -128,14 +139,22 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
   };
 
   const handleDragStart = (e: React.DragEvent, section: EvaluationSection) => {
+    console.log('EvaluationSectionsModule: handleDragStart called for section', section.label);
     const sectionComponent = createSectionComponent(section);
 
     if (onSectionDrag) {
+      console.log('EvaluationSectionsModule: Calling onSectionDrag with component', sectionComponent);
       onSectionDrag(sectionComponent);
     }
 
     e.dataTransfer.setData('application/json', JSON.stringify(sectionComponent));
     e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    console.log('EvaluationSectionsModule: handleDragEnd called');
+    // Reset draggable after drag
+    (e.currentTarget as HTMLElement).draggable = false;
   };
 
   const handleClick = (section: EvaluationSection) => {
@@ -352,7 +371,7 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-2 mb-2">
           <FileText className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Evaluation Sections</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Evaluation Sections - TESTING HOT RELOAD</h3>
         </div>
         <p className="text-sm text-gray-600">
           Comprehensive evaluation modules for clinical assessments
@@ -368,6 +387,15 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
       </div>
 
       <div className="p-4 space-y-6">
+        {/* Test div to verify event handling */}
+        <div
+          className="p-4 bg-red-200 cursor-pointer rounded-md border-2 border-red-400"
+          onClick={() => console.log('Test div clicked!')}
+          onMouseDown={() => console.log('Test div mousedown!')}
+        >
+          TEST - Click me to verify events work
+        </div>
+
         {Object.entries(groupedSections).map(([category, categorySections]) => (
           <div key={category}>
             <div className="flex items-center gap-2 mb-3">
@@ -384,10 +412,42 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
               {categorySections.map((section) => (
                 <Card
                   key={section.id}
-                  className="cursor-move hover:shadow-md transition-shadow duration-200 border-2 border-transparent hover:border-blue-200"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, section)}
-                  onClick={() => handleClick(section)}
+                  className="hover:shadow-md transition-shadow duration-200 border-2 border-transparent hover:border-blue-200 cursor-pointer"
+                  data-section-id={section.id}
+                  onClick={(e) => {
+                    console.log('EvaluationSectionsModule: Card onClick triggered for', section.label);
+                    console.log('Event target:', e.target);
+                    console.log('Current target:', e.currentTarget);
+                    console.log('Event type:', e.type);
+                    console.log('onComponentClick exists:', !!onComponentClick);
+                    console.log('onComponentClick type:', typeof onComponentClick);
+                    
+                    // Ignore clicks on interactive elements
+                    const target = e.target as HTMLElement;
+                    if (target.closest('.grip-handle') || target.closest('button')) {
+                      console.log('EvaluationSectionsModule: Click on interactive element, ignoring');
+                      return;
+                    }
+                    
+                    e.stopPropagation();
+                    
+                    // Handle as component click
+                    if (onComponentClick) {
+                      const sectionComponent = createSectionComponent(section);
+                      console.log('EvaluationSectionsModule: Calling onComponentClick with component', sectionComponent);
+                      onComponentClick(sectionComponent);
+                    } else {
+                      console.error('EvaluationSectionsModule: No onComponentClick handler provided!');
+                    }
+                  }}
+                  onMouseDown={(e) => {
+                    console.log('EvaluationSectionsModule: Card onMouseDown triggered for', section.label);
+                    console.log('MouseDown target:', e.target);
+                  }}
+                  onPointerDown={(e) => {
+                    console.log('EvaluationSectionsModule: Card onPointerDown triggered for', section.label);
+                    console.log('PointerDown target:', e.target);
+                  }}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">
@@ -442,7 +502,19 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
                           </div>
                         )}
                       </div>
-                      <div className="flex-shrink-0">
+                      <div
+                        className="flex-shrink-0 grip-handle cursor-move p-1 hover:bg-gray-100 rounded"
+                        draggable
+                        onDragStart={(e) => {
+                          console.log('EvaluationSectionsModule: Grip handle dragStart for', section.label);
+                          e.stopPropagation();
+                          handleDragStart(e, section);
+                        }}
+                        onDragEnd={(e) => {
+                          console.log('EvaluationSectionsModule: Grip handle dragEnd');
+                          e.stopPropagation();
+                        }}
+                      >
                         <GripVertical className="h-4 w-4 text-gray-400" />
                       </div>
                     </div>
