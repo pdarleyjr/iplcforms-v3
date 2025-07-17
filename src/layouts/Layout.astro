@@ -47,7 +47,6 @@ const apiTokenSet = API_TOKEN && API_TOKEN !== '' && API_TOKEN !== 'dev_fallback
         {!apiTokenSet && <ApiTokenMissingCard />}
       </div>
       <div class="flex items-center justify-between">
-        <h2 class="text-3xl font-bold tracking-tight">{title}</h2>
         <slot name="actions" />
       </div>
       <slot />

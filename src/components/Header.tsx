@@ -45,7 +45,7 @@ export function Header({ currentPath }: { currentPath: string }) {
                   <a
                     key={link.href}
                     className={cn(
-                      "relative px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200",
+                      "relative overflow-hidden px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200",
                       currentPath === link.href
                         ? "text-[#27599F]"
                         : "text-[#92969C] hover:text-[#219FD9]",

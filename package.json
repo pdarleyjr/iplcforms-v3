@@ -79,6 +79,7 @@
     "migrate:test": "node scripts/test-migrations.js",
     "db:setup": "npm run migrate && npm run migrate:test",
     "test:ipad": "npx playwright test tests/form-builder-ipad.spec.ts",
+    "test:ui-cleanup": "npx playwright test tests/ui-cleanup.spec.ts",
     "test:lighthouse": "lhci autorun",
     "test:axe": "axe http://localhost:4321/forms/new --tags wcag2aa,wcag21aa --exit"
   }

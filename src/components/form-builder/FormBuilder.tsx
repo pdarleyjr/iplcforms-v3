@@ -513,15 +513,6 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowSummary(true)}
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                AI Summary
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={() => setPreviewMode(!previewMode)}
               >
                 <Eye className="mr-2 h-4 w-4" />

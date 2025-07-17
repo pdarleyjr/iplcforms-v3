@@ -17,6 +17,22 @@ import {
   UserCheck
 } from 'lucide-react';
 
+// Fetch dashboard statistics
+let dashboardStats = {
+  activePatients: 0,
+  formsCreated: 0,
+  completionRate: '0.0%'
+};
+
+try {
+  const response = await fetch(new URL('/api/dashboard/overview', Astro.url).href);
+  if (response.ok) {
+    dashboardStats = await response.json();
+  }
+} catch (error) {
+  console.error('Failed to fetch dashboard stats:', error);
+}
+
 const features = [
   {
     icon: Users,
@@ -106,15 +122,15 @@ const benefits = [
                 <div className="grid gap-4">
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <p className="text-2xl font-bold">1,234</p>
+                      <p className="text-2xl font-bold">{dashboardStats.activePatients.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">Active Patients</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-2xl font-bold">56</p>
+                      <p className="text-2xl font-bold">{dashboardStats.formsCreated}</p>
                       <p className="text-xs text-muted-foreground">Forms Created</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-2xl font-bold">98.5%</p>
+                      <p className="text-2xl font-bold">{dashboardStats.completionRate}</p>
                       <p className="text-xs text-muted-foreground">Completion Rate</p>
                     </div>
                   </div>
