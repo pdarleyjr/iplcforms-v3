@@ -30,6 +30,7 @@ import { AISummaryElement } from "./components/AISummaryElement";
 import TitleElement from "./components/TitleElement";
 import SubtitleElement from "./components/SubtitleElement";
 import SeparatorElement from "./components/SeparatorElement";
+import evaluationSectionsConfig from "./evaluation-sections-config.json";
 
 const templateFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -244,6 +245,9 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
 
   const addComponent = useCallback((component: FormComponent, targetIndex?: number) => {
     console.log('FormBuilder: addComponent called with', component);
+    console.log('Component type:', component.type);
+    console.log('Component sectionId:', (component as any).sectionId);
+    
     const newComponents = [...components];
     const insertIndex = targetIndex !== undefined ? targetIndex : newComponents.length;
     
@@ -262,6 +266,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     });
 
     console.log('FormBuilder: setting components to', newComponents);
+    console.log('New components array length:', newComponents.length);
     setComponents(newComponents);
   }, [components]);
 
@@ -442,7 +447,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
       {/* Component Palette Sidebar */}
       <div className="w-80 border-r bg-card flex flex-col">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'components' | 'evaluation')} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 p-1 mx-4 mt-4">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="components">Components</TabsTrigger>
             <TabsTrigger value="evaluation">Evaluation Sections</TabsTrigger>
           </TabsList>
@@ -1232,6 +1237,12 @@ function ComponentRenderer({
   isEditing?: boolean;
   allComponents?: FormComponent[];
 }) {
+  // Debug logging for evaluation sections
+  if (component.type === 'evaluation_section') {
+    console.log('ComponentRenderer: Rendering evaluation section', component);
+    console.log('Component sectionId:', (component as any).sectionId);
+  }
+  
   const handleLabelChange = (label: string) => {
     onUpdate?.({ label });
   };
@@ -1499,7 +1510,7 @@ case "line_separator":
 
 case "evaluation_section": {
   // Import the evaluation sections config to render the fields
-  const evaluationSections = require('./evaluation-sections-config.json').evaluationSections;
+  const evaluationSections = evaluationSectionsConfig.evaluationSections;
   const section = evaluationSections.find((s: any) => s.id === component.sectionId);
   
   if (!section) {
