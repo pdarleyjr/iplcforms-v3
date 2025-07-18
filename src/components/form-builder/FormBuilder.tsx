@@ -447,17 +447,23 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
       {/* Component Palette Sidebar */}
       <div className="w-80 border-r bg-card flex flex-col">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'components' | 'evaluation')} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="components">Components</TabsTrigger>
-            <TabsTrigger value="evaluation">Evaluation Sections</TabsTrigger>
-          </TabsList>
-          <TabsContent value="components" className="flex-1 mt-0">
+          <div className="p-4 border-b bg-gray-50">
+            <TabsList className="grid w-full grid-cols-2 bg-white border-2 border-gray-300 shadow-sm">
+              <TabsTrigger value="components" className="data-[state=active]:bg-gradient-metallic-primary data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
+                Components
+              </TabsTrigger>
+              <TabsTrigger value="evaluation" className="data-[state=active]:bg-gradient-metallic-primary data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
+                Evaluation Sections
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="components" className="flex-1 mt-0 overflow-hidden">
             <ComponentPalette
               onComponentDrag={setDraggedComponent}
               onComponentClick={handleComponentClick}
             />
           </TabsContent>
-          <TabsContent value="evaluation" className="flex-1 mt-0">
+          <TabsContent value="evaluation" className="flex-1 mt-0 overflow-hidden">
             <EvaluationSectionsModule
               onSectionDrag={setDraggedComponent}
               onComponentClick={handleComponentClick}
@@ -913,18 +919,19 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                       onDrop={(e) => handleDrop(e, index)}
                     >
                       {/* Component Controls */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="flex items-center gap-1">
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
+                            className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
                             onClick={() => removeComponent(index)}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                          <div className="drag-handle cursor-move p-3 hover:bg-gray-100 rounded" style={{ minWidth: '44px', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <GripVertical className="h-5 w-5 text-gray-400" />
+                          <div className="drag-handle cursor-move p-2 hover:bg-gradient-metallic-primary hover:text-white rounded-md shadow-sm border border-gray-200 hover:border-iplc-primary transition-all duration-150"
+                               style={{ minWidth: '40px', minHeight: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <GripVertical className="h-5 w-5" />
                           </div>
                         </div>
                       </div>
@@ -1653,8 +1660,8 @@ case "evaluation_section": {
                           type="button"
                           disabled={!isEditing}
                           className={`w-8 h-8 rounded-full border-2 ${
-                            isEditing ? 'hover:bg-blue-100 hover:border-blue-400' : ''
-                          } border-gray-300 text-xs font-medium`}
+                            isEditing ? 'hover:bg-gradient-metallic-primary hover:border-iplc-primary hover:text-white hover:shadow-md' : ''
+                          } border-gray-300 bg-white text-xs font-medium transition-all duration-150`}
                         >
                           {value}
                         </button>
@@ -1734,7 +1741,7 @@ case "evaluation_section": {
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-gray-700">{field.label}</label>
                     {isEditing && (
-                      <Button size="sm" variant="outline" className="text-xs">
+                      <Button size="sm" variant="outline" className="text-xs hover:bg-gradient-metallic-primary hover:text-white hover:border-iplc-primary transition-all duration-150">
                         <Plus className="h-3 w-3 mr-1" />
                         {field.addButtonLabel || 'Add Item'}
                       </Button>

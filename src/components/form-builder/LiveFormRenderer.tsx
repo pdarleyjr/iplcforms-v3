@@ -15,6 +15,7 @@ import { AISummaryElement } from './components/AISummaryElement';
 import TitleElement from './components/TitleElement';
 import SubtitleElement from './components/SubtitleElement';
 import SeparatorElement from './components/SeparatorElement';
+import evaluationSectionsConfig from './evaluation-sections-config.json';
 
 interface LiveFormRendererProps {
   template: FormTemplate;
@@ -429,6 +430,91 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
             />
           </div>
         );
+
+      case 'evaluation_section': {
+        const evaluationSections = evaluationSectionsConfig.evaluationSections;
+        const section = evaluationSections.find((s: any) => s.id === (component as any).sectionId);
+        
+        if (!section) {
+          return (
+            <div key={id} className="p-4 border border-red-300 rounded bg-red-50">
+              <p className="text-sm text-red-600">
+                Evaluation section not found: {(component as any).sectionId}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div key={id} className="space-y-4 p-4 border-2 border-blue-200 rounded-lg bg-blue-50/50">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-blue-900">{label}</h3>
+              <Badge variant="outline" className="text-xs">{section.discipline}</Badge>
+            </div>
+            
+            {section.description && (
+              <p className="text-sm text-gray-600">{section.description}</p>
+            )}
+            
+            <div className="space-y-3 mt-4">
+              {section.fields.map((field: any, fieldIndex: number) => {
+                const fieldId = `${id}_${field.id}`;
+                const fieldValue = formData[fieldId] || '';
+                
+                // Render each field based on its type
+                switch (field.type) {
+                  case 'section_header':
+                    return (
+                      <div key={fieldIndex} className={`mt-${field.level === 1 ? '4' : '3'} mb-2`}>
+                        <h4 className={`text-${field.level === 1 ? 'lg' : 'md'} font-semibold text-gray-800`}>{field.label}</h4>
+                      </div>
+                    );
+                    
+                  case 'text':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <Input
+                          value={fieldValue}
+                          onChange={(e) => updateFormData(fieldId, e.target.value)}
+                          placeholder={`Enter ${field.label.toLowerCase()}`}
+                          className="text-sm"
+                        />
+                      </div>
+                    );
+                    
+                  case 'textarea':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <Textarea
+                          value={fieldValue}
+                          onChange={(e) => updateFormData(fieldId, e.target.value)}
+                          placeholder={`Enter ${field.label.toLowerCase()}`}
+                          rows={field.rows || 3}
+                          className="text-sm"
+                        />
+                      </div>
+                    );
+                    
+                  default:
+                    return (
+                      <div key={fieldIndex} className="text-sm text-gray-500">
+                        {field.label} ({field.type})
+                      </div>
+                    );
+                }
+              })}
+            </div>
+          </div>
+        );
+      }
 
       default:
         return (

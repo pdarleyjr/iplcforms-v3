@@ -14,6 +14,7 @@ import { AISummaryElement } from './components/AISummaryElement';
 import { TitleElement } from './components/TitleElement';
 import SubtitleElement from './components/SubtitleElement';
 import SeparatorElement from './components/SeparatorElement';
+import evaluationSectionsConfig from './evaluation-sections-config.json';
 
 interface FormPreviewProps {
   components: FormComponent[];
@@ -201,7 +202,7 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
                     <button
                       key={value}
                       disabled
-                      className="w-8 h-8 rounded-full border-2 border-gray-300 bg-gray-50 text-sm text-gray-400 flex items-center justify-center"
+                      className="w-8 h-8 rounded-full border-2 border-gray-300 bg-gray-50 text-sm text-gray-600 flex items-center justify-center font-medium shadow-sm"
                     >
                       {value}
                     </button>
@@ -231,6 +232,38 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
 
       case 'line_separator':
         return <SeparatorElement key={component.id} props={component.props as any} />;
+
+      case 'evaluation_section': {
+        const evaluationSections = evaluationSectionsConfig.evaluationSections;
+        const section = evaluationSections.find((s: any) => s.id === (component as any).sectionId);
+        
+        if (!section) {
+          return (
+            <div key={component.id} className="p-4 border border-red-300 rounded bg-red-50">
+              <p className="text-sm text-red-600">
+                Evaluation section not found: {(component as any).sectionId}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div key={component.id} className="space-y-4 p-4 border-2 border-blue-200 rounded-lg bg-blue-50/50">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-blue-900">{component.label}</h3>
+              <Badge variant="outline" className="text-xs">{section.discipline}</Badge>
+            </div>
+            
+            {section.description && (
+              <p className="text-sm text-gray-600">{section.description}</p>
+            )}
+            
+            <div className="text-sm text-blue-700 italic">
+              This evaluation section contains {section.fields.length} fields that will be displayed in the live form.
+            </div>
+          </div>
+        );
+      }
 
       default:
         return (
