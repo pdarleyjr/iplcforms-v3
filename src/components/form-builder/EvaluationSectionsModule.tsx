@@ -85,20 +85,20 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 const categoryColors: Record<string, string> = {
-  'Initial Assessment': 'bg-blue-100 text-blue-800',
-  'Cognitive Assessment': 'bg-purple-100 text-purple-800',
-  'Motor Assessment': 'bg-green-100 text-green-800',
-  'Communication Assessment': 'bg-cyan-100 text-cyan-800',
-  'Functional Assessment': 'bg-orange-100 text-orange-800',
-  'Testing Results': 'bg-yellow-100 text-yellow-800',
-  'Summary': 'bg-gray-100 text-gray-800',
-  'Progress Monitoring': 'bg-indigo-100 text-indigo-800'
+  'Initial Assessment': 'bg-iplc-primary/10 text-iplc-primary border-iplc-primary/20',
+  'Cognitive Assessment': 'bg-purple-500/10 text-purple-700 border-purple-500/20',
+  'Motor Assessment': 'bg-iplc-green/10 text-iplc-green border-iplc-green/20',
+  'Communication Assessment': 'bg-blue-500/10 text-blue-700 border-blue-500/20',
+  'Functional Assessment': 'bg-iplc-gold/10 text-iplc-gold border-iplc-gold/20',
+  'Testing Results': 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20',
+  'Summary': 'bg-gray-500/10 text-gray-700 border-gray-500/20',
+  'Progress Monitoring': 'bg-iplc-navy/10 text-iplc-navy border-iplc-navy/20'
 };
 
 const disciplineColors: Record<string, string> = {
-  'SLP': 'bg-cyan-100 text-cyan-800',
-  'OT': 'bg-emerald-100 text-emerald-800',
-  'Both': 'bg-indigo-100 text-indigo-800'
+  'SLP': 'bg-blue-500/10 text-blue-700 border-blue-500/20',
+  'OT': 'bg-iplc-green/10 text-iplc-green border-iplc-green/20',
+  'Both': 'bg-iplc-primary/10 text-iplc-primary border-iplc-primary/20'
 };
 
 export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> = ({
@@ -367,42 +367,33 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
   };
 
   return (
-    <div className={`w-80 bg-white border-r border-gray-200 h-full overflow-y-auto ${className}`}>
-      <div className="p-4 border-b border-gray-200">
+    <div className={`w-80 bg-white border-r border-gray-200 h-full flex flex-col ${className}`}>
+      <div className="p-4 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-2 mb-2">
           <FileText className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Evaluation Sections - TESTING HOT RELOAD</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Evaluation Sections</h3>
         </div>
         <p className="text-sm text-gray-600">
           Comprehensive evaluation modules for clinical assessments
         </p>
         <div className="flex gap-1 mt-2">
-          <Badge variant="secondary" className={disciplineColors[selectedDiscipline]}>
+          <Badge variant="outline" className={`text-xs px-2 py-0.5 border ${disciplineColors[selectedDiscipline]}`}>
             {selectedDiscipline === 'Both' ? 'All Disciplines' : selectedDiscipline}
           </Badge>
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-xs px-2 py-0.5 border border-gray-300">
             {filteredSections.length} sections
           </Badge>
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
-        {/* Test div to verify event handling */}
-        <div
-          className="p-4 bg-red-200 cursor-pointer rounded-md border-2 border-red-400"
-          onClick={() => console.log('Test div clicked!')}
-          onMouseDown={() => console.log('Test div mousedown!')}
-        >
-          TEST - Click me to verify events work
-        </div>
-
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
         {Object.entries(groupedSections).map(([category, categorySections]) => (
           <div key={category}>
             <div className="flex items-center gap-2 mb-3">
               <h4 className="text-sm font-medium text-gray-700">{category}</h4>
-              <Badge 
-                variant="secondary" 
-                className={`text-xs ${categoryColors[category] || 'bg-gray-100 text-gray-800'}`}
+              <Badge
+                variant="outline"
+                className={`text-xs px-2 py-0.5 border ${categoryColors[category] || 'bg-gray-500/10 text-gray-700 border-gray-500/20'}`}
               >
                 {categorySections.length}
               </Badge>
@@ -412,7 +403,7 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
               {categorySections.map((section) => (
                 <Card
                   key={section.id}
-                  className="hover:shadow-md transition-shadow duration-200 border-2 border-transparent hover:border-blue-200 cursor-pointer"
+                  className="cursor-pointer transition-all duration-200 border border-gray-200 hover:border-iplc-primary hover:iplc-shadow-md bg-white"
                   data-section-id={section.id}
                   onClick={(e) => {
                     console.log('EvaluationSectionsModule: Card onClick triggered for', section.label);
@@ -451,17 +442,17 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 p-2 bg-blue-50 rounded-md">
-                        {iconMap[section.icon] || <FileText className="h-4 w-4" />}
+                      <div className="flex-shrink-0 p-2 bg-gradient-to-br from-iplc-primary/10 to-iplc-primary/5 rounded-md">
+                        {iconMap[section.icon] || <FileText className="h-4 w-4 text-iplc-primary" />}
                       </div>
                       <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h5 className="text-sm font-medium text-gray-900 truncate">
                             {section.label}
                           </h5>
-                          <Badge 
-                            variant="outline" 
-                            className={`text-xs ${disciplineColors[section.discipline]}`}
+                          <Badge
+                            variant="outline"
+                            className={`text-xs px-2 py-0.5 border ${disciplineColors[section.discipline]}`}
                           >
                             {section.discipline}
                           </Badge>
@@ -503,7 +494,7 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
                         )}
                       </div>
                       <div
-                        className="flex-shrink-0 grip-handle cursor-move p-1 hover:bg-gray-100 rounded"
+                        className="flex-shrink-0 grip-handle cursor-move p-1 hover:bg-gray-100 rounded transition-colors duration-200"
                         draggable
                         onDragStart={(e) => {
                           console.log('EvaluationSectionsModule: Grip handle dragStart for', section.label);
@@ -526,7 +517,7 @@ export const EvaluationSectionsModule: React.FC<EvaluationSectionsModuleProps> =
         ))}
       </div>
 
-      <div className="p-4 border-t border-gray-200 bg-blue-50">
+      <div className="p-4 border-t border-gray-200 bg-gradient-to-br from-iplc-primary/5 to-iplc-primary/10 flex-shrink-0">
         <div className="text-xs text-gray-600">
           <p className="font-medium mb-2 flex items-center gap-1">
             <ClipboardList className="h-3 w-3" />

@@ -481,6 +481,24 @@
           "required": true
         },
         {
+          "type": "ai_summary",
+          "id": "clinical_impressions_ai_summary",
+          "label": "AI Summary - Clinical Impressions",
+          "props": {
+            "aiSummaryConfig": {
+              "autoSelectFields": false,
+              "includeMedicalContext": true,
+              "maxLength": 500,
+              "sourceFieldLabels": true,
+              "preselectedFields": [
+                "strengths",
+                "areas_of_concern",
+                "clinical_impressions"
+              ]
+            }
+          }
+        },
+        {
           "type": "text",
           "id": "primary_diagnosis",
           "label": "Primary Diagnosis (ICD-10)"

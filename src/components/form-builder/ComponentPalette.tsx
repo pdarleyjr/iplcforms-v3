@@ -16,11 +16,12 @@ import {
   Sparkles,
   Heading,
   Heading2,
-  Minus
+  Minus,
+  ClipboardList
 } from 'lucide-react';
 interface ComponentPaletteItem {
   id: string;
-  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' | 'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator';
+  type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' | 'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator' | 'evaluation_section';
   label: string;
   icon: React.ReactNode;
   description: string;
@@ -123,14 +124,22 @@ const componentItems: ComponentPaletteItem[] = [
     icon: <Minus className="h-4 w-4" />,
     description: 'Visual line separator with style options',
     category: 'Content'
+  },
+  {
+    id: 'evaluation_section',
+    type: 'evaluation_section',
+    label: 'Evaluation Section',
+    icon: <ClipboardList className="h-4 w-4" />,
+    description: 'Clinical evaluation sections with structured fields',
+    category: 'Advanced'
   }
 ];
 
 const categoryColors = {
-  'Basic': 'bg-blue-100 text-blue-800',
-  'Selection': 'bg-green-100 text-green-800',
-  'Advanced': 'bg-purple-100 text-purple-800',
-  'Content': 'bg-orange-100 text-orange-800'
+  'Basic': 'bg-iplc-accent-sky/10 text-iplc-accent-sky border-iplc-accent-sky/20',
+  'Selection': 'bg-iplc-accent-green/10 text-iplc-accent-green border-iplc-accent-green/20',
+  'Advanced': 'bg-iplc-primary/10 text-iplc-primary border-iplc-primary/20',
+  'Content': 'bg-iplc-accent-gold/10 text-iplc-accent-gold border-iplc-accent-gold/20'
 };
 
 interface ComponentPaletteProps {
@@ -200,6 +209,14 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
           width: 100,
           marginTop: 16,
           marginBottom: 16
+        } : {}),
+        ...(item.type === 'evaluation_section' ? {
+          sectionKey: 'default',
+          headerLevel: 'h2',
+          showScores: true,
+          showDate: true,
+          enableComments: true,
+          selectedFields: []
         } : {})
       }
     };
@@ -240,18 +257,21 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
   }, {} as Record<string, ComponentPaletteItem[]>);
 
   return (
-    <div className={`component-palette w-72 bg-white border-r border-gray-200 h-full overflow-y-auto ${className}`}>
-      <div className="p-4 border-b border-gray-200">
+    <div className={`component-palette h-full flex flex-col bg-white border-r border-gray-200 ${className}`}>
+      {/* Fixed Header */}
+      <div className="p-4 border-b border-gray-200 flex-shrink-0">
         <h3 className="text-lg font-semibold text-gray-900">Components</h3>
         <p className="text-sm text-gray-600 mt-1">Drag components to add to your form</p>
       </div>
-      
-      <div className="p-4 space-y-6">
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-4 space-y-6">
         {Object.entries(groupedComponents).map(([category, items]) => (
           <div key={category}>
             <div className="flex items-center gap-2 mb-3">
               <h4 className="text-sm font-medium text-gray-700">{category}</h4>
-              <Badge variant="secondary" className={`text-xs ${categoryColors[category as keyof typeof categoryColors]}`}>
+              <Badge variant="outline" className={`text-xs px-2 py-0.5 border ${categoryColors[category as keyof typeof categoryColors]}`}>
                 {items.length}
               </Badge>
             </div>
@@ -260,7 +280,7 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
               {items.map((item) => (
                 <Card
                   key={item.id}
-                  className="cursor-move hover:shadow-md transition-shadow duration-200 border-2 border-transparent hover:border-blue-200"
+                  className="cursor-move transition-all duration-200 border border-gray-200 hover:border-iplc-primary hover:iplc-shadow-md bg-white"
                   draggable
                   onDragStart={(e) => handleDragStart(e, item)}
                   onClick={(e) => handleClick(e, item)}
@@ -275,15 +295,15 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
                   }}
                 >
                   <CardContent className="p-3">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 p-2 bg-gray-100 rounded-md">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0 p-2 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
                         {item.icon}
                       </div>
                       <div className="flex-grow min-w-0">
-                        <h5 className="text-sm font-medium text-gray-900 truncate">
+                        <h5 className="text-sm font-medium text-gray-900">
                           {item.label}
                         </h5>
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
                           {item.description}
                         </p>
                       </div>
@@ -294,9 +314,11 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
             </div>
           </div>
         ))}
+        </div>
       </div>
       
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
+      {/* Fixed Footer */}
+      <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
         <div className="text-xs text-gray-500">
           <p className="font-medium mb-1">Quick Tips:</p>
           <ul className="space-y-1">
