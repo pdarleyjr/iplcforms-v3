@@ -18,10 +18,10 @@ export function Header({ currentPath }: { currentPath: string }) {
           {/* Brand text with metallic hover effect */}
           <a
             href="/"
-            className="group relative flex items-center pr-4 lg:pr-6 transition-transform hover:scale-105 focus:outline-none focus:ring-0"
+            className="group relative inline-flex items-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#219FD9] focus:ring-offset-2 rounded-lg"
             aria-label="FormPro Home"
           >
-            <h1 className="text-2xl font-bold gradient-metallic-primary bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold gradient-metallic-primary bg-clip-text text-transparent px-2 py-1">
               FormPro
             </h1>
           </a>
