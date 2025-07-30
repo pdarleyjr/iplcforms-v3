@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Shield, Search, Filter, ChevronRight, Activity, Brain, Heart, Stethoscope, User, FileText, Calendar, Clock, Pill, TestTube, Eye, Ear, Hand, Footprints, Users, Baby, UserPlus, Briefcase, Home, Car, Utensils, Bath, Shirt, BookOpen, Gamepad } from "lucide-react";
 import type { FormComponent } from "@/lib/api-form-builder";
+import clinicalConfig from './clinical-components-config.json';
 
 // Type the imported JSON data
 interface ClinicalConfigData {
@@ -31,9 +32,6 @@ interface ClinicalConfigData {
     }>;
   }>;
 }
-
-// Import and type the config
-const clinicalConfig: ClinicalConfigData = require('./clinical-components-config.json');
 
 interface ClinicalComponentPaletteProps {
   onComponentDrag: (component: FormComponent) => void;
