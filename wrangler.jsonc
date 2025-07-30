@@ -63,7 +63,18 @@
     },
     {
       "binding": "CHAT_HISTORY",
-      "id": "chat-history-kv-namespace"
+      "id": "11baf1c1465d4b03afbe59fdfcdfe1b8",
+      "preview_id": "0c59462935aa4ae5a8f2c4bc49d1aa56"
+    },
+    {
+      "binding": "METRICS_KV",
+      "id": "b34d60620f6b422c84f196271228c56b",
+      "preview_id": "a5aaa400e91d44bc9d416099707b4911"
+    },
+    {
+      "binding": "CACHE_KV",
+      "id": "f0468576601a4935b68069b4e54157e4",
+      "preview_id": "4590bca3cdf9499b91dc607544ac380a"
     }
   ],
   "vectorize": [
