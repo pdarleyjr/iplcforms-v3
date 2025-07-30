@@ -22,7 +22,8 @@ import { EvaluationSectionsModule } from "./EvaluationSectionsModule";
 import { ClinicalComponentPalette } from "./ClinicalComponentPalette";
 import { ConditionalLogicPanel } from "./ConditionalLogicPanel";
 import { createFormTemplate, updateFormTemplate, getFormTemplates, type TemplateSearchParams } from "@/lib/api-form-builder";
-import type { FormTemplate, FormComponent, FormPage } from "@/lib/api-form-builder";
+import type { FormTemplate, FormComponent } from "@/lib/api-form-builder";
+import type { FormPage } from "@/lib/schemas/api-validation";
 import { useFormAutosave } from "@/hooks/useFormAutosave";
 import { useFormLock } from "@/hooks/useFormLock";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -222,11 +223,26 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     }
   });
   
-  // Autosave when components change
+  // Autosave when components or pages change
   useEffect(() => {
-    if (components.length > 0) {
+    if (isMultiPage && pages.length > 0) {
+      autoSave({
+        components: [], // Empty for multi-page forms
+        pages,
+        isMultiPage: true,
+        metadata: {
+          name: form.getValues("name"),
+          description: form.getValues("description"),
+          category: form.getValues("category"),
+          clinical_context: form.getValues("clinical_context"),
+          showIplcLogo: form.getValues("showIplcLogo"),
+        }
+      });
+    } else if (!isMultiPage && components.length > 0) {
       autoSave({
         components,
+        pages: [],
+        isMultiPage: false,
         metadata: {
           name: form.getValues("name"),
           description: form.getValues("description"),
@@ -236,7 +252,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
         }
       });
     }
-  }, [components, autoSave]);
+  }, [components, pages, isMultiPage, autoSave]);
   
   // Initialize SortableJS for form components
   useEffect(() => {
@@ -403,8 +419,8 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   }, [components]);
 
   const removeComponent = useCallback((index: number) => {
-    const newComponents = components.filter((_, i) => i !== index);
-    newComponents.forEach((comp, i) => {
+    const newComponents = components.filter((_: FormComponent, i: number) => i !== index);
+    newComponents.forEach((comp: FormComponent, i: number) => {
       comp.order = i;
     });
     setComponents(newComponents);
@@ -451,8 +467,24 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
 
   // Handle template selection
   const handleTemplateSelect = (selectedTemplate: FormTemplate) => {
-    if (selectedTemplate.schema?.components) {
-      setComponents(selectedTemplate.schema.components);
+    if (selectedTemplate.schema) {
+      // Check if it's a multi-page form
+      if (selectedTemplate.schema.isMultiPage && selectedTemplate.schema.pages) {
+        setIsMultiPage(true);
+        setPages(selectedTemplate.schema.pages);
+        setActivePageId(selectedTemplate.schema.pages[0]?.id || 'page_1');
+      } else if (selectedTemplate.schema.components) {
+        // Single-page form
+        setIsMultiPage(false);
+        setPages([{
+          id: 'page_1',
+          title: 'Page 1',
+          description: '',
+          order: 0,
+          components: selectedTemplate.schema.components
+        }]);
+        setActivePageId('page_1');
+      }
       
       // Update form values with template data
       form.reset({
@@ -1108,7 +1140,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                 </div>
               ) : (
                 <div className="space-y-4" ref={formListRef}>
-                  {components.map((component, index) => (
+                  {components.map((component: FormComponent, index: number) => (
                     <div
                       key={component.id}
                       data-id={component.id}
@@ -1143,7 +1175,7 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                       <div className="pr-16">
                         <ComponentRenderer
                           component={component}
-                          onUpdate={(updates) => updateComponent(index, updates)}
+                          onUpdate={(updates: Partial<FormComponent>) => updateComponent(index, updates)}
                           isEditing={true}
                           allComponents={components}
                         />
