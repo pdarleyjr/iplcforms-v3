@@ -224,20 +224,22 @@ export function SubscriptionsTable({ data }: DataTableProps) {
   });
 
   return (
-    <div className="rounded-lg border border-zinc-200/50 dark:border-zinc-800/50 bg-card/50 backdrop-blur-sm shadow-sm">
-      <div className="p-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
+    <div className="rounded-lg border border-slate-200/80 dark:border-slate-700/30 bg-gradient-to-br from-slate-50/90 to-slate-100/90 dark:from-slate-900/90 dark:to-slate-800/90 backdrop-blur-sm shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
+      <div className="p-6 border-b border-slate-200/80 dark:border-slate-700/30">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Clinical Subscription Plans</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className="text-xl font-semibold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
+              Clinical Subscription Plans
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
               Manage healthcare professional subscription tiers and billing
             </p>
           </div>
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="text-xs">
+          <div className="flex items-center space-x-3">
+            <Badge variant="outline" className="text-xs border-slate-300/50 dark:border-slate-600/50 text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/50">
               {data.length} Plans
             </Badge>
-            <Badge variant="default" className="text-xs">
+            <Badge variant="default" className="text-xs bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-sm">
               {data.filter(sub => getSubscriptionStatus(sub) === 'Active').length} Active
             </Badge>
           </div>

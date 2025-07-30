@@ -1,0 +1,18 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { DashboardTabs } from '@/components/admin/dashboard-tabs';
+
+const title = 'Dashboard';
+---
+
+<AdminLayout title={title}>
+  <div slot="actions">
+    <h1 class="text-3xl font-bold tracking-tight gradient-metallic-primary bg-clip-text text-transparent">
+      Dashboard
+    </h1>
+  </div>
+  
+  <div class="space-y-4">
+    <DashboardTabs client:load />
+  </div>
+</AdminLayout>

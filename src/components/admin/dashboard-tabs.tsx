@@ -18,11 +18,30 @@ interface DashboardTabsProps {
 }
 
 export const DashboardTabs: React.FC<DashboardTabsProps> = ({
-  formTemplates,
-  subscriptions,
-  customers,
-  customerSubscriptions,
-  recentActivity
+  formTemplates = 12,
+  subscriptions = 45,
+  customers = 38,
+  customerSubscriptions = 156,
+  recentActivity = [
+    {
+      action: "New assessment created",
+      user: "Dr. Smith",
+      time: "2 minutes ago",
+      type: "assessment"
+    },
+    {
+      action: "Session completed",
+      user: "Jane Doe",
+      time: "15 minutes ago",
+      type: "session"
+    },
+    {
+      action: "Report generated",
+      user: "Dr. Johnson",
+      time: "1 hour ago",
+      type: "report"
+    }
+  ]
 }) => {
   return (
     <Tabs defaultValue="overview" className="space-y-6">

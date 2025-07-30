@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { D1ConnectionManager, getD1Manager } from './d1-connection-manager';
+import { FormTemplateService } from './form_template';
 
 export const FORM_SUBMISSION_QUERIES = {
   // Optimized: Reduced JOIN complexity, added indexes hint
@@ -116,9 +117,11 @@ const processSubmissionResults = (rows: any[]) => {
 
 export class FormSubmissionService {
   private connectionManager: D1ConnectionManager;
+  private templateService: FormTemplateService;
 
   constructor(DB: D1Database) {
     this.connectionManager = getD1Manager(DB);
+    this.templateService = new FormTemplateService(DB);
   }
 
   async getById(id: number) {
@@ -218,15 +221,24 @@ export class FormSubmissionService {
       metadata = {},
     } = submissionData;
 
+    // Get template to check visibility conditions
+    const template = await this.templateService.getById(template_id);
+    if (!template) {
+      throw new Error("Template not found");
+    }
+
+    // Filter responses based on visibility conditions
+    const visibleResponses = await this.filterResponsesByVisibility(template, responses);
+
     // Calculate score based on template scoring configuration
-    const calculated_score = await this.calculateScore(template_id, responses);
+    const calculated_score = await this.calculateScore(template_id, visibleResponses);
 
     const stmt = this.connectionManager.prepare(FORM_SUBMISSION_QUERIES.INSERT_SUBMISSION);
     const response = await stmt
       .bind(
         template_id,
         patient_id || null,
-        JSON.stringify(responses),
+        JSON.stringify(visibleResponses),
         status,
         calculated_score,
         completion_time_seconds || null,
@@ -266,16 +278,25 @@ export class FormSubmissionService {
       metadata = existing.metadata,
     } = submissionData;
 
+    // Get template to check visibility conditions
+    const template = await this.templateService.getById(existing.template_id);
+    if (!template) {
+      throw new Error("Template not found");
+    }
+
+    // Filter responses based on visibility conditions
+    const visibleResponses = await this.filterResponsesByVisibility(template, responses);
+
     // Recalculate score if responses changed
     let calculated_score = existing.calculated_score;
     if (submissionData.responses) {
-      calculated_score = await this.calculateScore(existing.template_id, responses);
+      calculated_score = await this.calculateScore(existing.template_id, visibleResponses);
     }
 
     const stmt = this.connectionManager.prepare(FORM_SUBMISSION_QUERIES.UPDATE_SUBMISSION);
     const response = await stmt
       .bind(
-        JSON.stringify(responses),
+        JSON.stringify(visibleResponses),
         status,
         calculated_score,
         completion_time_seconds,
@@ -557,5 +578,63 @@ export class FormSubmissionService {
     });
     
     return csvRows.join('\n');
+  }
+
+  private async filterResponsesByVisibility(template: any, responses: any): Promise<any> {
+    // If template doesn't have schema or components, return all responses
+    if (!template.schema || !template.schema.components) {
+      return responses;
+    }
+
+    const components = template.schema.components;
+    const filteredResponses: any = {};
+
+    // Helper function to evaluate visibility condition
+    const evaluateCondition = (condition: any): boolean => {
+      if (!condition || !condition.field || !condition.operator) {
+        return true; // No condition means always visible
+      }
+
+      const triggerValue = responses[condition.field];
+      const targetValue = condition.value;
+
+      switch (condition.operator) {
+        case 'equals':
+          return triggerValue === targetValue;
+        case 'not_equals':
+          return triggerValue !== targetValue;
+        case 'contains':
+          return String(triggerValue).includes(String(targetValue));
+        case 'greater_than':
+          return Number(triggerValue) > Number(targetValue);
+        case 'less_than':
+          return Number(triggerValue) < Number(targetValue);
+        default:
+          return true;
+      }
+    };
+
+    // Check each component's visibility
+    for (const component of components) {
+      const fieldId = component.id;
+      
+      // Skip if field doesn't have a response
+      if (!(fieldId in responses)) {
+        continue;
+      }
+
+      // Check visibility condition
+      if (component.props?.visibilityCondition) {
+        const isVisible = evaluateCondition(component.props.visibilityCondition);
+        if (isVisible) {
+          filteredResponses[fieldId] = responses[fieldId];
+        }
+      } else {
+        // No visibility condition means always visible
+        filteredResponses[fieldId] = responses[fieldId];
+      }
+    }
+
+    return filteredResponses;
   }
 }

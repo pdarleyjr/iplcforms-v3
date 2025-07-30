@@ -12,13 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Save, Settings, Eye, Plus, Trash2, GripVertical, Cloud, CloudOff, Loader2, Sparkles, Users, Clock, Tag, Palette, Share2, FolderPlus, Search, Filter, Grid, List, Download, Calendar, Star, ChevronDown } from "lucide-react";
+import { Save, Settings, Eye, Plus, Trash2, GripVertical, Cloud, CloudOff, Loader2, Sparkles, Users, Clock, Tag, Palette, Share2, FolderPlus, Search, Filter, Grid, List, Download, Calendar, Star, ChevronDown, Shield } from "lucide-react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Sortable from "sortablejs";
 import { ComponentPalette } from "./ComponentPalette";
 import { FormPreview } from "./FormPreview";
 import { EvaluationSectionsModule } from "./EvaluationSectionsModule";
+import { ClinicalComponentPalette } from "./ClinicalComponentPalette";
+import { ConditionalLogicPanel } from "./ConditionalLogicPanel";
 import { createFormTemplate, updateFormTemplate, getFormTemplates, type TemplateSearchParams } from "@/lib/api-form-builder";
 import type { FormTemplate, FormComponent } from "@/lib/api-form-builder";
 import { useFormAutosave } from "@/hooks/useFormAutosave";
@@ -66,7 +68,8 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [draggedComponent, setDraggedComponent] = useState<FormComponent | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'components' | 'evaluation'>('components');
+  const [activeTab, setActiveTab] = useState<'components' | 'evaluation' | 'clinical'>('components');
+  const [selectedComponentIndex, setSelectedComponentIndex] = useState<number | null>(null);
   
   // Load Template state
   const [availableTemplates, setAvailableTemplates] = useState<FormTemplate[]>([]);
@@ -444,19 +447,23 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
 
   return (
     <div className="form-builder-container flex h-screen bg-background">
-      {/* Component Palette Sidebar */}
-      <div className="w-80 border-r bg-card flex flex-col">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'components' | 'evaluation')} className="flex-1 flex flex-col">
-          <div className="p-4 border-b bg-gray-50">
-            <TabsList className="grid w-full grid-cols-2 bg-white border-2 border-gray-300 shadow-sm">
-              <TabsTrigger value="components" className="data-[state=active]:bg-gradient-metallic-primary data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
-                Components
-              </TabsTrigger>
-              <TabsTrigger value="evaluation" className="data-[state=active]:bg-gradient-metallic-primary data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
-                Evaluation Sections
-              </TabsTrigger>
-            </TabsList>
-          </div>
+      {/* Component Palette Sidebar - Dynamic width container */}
+      <div className="relative flex-shrink-0 transition-all duration-300 ease-in-out">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'components' | 'evaluation' | 'clinical')} className="h-full flex flex-col">
+          <TabsList className="grid w-full grid-cols-3 bg-gradient-metallic-primary">
+            <TabsTrigger value="components" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Components
+            </TabsTrigger>
+            <TabsTrigger value="evaluation" className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Evaluation
+            </TabsTrigger>
+            <TabsTrigger value="clinical" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Clinical
+            </TabsTrigger>
+          </TabsList>
           <TabsContent value="components" className="flex-1 mt-0 overflow-hidden">
             <ComponentPalette
               onComponentDrag={setDraggedComponent}
@@ -467,6 +474,13 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
             <EvaluationSectionsModule
               onSectionDrag={setDraggedComponent}
               onComponentClick={handleComponentClick}
+            />
+          </TabsContent>
+          <TabsContent value="clinical" className="flex-1 mt-0 overflow-hidden">
+            <ClinicalComponentPalette
+              onComponentDrag={setDraggedComponent}
+              onComponentClick={handleComponentClick}
+              selectedDiscipline="Both"
             />
           </TabsContent>
         </Tabs>
@@ -912,11 +926,13 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                       key={component.id}
                       data-id={component.id}
                       className={`relative group border rounded-lg p-4 bg-white ${
-                        dragOverIndex === index ? "border-primary bg-primary/5" : "border-gray-200"
-                      } transition-all duration-200`}
+                        dragOverIndex === index ? "border-primary bg-primary/5" :
+                        selectedComponentIndex === index ? "border-blue-500 bg-blue-50/50" : "border-gray-200"
+                      } transition-all duration-200 cursor-pointer`}
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, index)}
+                      onClick={() => setSelectedComponentIndex(index === selectedComponentIndex ? null : index)}
                     >
                       {/* Component Controls */}
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -945,6 +961,17 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
                           allComponents={components}
                         />
                       </div>
+                      
+                      {/* Conditional Logic Panel */}
+                      {selectedComponentIndex === index && component.type !== 'title_subtitle' && component.type !== 'line_separator' && component.type !== 'evaluation_section' && (
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <ConditionalLogicPanel
+                            component={component}
+                            allComponents={components}
+                            onUpdate={(updates) => updateComponent(index, updates)}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

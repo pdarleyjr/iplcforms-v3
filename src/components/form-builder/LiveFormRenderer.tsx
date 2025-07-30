@@ -46,6 +46,33 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
   // Sort components by order
   const sortedComponents = [...components].sort((a, b) => a.order - b.order);
 
+  // Function to evaluate visibility conditions
+  const evaluateVisibilityCondition = (component: FormComponent): boolean => {
+    const condition = component.props?.visibilityCondition;
+    if (!condition) return true;
+
+    const triggerValue = formData[condition.field];
+    const conditionValue = condition.value;
+
+    switch (condition.operator) {
+      case 'equals':
+        return triggerValue == conditionValue;
+      case 'not_equals':
+        return triggerValue != conditionValue;
+      case 'contains':
+        return String(triggerValue || '').includes(String(conditionValue));
+      case 'greater_than':
+        return Number(triggerValue) > Number(conditionValue);
+      case 'less_than':
+        return Number(triggerValue) < Number(conditionValue);
+      default:
+        return true;
+    }
+  };
+
+  // Filter components based on visibility conditions
+  const visibleComponents = sortedComponents.filter(evaluateVisibilityCondition);
+
   const updateFormData = (componentId: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -79,7 +106,8 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    sortedComponents.forEach(component => {
+    // Only validate visible components
+    visibleComponents.forEach(component => {
       const { id, props = {}, label } = component;
       const isRequired = props.required || false;
       const value = formData[id];
@@ -119,18 +147,26 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
     setSubmitStatus('idle');
 
     try {
-      // Collect AI summary data from components
+      // Collect AI summary data from visible components
       const aiSummaryData: Record<string, any> = {};
-      sortedComponents.forEach(component => {
+      visibleComponents.forEach(component => {
         if (component.type === 'ai_summary' && component.props?.aiSummaryData) {
           aiSummaryData[component.id] = component.props.aiSummaryData;
+        }
+      });
+
+      // Only include data from visible fields
+      const visibleFormData: Record<string, any> = {};
+      visibleComponents.forEach(component => {
+        if (formData[component.id] !== undefined) {
+          visibleFormData[component.id] = formData[component.id];
         }
       });
 
       const submissionData: FormSubmissionData = {
         template_id: template.id!,
         responses: {
-          ...formData,
+          ...visibleFormData,
           ...aiSummaryData
         },
         metadata: {
@@ -425,7 +461,7 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
             <AISummaryElement
               component={component}
               isEditing={false}
-              allComponents={sortedComponents}
+              allComponents={visibleComponents}
               onUpdate={(updates) => updateComponentData(id, updates)}
             />
           </div>
@@ -562,9 +598,9 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
             )}
 
             {/* Form Fields */}
-            {sortedComponents.length > 0 ? (
+            {visibleComponents.length > 0 ? (
               <div className="space-y-6">
-                {sortedComponents.map(renderFormComponent)}
+                {visibleComponents.map(renderFormComponent)}
                 
                 {/* Submit Button */}
                 <div className="pt-6 border-t border-gray-200">

@@ -59,7 +59,7 @@ export const FormComponentSchema = z.object({
       min: z.number().optional(),
       max: z.number().optional(),
     }).optional(),
-    conditional: z.object({
+    visibilityCondition: z.object({
       field: z.string().min(1),
       value: z.any(),
       operator: z.enum(['equals', 'not_equals', 'contains', 'greater_than', 'less_than']),

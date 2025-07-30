@@ -17,7 +17,8 @@
     "SUPABASE_ANON_KEY": "your-supabase-anon-key-here",
     "CLOUDFLARE_ACCOUNT_ID": "your-cloudflare-account-id-here",
     "CLOUDFLARE_D1_TOKEN": "your-cloudflare-d1-token-here",
-    "CLOUDFLARE_DATABASE_ID": "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a"
+    "CLOUDFLARE_DATABASE_ID": "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a",
+    "ADMIN_PASS": "Iplc2353!"
   },
   "d1_databases": [
     {
@@ -59,6 +60,16 @@
     {
       "binding": "SESSION",
       "id": "b68836e642d84fd08a40b96879cbda47"
+    },
+    {
+      "binding": "CHAT_HISTORY",
+      "id": "chat-history-kv-namespace"
+    }
+  ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "iplc-forms-chat"
     }
   ]
 }

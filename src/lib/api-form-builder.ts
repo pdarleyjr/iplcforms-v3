@@ -6,11 +6,12 @@ export interface FormComponent {
   type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' |
         'clinical_scale' | 'assistance_level' | 'demographics' | 'standardized_test' | 'oral_motor' |
         'language_sample' | 'sensory_processing' | 'goals_planning' | 'clinical_signature' | 'cpt_code' |
-        'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator' | 'evaluation_section';
+        'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator' | 'evaluation_section' | 'clinical_component';
   label: string;
   order: number;
   sectionId?: string; // For evaluation_section components
   collapsed?: boolean; // For evaluation_section components
+  fields?: any[]; // For clinical components that have structured field definitions
   props?: {
     required?: boolean;
     placeholder?: string;
@@ -25,7 +26,7 @@ export interface FormComponent {
       min?: number;
       max?: number;
     };
-    conditional?: {
+    visibilityCondition?: {
       field: string;
       value: any;
       operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
@@ -90,6 +91,9 @@ export interface FormComponent {
     style?: string;
     thickness?: number;
     width?: number;
+    // Clinical Component properties
+    componentType?: string;
+    discipline?: 'OT' | 'SLP' | 'Both';
   };
 }
 

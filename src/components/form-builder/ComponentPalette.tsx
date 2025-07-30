@@ -1,9 +1,11 @@
 // Component Palette for Form Builder - IPLC Forms v3
 // Draggable component library for form creation
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Type,
   FileText,
@@ -17,8 +19,14 @@ import {
   Heading,
   Heading2,
   Minus,
-  ClipboardList
+  ClipboardList,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Palette
 } from 'lucide-react';
+
 interface ComponentPaletteItem {
   id: string;
   type: 'text_input' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'scale' | 'ai_summary' | 'title_subtitle' | 'subtitle' | 'line_separator' | 'evaluation_section';
@@ -136,10 +144,10 @@ const componentItems: ComponentPaletteItem[] = [
 ];
 
 const categoryColors = {
-  'Basic': 'bg-iplc-accent-sky/10 text-iplc-accent-sky border-iplc-accent-sky/20',
-  'Selection': 'bg-iplc-accent-green/10 text-iplc-accent-green border-iplc-accent-green/20',
-  'Advanced': 'bg-iplc-primary/10 text-iplc-primary border-iplc-primary/20',
-  'Content': 'bg-iplc-accent-gold/10 text-iplc-accent-gold border-iplc-accent-gold/20'
+  'Basic': 'bg-iplc-accent-sky/20 text-iplc-accent-sky-dark border-iplc-accent-sky/30',
+  'Selection': 'bg-iplc-accent-green/20 text-iplc-accent-green-dark border-iplc-accent-green/30',
+  'Advanced': 'bg-gradient-metallic-primary/20 text-iplc-primary border-iplc-primary/30',
+  'Content': 'bg-iplc-accent-gold/20 text-iplc-accent-gold-dark border-iplc-accent-gold/30'
 };
 
 interface ComponentPaletteProps {
@@ -149,6 +157,27 @@ interface ComponentPaletteProps {
 }
 
 export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = '', onComponentDrag, onComponentClick }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+      // Auto-collapse on mobile
+      if (window.innerWidth < 1024) {
+        setIsCollapsed(true);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   const createComponent = (item: ComponentPaletteItem) => {
     return {
       type: item.type,
@@ -257,77 +286,171 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
   }, {} as Record<string, ComponentPaletteItem[]>);
 
   return (
-    <div className={`component-palette h-full flex flex-col bg-white border-r border-gray-200 ${className}`}>
+    <div
+      className={cn(
+        "component-palette relative h-full flex flex-col bg-[#153F81] transition-all duration-300 ease-in-out",
+        "iplc-shadow-xl border-r-2 border-[#27599F]/30",
+        isCollapsed ? "w-16" : "w-80",
+        isMobile && "fixed top-0 left-0 z-50 h-screen",
+        isMobile && isCollapsed && "-translate-x-full",
+        className
+      )}
+    >
       {/* Fixed Header */}
-      <div className="p-4 border-b border-gray-200 flex-shrink-0">
-        <h3 className="text-lg font-semibold text-gray-900">Components</h3>
-        <p className="text-sm text-gray-600 mt-1">Drag components to add to your form</p>
+      <div className={cn(
+        "p-4 border-b border-white/10 flex-shrink-0",
+        "bg-gradient-to-r from-[#153F81] to-[#27599F]",
+        "relative"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className={cn(
+            "transition-all duration-300",
+            isCollapsed && !isMobile && "opacity-0"
+          )}>
+            <div className="flex items-center gap-2">
+              <Palette className="h-5 w-5 text-iplc-accent-gold" />
+              <h3 className="text-lg font-bold text-white">Components</h3>
+            </div>
+            <p className="text-sm text-white/80 mt-1">Drag to add to form</p>
+          </div>
+          
+          {/* Toggle Button */}
+          <button
+            onClick={toggleSidebar}
+            className={cn(
+              "rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group",
+              isCollapsed && !isMobile ? "w-10 h-10" : "w-10 h-10 ml-2",
+              isMobile && isCollapsed && "fixed left-4 top-4 z-50 bg-[#153F81] iplc-shadow-lg"
+            )}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              isMobile ? (
+                <Menu className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
+              ) : (
+                <ChevronRight className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
+              )
+            ) : (
+              isMobile ? (
+                <X className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
+              ) : (
+                <ChevronLeft className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
+              )
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="p-4 space-y-6">
-        {Object.entries(groupedComponents).map(([category, items]) => (
-          <div key={category}>
-            <div className="flex items-center gap-2 mb-3">
-              <h4 className="text-sm font-medium text-gray-700">{category}</h4>
-              <Badge variant="outline" className={`text-xs px-2 py-0.5 border ${categoryColors[category as keyof typeof categoryColors]}`}>
-                {items.length}
-              </Badge>
-            </div>
-            
-            <div className="space-y-2">
-              {items.map((item) => (
-                <Card
-                  key={item.id}
-                  className="cursor-move transition-all duration-200 border border-gray-200 hover:border-iplc-primary hover:iplc-shadow-md bg-white"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, item)}
-                  onClick={(e) => handleClick(e, item)}
-                  data-component-type={item.type}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleClick(e as any, item);
-                    }
-                  }}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-shrink-0 p-2 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
-                        {item.icon}
-                      </div>
-                      <div className="flex-grow min-w-0">
-                        <h5 className="text-sm font-medium text-gray-900">
-                          {item.label}
-                        </h5>
-                        <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+      <div className={cn(
+        "flex-1 overflow-y-auto custom-scrollbar",
+        isCollapsed && !isMobile && "overflow-hidden"
+      )}>
+        {isCollapsed && !isMobile ? (
+          // Collapsed state - show icons only
+          <div className="p-2 space-y-2">
+            {componentItems.map((item) => (
+              <button
+                key={item.id}
+                className="w-full p-2 rounded-lg bg-white/10 hover:bg-gradient-metallic-primary transition-all group"
+                onClick={(e) => handleClick(e, item)}
+                title={item.label}
+              >
+                <div className="text-white group-hover:scale-110 transition-transform">
+                  {item.icon}
+                </div>
+              </button>
+            ))}
           </div>
-        ))}
-        </div>
+        ) : (
+          // Expanded state
+          <div className="p-4 space-y-6">
+            {Object.entries(groupedComponents).map(([category, items]) => (
+              <div key={category}>
+                <div className="flex items-center gap-2 mb-3">
+                  <h4 className="text-sm font-semibold text-white">{category}</h4>
+                  <Badge variant="outline" className={cn(
+                    "text-xs px-2 py-0.5 border font-medium",
+                    categoryColors[category as keyof typeof categoryColors]
+                  )}>
+                    {items.length}
+                  </Badge>
+                </div>
+                
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <Card
+                      key={item.id}
+                      className={cn(
+                        "cursor-move transition-all duration-200",
+                        "border border-white/20 bg-white/10 backdrop-blur-sm",
+                        "hover:bg-gradient-metallic-primary hover:border-iplc-accent-gold/50",
+                        "hover:iplc-shadow-md hover:scale-[1.02]"
+                      )}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
+                      onClick={(e) => handleClick(e, item)}
+                      data-component-type={item.type}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleClick(e as any, item);
+                        }
+                      }}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "flex-shrink-0 p-2 rounded-lg",
+                            "bg-gradient-to-br from-white/20 to-white/10",
+                            "border border-white/20"
+                          )}>
+                            <div className="text-white">
+                              {item.icon}
+                            </div>
+                          </div>
+                          <div className="flex-grow min-w-0">
+                            <h5 className="text-sm font-semibold text-white">
+                              {item.label}
+                            </h5>
+                            <p className="text-xs text-white/70 mt-0.5 line-clamp-2">
+                              {item.description}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       
       {/* Fixed Footer */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-        <div className="text-xs text-gray-500">
-          <p className="font-medium mb-1">Quick Tips:</p>
-          <ul className="space-y-1">
-            <li>• Drag components to the form area</li>
-            <li>• Click components to edit properties</li>
-            <li>• Reorder by dragging within the form</li>
-          </ul>
+      {!isCollapsed && (
+        <div className="p-4 border-t border-white/10 bg-gradient-to-r from-[#27599F] to-[#153F81] flex-shrink-0">
+          <div className="text-xs text-white/80">
+            <p className="font-semibold mb-1 text-iplc-accent-gold">Quick Tips:</p>
+            <ul className="space-y-1">
+              <li>• Drag components to the form area</li>
+              <li>• Click components to edit properties</li>
+              <li>• Reorder by dragging within the form</li>
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Mobile Overlay */}
+      {isMobile && !isCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/50 -z-10"
+          onClick={toggleSidebar}
+        />
+      )}
     </div>
   );
 };

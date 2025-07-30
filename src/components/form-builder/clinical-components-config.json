@@ -1,0 +1,339 @@
+{
+  "categories": [
+    {
+      "id": "assessment-tools",
+      "name": "Assessment Tools",
+      "icon": "stethoscope",
+      "description": "Standardized assessment instruments and evaluation tools",
+      "subcategories": [
+        {
+          "id": "motor-assessments",
+          "name": "Motor & Physical Assessments",
+          "components": [
+            {
+              "id": "rom-assessment",
+              "name": "Range of Motion Assessment",
+              "type": "rom_assessment",
+              "discipline": "OT",
+              "description": "Document joint range of motion measurements",
+              "fields": [
+                {
+                  "name": "joint",
+                  "type": "select",
+                  "label": "Joint",
+                  "options": ["Shoulder", "Elbow", "Wrist", "Hip", "Knee", "Ankle"]
+                },
+                {
+                  "name": "movement",
+                  "type": "select",
+                  "label": "Movement",
+                  "options": ["Flexion", "Extension", "Abduction", "Adduction", "Rotation"]
+                },
+                {
+                  "name": "degrees",
+                  "type": "number",
+                  "label": "Degrees"
+                }
+              ]
+            },
+            {
+              "id": "strength-assessment",
+              "name": "Manual Muscle Testing",
+              "type": "mmt_assessment",
+              "discipline": "OT",
+              "description": "Document muscle strength using standard MMT scale",
+              "config": {
+                "scale": "0-5",
+                "includeGravity": true
+              }
+            },
+            {
+              "id": "balance-assessment",
+              "name": "Balance Assessment",
+              "type": "balance_assessment",
+              "discipline": "Both",
+              "description": "Evaluate static and dynamic balance",
+              "fields": [
+                {
+                  "name": "testType",
+                  "type": "select",
+                  "label": "Test Type",
+                  "options": ["Berg Balance Scale", "Tinetti", "Single Leg Stance", "Functional Reach"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cognitive-assessments",
+          "name": "Cognitive & Language Assessments",
+          "components": [
+            {
+              "id": "moca-assessment",
+              "name": "Montreal Cognitive Assessment (MoCA)",
+              "type": "moca_assessment",
+              "discipline": "Both",
+              "description": "Standardized cognitive screening tool"
+            },
+            {
+              "id": "mmse-assessment",
+              "name": "Mini-Mental State Exam (MMSE)",
+              "type": "mmse_assessment",
+              "discipline": "Both",
+              "description": "Brief cognitive status examination"
+            },
+            {
+              "id": "language-assessment",
+              "name": "Language Assessment Battery",
+              "type": "language_assessment",
+              "discipline": "SLP",
+              "description": "Comprehensive language evaluation",
+              "fields": [
+                {
+                  "name": "domain",
+                  "type": "checkbox",
+                  "label": "Domains Assessed",
+                  "options": ["Expressive Language", "Receptive Language", "Pragmatics", "Reading", "Writing"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "adl-iadl",
+      "name": "ADL & IADL Assessments",
+      "icon": "home",
+      "description": "Activities of Daily Living evaluations",
+      "subcategories": [
+        {
+          "id": "basic-adl",
+          "name": "Basic ADLs",
+          "components": [
+            {
+              "id": "bathing-assessment",
+              "name": "Bathing/Hygiene Assessment",
+              "type": "bathing_assessment",
+              "discipline": "OT",
+              "description": "Evaluate bathing and personal hygiene skills"
+            },
+            {
+              "id": "dressing-assessment",
+              "name": "Dressing Assessment",
+              "type": "dressing_assessment",
+              "discipline": "OT",
+              "description": "Assess upper and lower body dressing abilities"
+            },
+            {
+              "id": "feeding-assessment",
+              "name": "Feeding/Eating Assessment",
+              "type": "feeding_assessment",
+              "discipline": "Both",
+              "description": "Evaluate feeding and swallowing function"
+            },
+            {
+              "id": "toileting-assessment",
+              "name": "Toileting Assessment",
+              "type": "toileting_assessment",
+              "discipline": "OT",
+              "description": "Assess toilet transfer and hygiene"
+            }
+          ]
+        },
+        {
+          "id": "instrumental-adl",
+          "name": "Instrumental ADLs",
+          "components": [
+            {
+              "id": "cooking-assessment",
+              "name": "Meal Preparation Assessment",
+              "type": "cooking_assessment",
+              "discipline": "OT",
+              "description": "Evaluate cooking and kitchen safety skills"
+            },
+            {
+              "id": "medication-management",
+              "name": "Medication Management",
+              "type": "medication_assessment",
+              "discipline": "OT",
+              "description": "Assess ability to manage medications independently"
+            },
+            {
+              "id": "money-management",
+              "name": "Financial Management",
+              "type": "money_assessment",
+              "discipline": "OT",
+              "description": "Evaluate money handling and budgeting skills"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "communication",
+      "name": "Communication & Swallowing",
+      "icon": "user",
+      "description": "Speech, language, and swallowing assessments",
+      "subcategories": [
+        {
+          "id": "speech-assessments",
+          "name": "Speech Production",
+          "components": [
+            {
+              "id": "articulation-assessment",
+              "name": "Articulation Assessment",
+              "type": "articulation_assessment",
+              "discipline": "SLP",
+              "description": "Evaluate speech sound production"
+            },
+            {
+              "id": "fluency-assessment",
+              "name": "Fluency Assessment",
+              "type": "fluency_assessment",
+              "discipline": "SLP",
+              "description": "Assess stuttering and fluency disorders"
+            },
+            {
+              "id": "voice-assessment",
+              "name": "Voice Assessment",
+              "type": "voice_assessment",
+              "discipline": "SLP",
+              "description": "Evaluate vocal quality and function"
+            }
+          ]
+        },
+        {
+          "id": "swallowing-assessments",
+          "name": "Swallowing & Dysphagia",
+          "components": [
+            {
+              "id": "bedside-swallow",
+              "name": "Bedside Swallow Evaluation",
+              "type": "bedside_swallow",
+              "discipline": "SLP",
+              "description": "Clinical swallowing assessment"
+            },
+            {
+              "id": "oral-motor-exam",
+              "name": "Oral Motor Examination",
+              "type": "oral_motor_exam",
+              "discipline": "SLP",
+              "description": "Assess oral motor structure and function"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pediatric",
+      "name": "Pediatric Assessments",
+      "icon": "baby",
+      "description": "Child-specific evaluation tools",
+      "subcategories": [
+        {
+          "id": "developmental",
+          "name": "Developmental Assessments",
+          "components": [
+            {
+              "id": "peabody-assessment",
+              "name": "Peabody Developmental Motor Scales",
+              "type": "peabody_assessment",
+              "discipline": "OT",
+              "description": "Assess gross and fine motor development"
+            },
+            {
+              "id": "sensory-profile",
+              "name": "Sensory Profile",
+              "type": "sensory_profile",
+              "discipline": "OT",
+              "description": "Evaluate sensory processing patterns"
+            },
+            {
+              "id": "pls-assessment",
+              "name": "Preschool Language Scales",
+              "type": "pls_assessment",
+              "discipline": "SLP",
+              "description": "Comprehensive language assessment for young children"
+            }
+          ]
+        },
+        {
+          "id": "school-function",
+          "name": "School Function",
+          "components": [
+            {
+              "id": "handwriting-assessment",
+              "name": "Handwriting Assessment",
+              "type": "handwriting_assessment",
+              "discipline": "OT",
+              "description": "Evaluate handwriting legibility and speed"
+            },
+            {
+              "id": "school-amps",
+              "name": "School AMPS",
+              "type": "school_amps",
+              "discipline": "OT",
+              "description": "Assessment of Motor and Process Skills in school"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "specialized",
+      "name": "Specialized Assessments",
+      "icon": "brain",
+      "description": "Condition-specific evaluation tools",
+      "subcategories": [
+        {
+          "id": "neurological",
+          "name": "Neurological Conditions",
+          "components": [
+            {
+              "id": "stroke-assessment",
+              "name": "Stroke Impact Scale",
+              "type": "stroke_assessment",
+              "discipline": "Both",
+              "description": "Assess stroke recovery across multiple domains"
+            },
+            {
+              "id": "aphasia-assessment",
+              "name": "Aphasia Assessment",
+              "type": "aphasia_assessment",
+              "discipline": "SLP",
+              "description": "Comprehensive aphasia evaluation"
+            },
+            {
+              "id": "apraxia-assessment",
+              "name": "Apraxia Battery",
+              "type": "apraxia_assessment",
+              "discipline": "Both",
+              "description": "Assess motor planning and execution"
+            }
+          ]
+        },
+        {
+          "id": "cognitive-communication",
+          "name": "Cognitive-Communication",
+          "components": [
+            {
+              "id": "rbans-assessment",
+              "name": "RBANS",
+              "type": "rbans_assessment",
+              "discipline": "SLP",
+              "description": "Repeatable Battery for Assessment of Neuropsychological Status"
+            },
+            {
+              "id": "executive-function",
+              "name": "Executive Function Assessment",
+              "type": "executive_assessment",
+              "discipline": "Both",
+              "description": "Evaluate planning, organization, and problem-solving"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

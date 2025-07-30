@@ -1,464 +1,353 @@
-// Clinical Component Palette for SLP/OT Form Builder - IPLC Forms v3
-// Specialized clinical evaluation components for speech-language pathology and occupational therapy
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Shield, Search, Filter, ChevronRight, Activity, Brain, Heart, Stethoscope, User, FileText, Calendar, Clock, Pill, TestTube, Eye, Ear, Hand, Footprints, Users, Baby, UserPlus, Briefcase, Home, Car, Utensils, Bath, Shirt, BookOpen, Gamepad } from "lucide-react";
+import type { FormComponent } from "@/lib/api-form-builder";
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Type, 
-  FileText, 
-  ChevronDown, 
-  CheckSquare, 
-  Circle, 
-  Calendar, 
-  Hash, 
-  BarChart3,
-  Stethoscope,
-  Brain,
-  Users,
-  ClipboardList,
-  Target,
-  FileSignature,
-  Scale,
-  Activity,
-  Heart,
-  Eye,
-  Ear,
-  Hand,
-  MessageSquare,
-  Timer,
-  Calculator,
-  Award,
-  Shield
-} from 'lucide-react';
-
-interface ClinicalComponentItem {
-  id: string;
-  type: 'demographics' | 'medical_history' | 'functional_assessment' | 'sensory_motor' | 
-        'standardized_test' | 'clinical_scale' | 'assistance_level' | 'goals_planning' | 
-        'clinical_signature' | 'cpt_code' | 'oral_motor' | 'language_sample' | 
-        'adl_assessment' | 'sensory_processing' | 'motor_skills' | 'cognitive_assessment' |
-        'social_communication' | 'feeding_swallowing' | 'voice_fluency' | 'hearing_screening';
-  label: string;
-  icon: React.ReactNode;
-  description: string;
-  category: 'Demographics' | 'Medical' | 'Assessment' | 'Testing' | 'Clinical' | 'Documentation';
-  clinicalDiscipline: 'SLP' | 'OT' | 'Both';
+// Type the imported JSON data
+interface ClinicalConfigData {
+  categories: Array<{
+    id: string;
+    name: string;
+    icon: string;
+    description: string;
+    subcategories: Array<{
+      id: string;
+      name: string;
+      components: Array<{
+        id: string;
+        name: string;
+        type: string;
+        discipline: string;
+        description?: string;
+        fields?: any[];
+        config?: any;
+      }>;
+    }>;
+  }>;
 }
 
-const clinicalComponents: ClinicalComponentItem[] = [
-  // Demographics Section
-  {
-    id: 'demographics',
-    type: 'demographics',
-    label: 'Client Demographics',
-    icon: <Users className="h-4 w-4" />,
-    description: 'Comprehensive client information form',
-    category: 'Demographics',
-    clinicalDiscipline: 'Both'
-  },
-  
-  // Medical History Section
-  {
-    id: 'medical_history',
-    type: 'medical_history',
-    label: 'Medical History',
-    icon: <Stethoscope className="h-4 w-4" />,
-    description: 'Medical background and relevant conditions',
-    category: 'Medical',
-    clinicalDiscipline: 'Both'
-  },
-  
-  // SLP-Specific Components
-  {
-    id: 'oral_motor',
-    type: 'oral_motor',
-    label: 'Oral-Motor Examination',
-    icon: <MessageSquare className="h-4 w-4" />,
-    description: 'Comprehensive oral-motor structure and function assessment',
-    category: 'Assessment',
-    clinicalDiscipline: 'SLP'
-  },
-  {
-    id: 'language_sample',
-    type: 'language_sample',
-    label: 'Language Sample Analysis',
-    icon: <Brain className="h-4 w-4" />,
-    description: 'Structured language sampling and analysis tools',
-    category: 'Assessment',
-    clinicalDiscipline: 'SLP'
-  },
-  {
-    id: 'voice_fluency',
-    type: 'voice_fluency',
-    label: 'Voice & Fluency Assessment',
-    icon: <Activity className="h-4 w-4" />,
-    description: 'Voice quality, pitch, loudness, and fluency evaluation',
-    category: 'Assessment',
-    clinicalDiscipline: 'SLP'
-  },
-  {
-    id: 'feeding_swallowing',
-    type: 'feeding_swallowing',
-    label: 'Feeding & Swallowing',
-    icon: <Heart className="h-4 w-4" />,
-    description: 'Dysphagia and feeding assessment protocols',
-    category: 'Assessment',
-    clinicalDiscipline: 'SLP'
-  },
-  {
-    id: 'hearing_screening',
-    type: 'hearing_screening',
-    label: 'Hearing Screening',
-    icon: <Ear className="h-4 w-4" />,
-    description: 'Basic hearing screening and audiological considerations',
-    category: 'Assessment',
-    clinicalDiscipline: 'SLP'
-  },
-  {
-    id: 'social_communication',
-    type: 'social_communication',
-    label: 'Social Communication',
-    icon: <Users className="h-4 w-4" />,
-    description: 'Pragmatic language and social interaction assessment',
-    category: 'Assessment',
-    clinicalDiscipline: 'SLP'
-  },
-  
-  // OT-Specific Components
-  {
-    id: 'sensory_processing',
-    type: 'sensory_processing',
-    label: 'Sensory Processing',
-    icon: <Eye className="h-4 w-4" />,
-    description: 'Sensory integration and processing evaluation',
-    category: 'Assessment',
-    clinicalDiscipline: 'OT'
-  },
-  {
-    id: 'motor_skills',
-    type: 'motor_skills',
-    label: 'Motor Skills Assessment',
-    icon: <Hand className="h-4 w-4" />,
-    description: 'Fine and gross motor skills evaluation',
-    category: 'Assessment',
-    clinicalDiscipline: 'OT'
-  },
-  {
-    id: 'adl_assessment',
-    type: 'adl_assessment',
-    label: 'ADL Assessment',
-    icon: <ClipboardList className="h-4 w-4" />,
-    description: 'Activities of daily living evaluation',
-    category: 'Assessment',
-    clinicalDiscipline: 'OT'
-  },
-  {
-    id: 'sensory_motor',
-    type: 'sensory_motor',
-    label: 'Sensory-Motor Integration',
-    icon: <Activity className="h-4 w-4" />,
-    description: 'Integrated sensory and motor function assessment',
-    category: 'Assessment',
-    clinicalDiscipline: 'OT'
-  },
-  
-  // Shared Assessment Components
-  {
-    id: 'cognitive_assessment',
-    type: 'cognitive_assessment',
-    label: 'Cognitive Assessment',
-    icon: <Brain className="h-4 w-4" />,
-    description: 'Cognitive function and processing evaluation',
-    category: 'Assessment',
-    clinicalDiscipline: 'Both'
-  },
-  {
-    id: 'functional_assessment',
-    type: 'functional_assessment',
-    label: 'Functional Assessment',
-    icon: <Target className="h-4 w-4" />,
-    description: 'Functional skills and independence evaluation',
-    category: 'Assessment',
-    clinicalDiscipline: 'Both'
-  },
-  
-  // Standardized Testing Components
-  {
-    id: 'standardized_test',
-    type: 'standardized_test',
-    label: 'Standardized Test',
-    icon: <Award className="h-4 w-4" />,
-    description: 'Standardized assessment with norm calculations',
-    category: 'Testing',
-    clinicalDiscipline: 'Both'
-  },
-  
-  // Clinical Scales and Measurements
-  {
-    id: 'clinical_scale',
-    type: 'clinical_scale',
-    label: 'Clinical Rating Scale',
-    icon: <BarChart3 className="h-4 w-4" />,
-    description: 'Professional clinical rating scales (1-7, severity levels)',
-    category: 'Clinical',
-    clinicalDiscipline: 'Both'
-  },
-  {
-    id: 'assistance_level',
-    type: 'assistance_level',
-    label: 'Level of Assistance',
-    icon: <Scale className="h-4 w-4" />,
-    description: 'Independence vs assistance level indicators',
-    category: 'Clinical',
-    clinicalDiscipline: 'Both'
-  },
-  
-  // Goals and Intervention Planning
-  {
-    id: 'goals_planning',
-    type: 'goals_planning',
-    label: 'Goals & Intervention Planning',
-    icon: <Target className="h-4 w-4" />,
-    description: 'SMART goals and treatment planning framework',
-    category: 'Clinical',
-    clinicalDiscipline: 'Both'
-  },
-  
-  // Documentation and Compliance
-  {
-    id: 'clinical_signature',
-    type: 'clinical_signature',
-    label: 'Clinical Signature',
-    icon: <FileSignature className="h-4 w-4" />,
-    description: 'Digital signature with credentials and date',
-    category: 'Documentation',
-    clinicalDiscipline: 'Both'
-  },
-  {
-    id: 'cpt_code',
-    type: 'cpt_code',
-    label: 'CPT Billing Code',
-    icon: <Calculator className="h-4 w-4" />,
-    description: 'Clinical procedure coding for billing',
-    category: 'Documentation',
-    clinicalDiscipline: 'Both'
-  }
-];
-
-const categoryColors = {
-  'Demographics': 'bg-blue-100 text-blue-800',
-  'Medical': 'bg-red-100 text-red-800',
-  'Assessment': 'bg-green-100 text-green-800',
-  'Testing': 'bg-purple-100 text-purple-800',
-  'Clinical': 'bg-orange-100 text-orange-800',
-  'Documentation': 'bg-gray-100 text-gray-800'
-};
-
-const disciplineColors = {
-  'SLP': 'bg-cyan-100 text-cyan-800',
-  'OT': 'bg-emerald-100 text-emerald-800',
-  'Both': 'bg-indigo-100 text-indigo-800'
-};
+// Import and type the config
+const clinicalConfig: ClinicalConfigData = require('./clinical-components-config.json');
 
 interface ClinicalComponentPaletteProps {
-  className?: string;
-  onComponentDrag?: (component: any) => void;
-  selectedDiscipline?: 'SLP' | 'OT' | 'Both';
+  onComponentDrag: (component: FormComponent) => void;
+  onComponentClick: (component: FormComponent) => void;
+  selectedDiscipline?: 'OT' | 'SLP' | 'Both';
 }
 
-export const ClinicalComponentPalette: React.FC<ClinicalComponentPaletteProps> = ({ 
-  className = '', 
+interface ClinicalComponentCategory {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+  description: string;
+  subcategories: ClinicalSubcategory[];
+}
+
+interface ClinicalSubcategory {
+  id: string;
+  name: string;
+  components: ClinicalComponentDefinition[];
+}
+
+interface ClinicalComponentDefinition {
+  id: string;
+  name: string;
+  type: string;
+  discipline: 'OT' | 'SLP' | 'Both';
+  description?: string;
+  fields?: any[];
+  config?: any;
+}
+
+const iconMap: Record<string, React.ReactNode> = {
+  activity: <Activity className="h-4 w-4" />,
+  brain: <Brain className="h-4 w-4" />,
+  heart: <Heart className="h-4 w-4" />,
+  stethoscope: <Stethoscope className="h-4 w-4" />,
+  user: <User className="h-4 w-4" />,
+  filetext: <FileText className="h-4 w-4" />,
+  calendar: <Calendar className="h-4 w-4" />,
+  clock: <Clock className="h-4 w-4" />,
+  pill: <Pill className="h-4 w-4" />,
+  testtube: <TestTube className="h-4 w-4" />,
+  eye: <Eye className="h-4 w-4" />,
+  ear: <Ear className="h-4 w-4" />,
+  hand: <Hand className="h-4 w-4" />,
+  footprints: <Footprints className="h-4 w-4" />,
+  users: <Users className="h-4 w-4" />,
+  baby: <Baby className="h-4 w-4" />,
+  userplus: <UserPlus className="h-4 w-4" />,
+  briefcase: <Briefcase className="h-4 w-4" />,
+  home: <Home className="h-4 w-4" />,
+  car: <Car className="h-4 w-4" />,
+  utensils: <Utensils className="h-4 w-4" />,
+  bath: <Bath className="h-4 w-4" />,
+  shirt: <Shirt className="h-4 w-4" />,
+  bookopen: <BookOpen className="h-4 w-4" />,
+  gamepad: <Gamepad className="h-4 w-4" />,
+};
+
+export function ClinicalComponentPalette({
   onComponentDrag,
+  onComponentClick,
   selectedDiscipline = 'Both'
-}) => {
-  const handleDragStart = (e: React.DragEvent, item: ClinicalComponentItem) => {
-    const component = {
-      type: item.type,
-      label: item.label,
-      id: `${item.type}_${Date.now()}`,
-      clinicalType: item.type,
-      clinicalDiscipline: item.clinicalDiscipline,
+}: ClinicalComponentPaletteProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [disciplineFilter, setDisciplineFilter] = useState<'OT' | 'SLP' | 'Both'>(selectedDiscipline);
+
+  // Load clinical components from config
+  const categories: ClinicalComponentCategory[] = clinicalConfig.categories.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    description: cat.description,
+    icon: iconMap[cat.icon] || <Shield className="h-4 w-4" />,
+    subcategories: cat.subcategories.map(subcat => ({
+      id: subcat.id,
+      name: subcat.name,
+      components: subcat.components.map(comp => ({
+        id: comp.id,
+        name: comp.name,
+        type: comp.type,
+        discipline: comp.discipline as 'OT' | 'SLP' | 'Both',
+        description: comp.description,
+        fields: comp.fields,
+        config: comp.config
+      }))
+    }))
+  }));
+
+  // Filter components based on search and discipline
+  const filterComponents = (components: ClinicalComponentDefinition[]) => {
+    return components.filter(comp => {
+      const matchesSearch = searchQuery === '' || 
+        comp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        comp.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesDiscipline = disciplineFilter === 'Both' || 
+        comp.discipline === 'Both' || 
+        comp.discipline === disciplineFilter;
+      
+      return matchesSearch && matchesDiscipline;
+    });
+  };
+
+  // Filter categories based on selected category
+  const filteredCategories = selectedCategory === 'all' 
+    ? categories 
+    : categories.filter(cat => cat.id === selectedCategory);
+
+  const toggleCategory = (categoryId: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(categoryId)) {
+      newExpanded.delete(categoryId);
+    } else {
+      newExpanded.add(categoryId);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
+  const handleComponentClick = (component: ClinicalComponentDefinition) => {
+    const formComponent: FormComponent = {
+      id: `${component.type}_${Date.now()}`,
+      type: 'clinical_component',
+      label: component.name,
+      order: 0,
       props: {
-        required: false,
-        description: '',
-        clinicalContext: item.description,
-        ...getDefaultPropsForType(item.type)
-      }
+        componentType: component.type,
+        discipline: component.discipline,
+        ...component.config
+      },
+      // Store the field definitions if this is a structured component
+      fields: component.fields
     };
     
-    if (onComponentDrag) {
-      onComponentDrag(component);
-    }
+    onComponentClick(formComponent);
+  };
+
+  const handleDragStart = (e: React.DragEvent, component: ClinicalComponentDefinition) => {
+    const formComponent: FormComponent = {
+      id: `${component.type}_${Date.now()}`,
+      type: 'clinical_component',
+      label: component.name,
+      order: 0,
+      props: {
+        componentType: component.type,
+        discipline: component.discipline,
+        ...component.config
+      },
+      fields: component.fields
+    };
     
-    e.dataTransfer.setData('application/json', JSON.stringify(component));
     e.dataTransfer.effectAllowed = 'copy';
+    onComponentDrag(formComponent);
   };
 
-  const getDefaultPropsForType = (type: string) => {
-    switch (type) {
-      case 'demographics':
-        return {
-          fields: ['name', 'dob', 'age', 'gender', 'guardian', 'referral_source', 'diagnosis'],
-          includeEmergencyContact: true,
-          includeInsurance: true
-        };
-      case 'medical_history':
-        return {
-          sections: ['birth_history', 'developmental_milestones', 'medical_conditions', 'medications', 'surgeries', 'allergies'],
-          includeRiskFactors: true
-        };
-      case 'clinical_scale':
-        return {
-          scaleType: 'severity',
-          min: 1,
-          max: 7,
-          labels: ['Normal', 'Mild', 'Mild-Moderate', 'Moderate', 'Moderate-Severe', 'Severe', 'Profound']
-        };
-      case 'assistance_level':
-        return {
-          levels: ['Independent', 'Modified Independent', 'Supervision', 'Minimal Assist', 'Moderate Assist', 'Maximal Assist', 'Total Assist'],
-          includePrompting: true
-        };
-      case 'standardized_test':
-        return {
-          includeRawScore: true,
-          includeStandardScore: true,
-          includePercentile: true,
-          includeAgeEquivalent: true,
-          normDatabase: 'standard'
-        };
-      case 'goals_planning':
-        return {
-          goalType: 'SMART',
-          timeframe: 'quarterly',
-          includeBaseline: true,
-          includeTargetCriteria: true,
-          includeStrategies: true
-        };
-      case 'oral_motor':
-        return {
-          structures: ['lips', 'tongue', 'jaw', 'palate', 'teeth', 'pharynx'],
-          functions: ['strength', 'tone', 'coordination', 'symmetry', 'range_of_motion'],
-          includeReflexes: true
-        };
-      case 'language_sample':
-        return {
-          sampleType: 'spontaneous',
-          duration: 15,
-          analysisType: ['MLU', 'vocabulary_diversity', 'grammatical_complexity'],
-          includeTranscript: true
-        };
-      case 'sensory_processing':
-        return {
-          systems: ['visual', 'auditory', 'tactile', 'vestibular', 'proprioceptive', 'olfactory', 'gustatory'],
-          responsePatterns: ['seeking', 'avoiding', 'sensitivity', 'registration'],
-          includeADLImpact: true
-        };
-      case 'cpt_code':
-        return {
-          codeType: 'therapy',
-          includeUnits: true,
-          includeModifiers: true,
-          requireJustification: true
-        };
-      default:
-        return {};
+  // Auto-expand categories when searching
+  useEffect(() => {
+    if (searchQuery) {
+      const categoriesToExpand = new Set<string>();
+      categories.forEach(cat => {
+        cat.subcategories.forEach(subcat => {
+          const hasMatchingComponents = filterComponents(subcat.components).length > 0;
+          if (hasMatchingComponents) {
+            categoriesToExpand.add(cat.id);
+          }
+        });
+      });
+      setExpandedCategories(categoriesToExpand);
     }
-  };
-
-  // Filter components based on selected discipline
-  const filteredComponents = clinicalComponents.filter(item => 
-    selectedDiscipline === 'Both' || 
-    item.clinicalDiscipline === selectedDiscipline || 
-    item.clinicalDiscipline === 'Both'
-  );
-
-  const groupedComponents = filteredComponents.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, ClinicalComponentItem[]>);
+  }, [searchQuery]);
 
   return (
-    <div className={`w-80 bg-white border-r border-gray-200 h-full overflow-y-auto ${className}`}>
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-2 mb-2">
+    <div className="h-full flex flex-col p-4 bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
           <Shield className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Clinical Components</h3>
-        </div>
-        <p className="text-sm text-gray-600">Specialized SLP/OT evaluation tools</p>
-        <div className="flex gap-1 mt-2">
-          <Badge variant="secondary" className={disciplineColors[selectedDiscipline]}>
-            {selectedDiscipline === 'Both' ? 'All Disciplines' : selectedDiscipline}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {filteredComponents.length} components
-          </Badge>
-        </div>
-      </div>
-      
-      <div className="p-4 space-y-6">
-        {Object.entries(groupedComponents).map(([category, items]) => (
-          <div key={category}>
-            <div className="flex items-center gap-2 mb-3">
-              <h4 className="text-sm font-medium text-gray-700">{category}</h4>
-              <Badge variant="secondary" className={`text-xs ${categoryColors[category as keyof typeof categoryColors]}`}>
-                {items.length}
-              </Badge>
-            </div>
-            
-            <div className="space-y-2">
-              {items.map((item) => (
-                <Card
-                  key={item.id}
-                  className="cursor-move hover:shadow-md transition-shadow duration-200 border-2 border-transparent hover:border-blue-200"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, item)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 p-2 bg-blue-50 rounded-md">
-                        {item.icon}
-                      </div>
-                      <div className="flex-grow min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h5 className="text-sm font-medium text-gray-900 truncate">
-                            {item.label}
-                          </h5>
-                          <Badge variant="outline" className={`text-xs ${disciplineColors[item.clinicalDiscipline]}`}>
-                            {item.clinicalDiscipline}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-gray-600">
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          Clinical Components
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Specialized components for clinical assessments and documentation
+        </p>
+        
+        {/* Search and Filters */}
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search clinical components..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
-        ))}
+          
+          <div className="flex gap-2">
+            <Select value={disciplineFilter} onValueChange={(value) => setDisciplineFilter(value as 'OT' | 'SLP' | 'Both')}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Both">All Disciplines</SelectItem>
+                <SelectItem value="OT">OT Only</SelectItem>
+                <SelectItem value="SLP">SLP Only</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
       
-      <div className="p-4 border-t border-gray-200 bg-blue-50">
-        <div className="text-xs text-gray-600">
-          <p className="font-medium mb-2 flex items-center gap-1">
-            <Shield className="h-3 w-3" />
-            Clinical Guidelines:
-          </p>
-          <ul className="space-y-1">
-            <li>• Components follow ASHA/AOTA standards</li>
-            <li>• HIPAA-compliant data collection</li>
-            <li>• Evidence-based assessment tools</li>
-            <li>• Standardized scoring protocols</li>
-          </ul>
+      <ScrollArea className="flex-1">
+        <div className="space-y-4">
+          {filteredCategories.map(category => {
+            const isExpanded = expandedCategories.has(category.id);
+            const hasMatchingComponents = category.subcategories.some(subcat => 
+              filterComponents(subcat.components).length > 0
+            );
+            
+            if (!hasMatchingComponents && searchQuery) return null;
+            
+            return (
+              <Card key={category.id} className="border-l-4 border-l-blue-500">
+                <CardHeader 
+                  className="cursor-pointer pb-3"
+                  onClick={() => toggleCategory(category.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {category.icon}
+                      <CardTitle className="text-base">{category.name}</CardTitle>
+                    </div>
+                    <ChevronRight 
+                      className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                    />
+                  </div>
+                  <CardDescription className="text-xs mt-1">
+                    {category.description}
+                  </CardDescription>
+                </CardHeader>
+                
+                {isExpanded && (
+                  <CardContent className="pt-0">
+                    {category.subcategories.map(subcategory => {
+                      const filteredComponents = filterComponents(subcategory.components);
+                      if (filteredComponents.length === 0) return null;
+                      
+                      return (
+                        <div key={subcategory.id} className="mb-4 last:mb-0">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">
+                            {subcategory.name}
+                          </h4>
+                          <div className="grid gap-2">
+                            {filteredComponents.map(component => (
+                              <div
+                                key={component.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, component)}
+                                onClick={() => handleComponentClick(component)}
+                                className="group relative p-3 bg-white border rounded-lg cursor-move hover:shadow-md hover:border-blue-300 transition-all duration-150"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-medium text-sm">{component.name}</span>
+                                      <Badge 
+                                        variant={component.discipline === 'OT' ? 'default' : component.discipline === 'SLP' ? 'secondary' : 'outline'}
+                                        className="text-xs"
+                                      >
+                                        {component.discipline}
+                                      </Badge>
+                                    </div>
+                                    {component.description && (
+                                      <p className="text-xs text-gray-600">{component.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Hover effect */}
+                                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
         </div>
+      </ScrollArea>
+      
+      {/* Footer with tips */}
+      <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+        <p className="text-xs text-blue-700">
+          <strong>Tip:</strong> Drag components to the form canvas or click to add them. 
+          Use the discipline filter to show components specific to OT or SLP.
+        </p>
       </div>
     </div>
   );
-};
+}
