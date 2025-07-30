@@ -161,7 +161,7 @@ export default function Sidebar({ currentPath }: SidebarProps) {
                   <p className="text-[#219FD9] text-xs">Clinical Forms</p>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
