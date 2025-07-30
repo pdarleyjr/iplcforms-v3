@@ -750,48 +750,64 @@ export function ChatInterface() {
                     }`}
                   >
                     {message.role === 'assistant' && (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end flex items-center justify-center flex-shrink-0">
-                        <Bot className="w-5 h-5 text-white" />
-                      </div>
-                      <div
-                        className={`relative rounded-2xl px-4 py-3 max-w-[80%] group ${
-                          message.role === 'assistant'
-                            ? 'bg-muted'
-                            : 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white'
-                        }`}
-                      >
-                        <div className="text-sm leading-relaxed">
-                          {renderMessageWithCitations(message.content, message.citations)}
+                      <>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end flex items-center justify-center flex-shrink-0">
+                          <Bot className="w-5 h-5 text-white" />
                         </div>
-                        {message.streaming && (
-                          <span className="inline-block w-1 h-4 bg-current animate-pulse ml-1" />
-                        )}
-                        
-                        {/* Share button for assistant messages */}
-                        {message.role === 'assistant' && !message.streaming && (
-                          <button
-                            onClick={() => handleShareMessage(message.id)}
-                            disabled={sharingMessageId === message.id}
-                            className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity ${
-                              message.role === 'assistant'
-                                ? 'text-muted-foreground hover:text-foreground'
-                                : 'text-white/70 hover:text-white'
-                            }`}
-                            title="Share this Q&A"
-                          >
-                            {sharingMessageId === message.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Share2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                      {message.role === 'user' && (
+                        <div
+                          className={`relative rounded-2xl px-4 py-3 max-w-[80%] group ${
+                            message.role === 'assistant'
+                              ? 'bg-muted'
+                              : 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white'
+                          }`}
+                        >
+                          <div className="text-sm leading-relaxed">
+                            {renderMessageWithCitations(message.content, message.citations)}
+                          </div>
+                          {message.streaming && (
+                            <span className="inline-block w-1 h-4 bg-current animate-pulse ml-1" />
+                          )}
+                          
+                          {/* Share button for assistant messages */}
+                          {message.role === 'assistant' && !message.streaming && (
+                            <button
+                              onClick={() => handleShareMessage(message.id)}
+                              disabled={sharingMessageId === message.id}
+                              className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity ${
+                                message.role === 'assistant'
+                                  ? 'text-muted-foreground hover:text-foreground'
+                                  : 'text-white/70 hover:text-white'
+                              }`}
+                              title="Share this Q&A"
+                            >
+                              {sharingMessageId === message.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Share2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {message.role === 'user' && (
+                      <>
+                        <div
+                          className={`relative rounded-2xl px-4 py-3 max-w-[80%] group ${
+                            message.role === 'assistant'
+                              ? 'bg-muted'
+                              : 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white'
+                          }`}
+                        >
+                          <div className="text-sm leading-relaxed">
+                            {message.content}
+                          </div>
+                        </div>
                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                           <User className="w-5 h-5" />
                         </div>
-                      )}
+                      </>
+                    )}
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
