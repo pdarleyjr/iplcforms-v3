@@ -1,7 +1,7 @@
 // Live Form Renderer Component for IPLC Forms v3
 // Handles actual form data collection and submission with AI Summary support
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import type { FormComponent, FormTemplate } from '@/lib/api-form-builder';
-import { Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import type { FormPage } from '@/lib/schemas/api-validation';
+import { Calendar, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AISummaryElement } from './components/AISummaryElement';
 import TitleElement from './components/TitleElement';
 import SubtitleElement from './components/SubtitleElement';
@@ -29,22 +31,52 @@ interface FormSubmissionData {
   metadata?: Record<string, any>;
 }
 
-export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({ 
+export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
   template,
   onSubmit,
-  className = '' 
+  className = ''
 }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Extract components from template
-  const components = Array.isArray(template.schema?.components) ? template.schema.components :
-                    typeof template.schema?.components === 'string' ? JSON.parse(template.schema.components) : [];
-  
-  // Sort components by order
-  const sortedComponents = [...components].sort((a, b) => a.order - b.order);
+  // Check if this is a multi-page form
+  const isMultiPage = template.schema?.isMultiPage || false;
+  const pages = useMemo(() => {
+    if (isMultiPage && template.schema?.pages) {
+      const parsedPages = typeof template.schema.pages === 'string'
+        ? JSON.parse(template.schema.pages)
+        : template.schema.pages;
+      return [...parsedPages].sort((a: FormPage, b: FormPage) => a.order - b.order);
+    }
+    return [];
+  }, [isMultiPage, template.schema]);
+
+  // State for multi-page navigation
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+
+  // Get components based on whether it's multi-page or single-page
+  const sortedComponents = useMemo(() => {
+    let components: FormComponent[] = [];
+    
+    if (isMultiPage && pages.length > 0) {
+      // Get components from current page
+      const currentPage = pages[currentPageIndex];
+      if (currentPage && currentPage.components) {
+        components = typeof currentPage.components === 'string'
+          ? JSON.parse(currentPage.components)
+          : currentPage.components;
+      }
+    } else {
+      // Single-page form
+      components = Array.isArray(template.schema?.components) ? template.schema.components :
+                  typeof template.schema?.components === 'string' ? JSON.parse(template.schema.components) : [];
+    }
+    
+    // Sort components by order
+    return [...components].sort((a, b) => a.order - b.order);
+  }, [isMultiPage, pages, currentPageIndex, template.schema]);
 
   // Function to evaluate visibility conditions
   const evaluateVisibilityCondition = (component: FormComponent): boolean => {
@@ -103,11 +135,12 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = (componentsToValidate?: FormComponent[]): boolean => {
     const newErrors: Record<string, string> = {};
+    const components = componentsToValidate || visibleComponents;
 
     // Only validate visible components
-    visibleComponents.forEach(component => {
+    components.forEach(component => {
       const { id, props = {}, label } = component;
       const isRequired = props.required || false;
       const value = formData[id];
@@ -136,6 +169,24 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Navigation handlers for multi-page forms
+  const handlePreviousPage = () => {
+    if (currentPageIndex > 0) {
+      setCurrentPageIndex(currentPageIndex - 1);
+      // Clear errors when navigating
+      setErrors({});
+    }
+  };
+
+  const handleNextPage = () => {
+    // Validate current page before moving to next
+    if (validateForm(visibleComponents)) {
+      if (currentPageIndex < pages.length - 1) {
+        setCurrentPageIndex(currentPageIndex + 1);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -155,24 +206,43 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
         }
       });
 
-      // Only include data from visible fields
-      const visibleFormData: Record<string, any> = {};
-      visibleComponents.forEach(component => {
-        if (formData[component.id] !== undefined) {
-          visibleFormData[component.id] = formData[component.id];
-        }
-      });
+      // For multi-page forms, we need to include data from all pages
+      const allFormData: Record<string, any> = {};
+      
+      if (isMultiPage) {
+        // Collect data from all pages
+        pages.forEach((page: FormPage) => {
+          const pageComponents = typeof page.components === 'string'
+            ? JSON.parse(page.components)
+            : page.components;
+          
+          pageComponents.forEach((component: FormComponent) => {
+            if (evaluateVisibilityCondition(component) && formData[component.id] !== undefined) {
+              allFormData[component.id] = formData[component.id];
+            }
+          });
+        });
+      } else {
+        // Single-page form - only include visible fields
+        visibleComponents.forEach(component => {
+          if (formData[component.id] !== undefined) {
+            allFormData[component.id] = formData[component.id];
+          }
+        });
+      }
 
       const submissionData: FormSubmissionData = {
         template_id: template.id!,
         responses: {
-          ...visibleFormData,
+          ...allFormData,
           ...aiSummaryData
         },
         metadata: {
           submitted_at: new Date().toISOString(),
           form_version: template.version,
-          ai_summaries: Object.keys(aiSummaryData)
+          ai_summaries: Object.keys(aiSummaryData),
+          is_multi_page: isMultiPage,
+          total_pages: isMultiPage ? pages.length : 1
         }
       };
 
@@ -576,6 +646,29 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
                   {template.description}
                 </p>
               )}
+              
+              {/* Progress bar for multi-page forms */}
+              {isMultiPage && pages.length > 0 && (
+                <div className="mt-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      Page {currentPageIndex + 1} of {pages.length}: {pages[currentPageIndex]?.title || 'Untitled Page'}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {Math.round(((currentPageIndex + 1) / pages.length) * 100)}% Complete
+                    </span>
+                  </div>
+                  <Progress
+                    value={((currentPageIndex + 1) / pages.length) * 100}
+                    className="h-2"
+                  />
+                  {pages[currentPageIndex]?.description && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      {pages[currentPageIndex].description}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Status Messages */}
@@ -602,15 +695,66 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
               <div className="space-y-6">
                 {visibleComponents.map(renderFormComponent)}
                 
-                {/* Submit Button */}
+                {/* Navigation and Submit Buttons */}
                 <div className="pt-6 border-t border-gray-200">
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit Form'}
-                  </Button>
+                  <div className="flex justify-between items-center">
+                    {isMultiPage ? (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={handlePreviousPage}
+                          disabled={currentPageIndex === 0}
+                          variant="outline"
+                          className="flex items-center gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Previous
+                        </Button>
+                        
+                        <div className="flex items-center gap-2">
+                          {Array.from({ length: pages.length }, (_, i) => (
+                            <div
+                              key={i}
+                              className={`h-2 w-2 rounded-full transition-colors ${
+                                i === currentPageIndex
+                                  ? 'bg-blue-600'
+                                  : i < currentPageIndex
+                                  ? 'bg-blue-300'
+                                  : 'bg-gray-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        
+                        {currentPageIndex === pages.length - 1 ? (
+                          <Button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {isSubmitting ? 'Submitting...' : 'Submit Form'}
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={handleNextPage}
+                            className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Submitting...' : 'Submit Form'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (

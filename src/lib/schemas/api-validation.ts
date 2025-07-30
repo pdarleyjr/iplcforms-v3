@@ -97,6 +97,14 @@ export const FormComponentSchema = z.object({
   }).optional(),
 });
 
+export const FormPageSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).max(200),
+  description: z.string().max(500).optional(),
+  order: z.number().min(0),
+  components: z.array(FormComponentSchema),
+});
+
 export const FormTemplateSchema = z.object({
   id: z.number().optional(),
   name: z.string().min(2, "Name must be at least 2 characters").max(200),
@@ -106,8 +114,20 @@ export const FormTemplateSchema = z.object({
   clinical_context: z.string().min(2, "Clinical context is required").max(1000),
   version: z.number().min(1).default(1),
   schema: z.object({
-    components: z.array(FormComponentSchema),
-  }),
+    // Support both single-page (components) and multi-page (pages) forms
+    components: z.array(FormComponentSchema).optional(),
+    pages: z.array(FormPageSchema).optional(),
+    isMultiPage: z.boolean().optional().default(false),
+  }).refine(
+    (data) => {
+      // Either components or pages must be present
+      return (data.components && data.components.length > 0) ||
+             (data.pages && data.pages.length > 0);
+    },
+    {
+      message: "Form must have either components or pages",
+    }
+  ),
   ui_schema: z.record(z.string(), z.any()).optional(),
   scoring_config: z.record(z.string(), z.any()).optional(),
   permissions: z.record(z.string(), z.any()).optional(),
@@ -406,6 +426,7 @@ export type Customer = z.infer<typeof CustomerSchema>;
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 export type CustomerSubscription = z.infer<typeof CustomerSubscriptionSchema>;
 export type FormComponent = z.infer<typeof FormComponentSchema>;
+export type FormPage = z.infer<typeof FormPageSchema>;
 export type FormTemplate = z.infer<typeof FormTemplateSchema>;
 export type FormSubmission = z.infer<typeof FormSubmissionSchema>;
 export type FormTemplateCollection = z.infer<typeof FormTemplateCollectionSchema>;

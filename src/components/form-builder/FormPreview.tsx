@@ -1,15 +1,17 @@
 // Form Preview Component for Form Builder - IPLC Forms v3
 // Live preview of form being built
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import type { FormComponent } from '@/lib/api-form-builder';
-import { Calendar, Eye } from 'lucide-react';
+import type { FormPage } from '@/lib/schemas/api-validation';
+import { Calendar, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AISummaryElement } from './components/AISummaryElement';
 import { TitleElement } from './components/TitleElement';
 import SubtitleElement from './components/SubtitleElement';
@@ -17,7 +19,9 @@ import SeparatorElement from './components/SeparatorElement';
 import evaluationSectionsConfig from './evaluation-sections-config.json';
 
 interface FormPreviewProps {
-  components: FormComponent[];
+  components?: FormComponent[];
+  pages?: FormPage[];
+  isMultiPage?: boolean;
   title: string;
   description?: string;
   className?: string;
@@ -41,14 +45,38 @@ const LogoHeader: React.FC<{ show: boolean }> = ({ show }) => {
 };
 
 export const FormPreview: React.FC<FormPreviewProps> = ({
-  components,
+  components: singlePageComponents,
+  pages,
+  isMultiPage = false,
   title,
   description = '',
   className = '',
   showIplcLogo
 }) => {
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  
+  // Get components based on whether it's multi-page or single-page
+  const currentComponents = isMultiPage && pages
+    ? (pages[currentPageIndex]?.components || [])
+    : (singlePageComponents || []);
+  
   // Sort components by order
-  const sortedComponents = [...components].sort((a, b) => a.order - b.order);
+  const sortedComponents = [...currentComponents].sort((a, b) => a.order - b.order);
+  
+  const totalPages = pages?.length || 1;
+  const currentPage = pages?.[currentPageIndex];
+  
+  const handleNextPage = () => {
+    if (currentPageIndex < totalPages - 1) {
+      setCurrentPageIndex(currentPageIndex + 1);
+    }
+  };
+  
+  const handlePrevPage = () => {
+    if (currentPageIndex > 0) {
+      setCurrentPageIndex(currentPageIndex - 1);
+    }
+  };
 
   const renderPreviewComponent = (component: FormComponent) => {
     const { type, label, props = {} } = component;
@@ -219,7 +247,7 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
             <AISummaryElement
               component={component}
               isEditing={false}
-              allComponents={components}
+              allComponents={currentComponents}
             />
           </div>
         );
@@ -278,16 +306,27 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
     <div className={`bg-white border border-gray-200 rounded-lg h-full overflow-y-auto ${className}`}>
       {/* Preview Header */}
       <div className="p-4 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center gap-2 mb-2">
-          <Eye className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">Preview</span>
-          <Badge variant="secondary" className="text-xs">
-            {sortedComponents.length} {sortedComponents.length === 1 ? 'field' : 'fields'}
-          </Badge>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Preview</span>
+              <Badge variant="secondary" className="text-xs">
+                {sortedComponents.length} {sortedComponents.length === 1 ? 'field' : 'fields'}
+              </Badge>
+            </div>
+            {isMultiPage && pages && pages.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  Page {currentPageIndex + 1} of {totalPages}
+                </span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500">
+            This is how your form will appear to users
+          </p>
         </div>
-        <p className="text-xs text-gray-500">
-          This is how your form will appear to users
-        </p>
       </div>
 
       {/* Preview Content */}
@@ -306,18 +345,70 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
                 {description}
               </p>
             )}
+            {/* Multi-page progress */}
+            {isMultiPage && pages && pages.length > 1 && (
+              <div className="mt-6 space-y-2">
+                <Progress value={(currentPageIndex + 1) / totalPages * 100} className="h-2" />
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Step {currentPageIndex + 1} of {totalPages}</span>
+                  {currentPage && (
+                    <span className="font-medium">{currentPage.title}</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
+          
+          {/* Page Title and Description for multi-page forms */}
+          {isMultiPage && currentPage && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                {currentPage.title}
+              </h3>
+              {currentPage.description && (
+                <p className="text-gray-600 text-sm">
+                  {currentPage.description}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Form Fields */}
           {sortedComponents.length > 0 ? (
             <div className="space-y-6">
               {sortedComponents.map(renderPreviewComponent)}
               
-              {/* Submit Button Preview */}
+              {/* Navigation Buttons */}
               <div className="pt-6 border-t border-gray-200">
-                <Button disabled className="bg-blue-600 hover:bg-blue-700">
-                  Submit Form
-                </Button>
+                {isMultiPage && pages && pages.length > 1 ? (
+                  <div className="flex justify-between">
+                    <Button
+                      disabled
+                      variant="outline"
+                      className={currentPageIndex === 0 ? 'invisible' : ''}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </Button>
+                    <Button
+                      disabled
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {currentPageIndex === totalPages - 1 ? (
+                        'Submit Form'
+                      ) : (
+                        <>
+                          Next
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button disabled className="bg-blue-600 hover:bg-blue-700">
+                    Submit Form
+                  </Button>
+                )}
               </div>
             </div>
           ) : (

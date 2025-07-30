@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "imgildev.vscode-auto-barrel",
+        "formulahendry.auto-close-tag",
+        "formulahendry.auto-rename-tag",
+        "codiium.wrangler",
+        "graphql.vscode-graphql-syntax",
+        "redhat.vscode-yaml"
+    ]
+}

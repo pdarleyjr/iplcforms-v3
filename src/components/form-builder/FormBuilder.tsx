@@ -22,7 +22,7 @@ import { EvaluationSectionsModule } from "./EvaluationSectionsModule";
 import { ClinicalComponentPalette } from "./ClinicalComponentPalette";
 import { ConditionalLogicPanel } from "./ConditionalLogicPanel";
 import { createFormTemplate, updateFormTemplate, getFormTemplates, type TemplateSearchParams } from "@/lib/api-form-builder";
-import type { FormTemplate, FormComponent } from "@/lib/api-form-builder";
+import type { FormTemplate, FormComponent, FormPage } from "@/lib/api-form-builder";
 import { useFormAutosave } from "@/hooks/useFormAutosave";
 import { useFormLock } from "@/hooks/useFormLock";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -60,9 +60,38 @@ interface FormBuilderProps {
 }
 
 export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }: FormBuilderProps) {
-  const [components, setComponents] = useState<FormComponent[]>(
-    template?.schema?.components || []
-  );
+  // Multi-page form state
+  const [isMultiPage, setIsMultiPage] = useState(template?.schema?.isMultiPage || false);
+  const [pages, setPages] = useState<FormPage[]>(() => {
+    if (template?.schema?.pages && template.schema.pages.length > 0) {
+      return template.schema.pages;
+    }
+    // Initialize with a single page if not multi-page
+    return [{
+      id: 'page_1',
+      title: 'Page 1',
+      description: '',
+      order: 0,
+      components: template?.schema?.components || []
+    }];
+  });
+  const [activePageId, setActivePageId] = useState<string>(pages[0]?.id || 'page_1');
+  
+  // Get current page components
+  const currentPage = pages.find(p => p.id === activePageId);
+  const components = currentPage?.components || [];
+  
+  // Helper to update components in the current page
+  const setComponents = useCallback((newComponents: FormComponent[]) => {
+    setPages(prevPages =>
+      prevPages.map(page =>
+        page.id === activePageId
+          ? { ...page, components: newComponents }
+          : page
+      )
+    );
+  }, [activePageId]);
+  
   const [previewMode, setPreviewMode] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
@@ -83,6 +112,69 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   
   const formListRef = useRef<HTMLDivElement>(null);
   const sortableInstanceRef = useRef<Sortable | null>(null);
+  
+  // Page management functions
+  const addPage = useCallback(() => {
+    const newPageId = `page_${Date.now()}`;
+    const newPage: FormPage = {
+      id: newPageId,
+      title: `Page ${pages.length + 1}`,
+      description: '',
+      order: pages.length,
+      components: []
+    };
+    setPages([...pages, newPage]);
+    setActivePageId(newPageId);
+  }, [pages]);
+  
+  const removePage = useCallback((pageId: string) => {
+    if (pages.length <= 1) return; // Keep at least one page
+    
+    const pageIndex = pages.findIndex(p => p.id === pageId);
+    const newPages = pages.filter(p => p.id !== pageId);
+    
+    // Update order
+    newPages.forEach((page, index) => {
+      page.order = index;
+    });
+    
+    setPages(newPages);
+    
+    // If removing active page, switch to previous or first page
+    if (pageId === activePageId) {
+      const newActiveIndex = Math.max(0, pageIndex - 1);
+      setActivePageId(newPages[newActiveIndex].id);
+    }
+  }, [pages, activePageId]);
+  
+  const updatePageTitle = useCallback((pageId: string, title: string) => {
+    setPages(prevPages =>
+      prevPages.map(page =>
+        page.id === pageId ? { ...page, title } : page
+      )
+    );
+  }, []);
+  
+  const updatePageDescription = useCallback((pageId: string, description: string) => {
+    setPages(prevPages =>
+      prevPages.map(page =>
+        page.id === pageId ? { ...page, description } : page
+      )
+    );
+  }, []);
+  
+  const reorderPages = useCallback((fromIndex: number, toIndex: number) => {
+    const newPages = [...pages];
+    const [movedPage] = newPages.splice(fromIndex, 1);
+    newPages.splice(toIndex, 0, movedPage);
+    
+    // Update order
+    newPages.forEach((page, index) => {
+      page.order = index;
+    });
+    
+    setPages(newPages);
+  }, [pages]);
   
   // Generate session ID for autosave
   const sessionId = useMemo(() => {
@@ -407,7 +499,11 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
         description: data.description,
         category: data.category,
         clinical_context: data.clinical_context,
-        schema: { components },
+        schema: {
+          components: isMultiPage ? [] : components,
+          pages: isMultiPage ? pages : [],
+          isMultiPage
+        },
         metadata: {
           ...template?.metadata,
           showIplcLogo: data.showIplcLogo,
@@ -512,12 +608,99 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
           </Alert>
         )}
         {/* Toolbar */}
-        <div className="border-b bg-card p-4">
+         <div className="border-b bg-card">
+           {/* Multi-page tabs */}
+           {isMultiPage && (
+             <div className="border-b px-4 pt-2">
+               <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center gap-2">
+                   <h3 className="text-sm font-medium text-muted-foreground">Form Pages</h3>
+                   <Badge variant="secondary" className="text-xs">
+                     {pages.length} {pages.length === 1 ? 'page' : 'pages'}
+                   </Badge>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   <Button
+                     variant="ghost"
+                     size="sm"
+                     onClick={addPage}
+                     className="h-7 text-xs"
+                   >
+                     <Plus className="h-3 w-3 mr-1" />
+                     Add Page
+                   </Button>
+                   <Switch
+                     checked={isMultiPage}
+                     onCheckedChange={(checked) => {
+                       setIsMultiPage(checked);
+                       if (!checked) {
+                         // When switching to single page, merge all components
+                         const allComponents = pages.flatMap(p => p.components);
+                         setPages([{
+                           id: 'page_1',
+                           title: 'Page 1',
+                           description: '',
+                           order: 0,
+                           components: allComponents
+                         }]);
+                         setActivePageId('page_1');
+                       }
+                     }}
+                   />
+                 </div>
+               </div>
+               
+               <Tabs value={activePageId} onValueChange={setActivePageId}>
+                 <TabsList className="h-auto p-0 bg-transparent">
+                   {pages.map((page, index) => (
+                     <TabsTrigger
+                       key={page.id}
+                       value={page.id}
+                       className="relative data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-t-lg border border-b-0 data-[state=active]:border-gray-200 data-[state=inactive]:border-transparent data-[state=inactive]:bg-transparent px-4 py-2 mr-1"
+                     >
+                       <div className="flex items-center gap-2">
+                         <span className="text-sm font-medium">{page.title}</span>
+                         <Badge variant="outline" className="text-xs">
+                           {page.components.length}
+                         </Badge>
+                         {pages.length > 1 && (
+                           <Button
+                             variant="ghost"
+                             size="icon"
+                             className="h-4 w-4 ml-1 opacity-0 hover:opacity-100 transition-opacity"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               removePage(page.id);
+                             }}
+                           >
+                             <Trash2 className="h-3 w-3" />
+                           </Button>
+                         )}
+                       </div>
+                     </TabsTrigger>
+                   ))}
+                 </TabsList>
+               </Tabs>
+             </div>
+           )}
+           
+           <div className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h2 className="text-lg font-semibold">
                 {template ? `Edit: ${template.name}` : "New Form Template"}
               </h2>
+              {!isMultiPage && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMultiPage(true)}
+                  className="text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Convert to Multi-Page
+                </Button>
+              )}
               
               {/* Autosave Status */}
               <div className="flex items-center gap-2 text-sm">
@@ -897,14 +1080,18 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
               </Dialog>
             </div>
           </div>
+          </div>
         </div>
 
         {/* Canvas Content */}
         <div className="flex-1 overflow-auto p-6">
           {previewMode ? (
             <FormPreview
-              components={components}
+              components={!isMultiPage ? components : undefined}
+              pages={isMultiPage ? pages : undefined}
+              isMultiPage={isMultiPage}
               title={form.getValues("name") || "Form Preview"}
+              description={form.getValues("description")}
               showIplcLogo={form.getValues("showIplcLogo")}
             />
           ) : (
