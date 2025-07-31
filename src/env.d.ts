@@ -26,6 +26,7 @@ interface ImportMeta {
 interface WorkerEnv {
   DB: D1Database;
   CUSTOMER_WORKFLOW: DurableObjectNamespace;
+  FORM_SESSION: DurableObjectNamespace; // Form session Durable Object
   METRICS_KV: KVNamespace;
   CACHE_KV: KVNamespace;
   CHAT_HISTORY: KVNamespace;

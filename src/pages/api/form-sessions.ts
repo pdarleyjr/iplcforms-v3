@@ -106,11 +106,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const doUrl = new URL(request.url);
     doUrl.searchParams.set('sessionId', sessionId);
     
-    // Use the original request body
+    // Pass the body data we extracted from the clone
     const response = await stub.fetch(doUrl.toString(), {
       method: 'POST',
-      headers: request.headers,
-      body: request.body
+      headers: {
+        ...Object.fromEntries(request.headers.entries()),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
     });
 
     return response;
