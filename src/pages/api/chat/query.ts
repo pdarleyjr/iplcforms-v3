@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
 
     // Forward to iplc-ai worker for RAG processing
-    const ragResponse = await env.AI_WORKER.fetch('https://iplc-ai.workers.dev/rag', {
+    const ragResponse = await env.AI_WORKER.fetch('http://ai-worker/rag', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

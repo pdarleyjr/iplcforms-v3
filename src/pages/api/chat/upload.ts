@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const text = await extractTextFromFile(file, buffer);
       
       // Forward to iplc-ai worker for embedding
-      const embedResponse = await env.AI_WORKER.fetch('https://iplc-ai.workers.dev/embed', {
+      const embedResponse = await env.AI_WORKER.fetch('http://ai-worker/embed', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

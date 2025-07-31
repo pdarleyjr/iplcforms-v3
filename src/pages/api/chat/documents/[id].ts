@@ -18,7 +18,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
     }
 
     // Forward to iplc-ai worker
-    const response = await env.AI_WORKER.fetch(`https://iplc-ai.workers.dev/documents/${documentId}`, {
+    const response = await env.AI_WORKER.fetch(`http://ai-worker/documents/${documentId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
     }
 
     // Forward to iplc-ai worker for complete deletion
-    const response = await env.AI_WORKER.fetch(`https://iplc-ai.workers.dev/documents/${documentId}`, {
+    const response = await env.AI_WORKER.fetch(`http://ai-worker/documents/${documentId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
