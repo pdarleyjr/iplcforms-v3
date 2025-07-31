@@ -286,8 +286,122 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
               <p className="text-sm text-gray-600">{section.description}</p>
             )}
             
-            <div className="text-sm text-blue-700 italic">
-              This evaluation section contains {section.fields.length} fields that will be displayed in the live form.
+            <div className="space-y-3 mt-4">
+              {section.fields.map((field: any, fieldIndex: number) => {
+                const fieldId = `${component.id}_${field.id}`;
+                
+                // Render each field based on its type
+                switch (field.type) {
+                  case 'section_header':
+                    return (
+                      <div key={fieldIndex} className={`mt-${field.level === 1 ? '4' : '3'} mb-2`}>
+                        <h4 className={`text-${field.level === 1 ? 'lg' : 'md'} font-semibold text-gray-800`}>{field.label}</h4>
+                      </div>
+                    );
+                    
+                  case 'text':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <Input
+                          disabled
+                          placeholder={`Enter ${field.label.toLowerCase()}`}
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    );
+                    
+                  case 'textarea':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <Textarea
+                          disabled
+                          placeholder={`Enter ${field.label.toLowerCase()}`}
+                          rows={field.rows || 3}
+                          className="bg-gray-50 min-h-[60px]"
+                        />
+                      </div>
+                    );
+                    
+                  case 'date':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <div className="relative">
+                          <Input
+                            type="date"
+                            disabled
+                            className="bg-gray-50"
+                          />
+                          <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        </div>
+                      </div>
+                    );
+                    
+                  case 'select':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <select
+                          disabled
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                        >
+                          <option value="">Select {field.label.toLowerCase()}</option>
+                          {field.options?.map((option: string, optIndex: number) => (
+                            <option key={optIndex} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                    
+                  case 'number':
+                    return (
+                      <div key={fieldIndex} className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <Input
+                          type="number"
+                          disabled
+                          placeholder={`Enter ${field.label.toLowerCase()}`}
+                          min={field.min}
+                          max={field.max}
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    );
+                    
+                  case 'subsection':
+                    return (
+                      <div key={fieldIndex} className="mt-3 mb-2">
+                        <h5 className="text-sm font-medium text-gray-700">{field.label}</h5>
+                      </div>
+                    );
+                    
+                  default:
+                    return (
+                      <div key={fieldIndex} className="text-sm text-gray-500">
+                        {field.label} ({field.type})
+                      </div>
+                    );
+                }
+              })}
             </div>
           </div>
         );

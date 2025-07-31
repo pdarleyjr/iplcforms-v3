@@ -180,10 +180,13 @@ export function ChatInterface() {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
 
+    // Store the message before clearing the input
+    const messageToSend = inputValue.trim();
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue,
+      content: messageToSend,
       timestamp: new Date(),
     };
 
@@ -211,7 +214,7 @@ export function ChatInterface() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: inputValue,
+          message: messageToSend,
           conversationId: currentConversationId,
           documentIds: enabledDocumentIds,
         }),

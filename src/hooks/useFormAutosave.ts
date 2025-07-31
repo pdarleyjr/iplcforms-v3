@@ -61,7 +61,23 @@ export function useFormAutosave({
       });
       
       if (!response.ok) {
-        throw new Error(`Save failed: ${response.statusText}`);
+        const errorData = await response.text();
+        let errorMessage = `Save failed: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorData);
+          if (errorJson.error) {
+            errorMessage = `Save failed: ${errorJson.error}`;
+          }
+          if (errorJson.details) {
+            errorMessage += ` - ${errorJson.details}`;
+          }
+        } catch {
+          // If response is not JSON, use the text content
+          if (errorData) {
+            errorMessage = `Save failed: ${errorData}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();

@@ -21,9 +21,11 @@ export function Header({ currentPath }: { currentPath: string }) {
             className="group relative inline-flex items-center transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#219FD9] focus:ring-offset-2 rounded-lg"
             aria-label="FormPro Home"
           >
-            <h1 className="text-2xl font-bold gradient-metallic-primary bg-clip-text text-transparent px-2 py-1">
-              FormPro
-            </h1>
+            <img
+              src="/iplc-logo.png"
+              alt="IPLC Logo"
+              className="h-10 w-auto object-contain"
+            />
           </a>
           
           {/* Only show navigation links in admin section */}

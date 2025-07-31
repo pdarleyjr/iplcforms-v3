@@ -57,27 +57,38 @@ export const GET: APIRoute = async ({ request, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = (locals as any).runtime?.env;
-  
-  // Handle test environment
-  if (!env) {
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Test environment - session saved'
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
   try {
-    const body = await request.json() as { sessionId: string };
+    const env = (locals as any).runtime?.env;
+    const body = await request.json() as {
+      sessionId: string;
+      formData?: any;
+      templateId?: number;
+      userName?: string;
+      timestamp?: string;
+    };
+    
+    // Handle test environment
+    if (!env || !env.FORM_SESSION) {
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Test environment - session saved',
+        session: {
+          sessionId: body.sessionId,
+          formData: body.formData || {},
+          timestamp: new Date().toISOString()
+        }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const { sessionId } = body;
 
     if (!sessionId) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'sessionId is required' 
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'sessionId is required'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -103,9 +114,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return response;
   } catch (error) {
     console.error('Error saving session:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: 'Failed to save session' 
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Failed to save session',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
