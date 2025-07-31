@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
+// Force rebuild - correct import path
 import { getSSEPerformanceMonitor } from '../../../lib/utils/sse-performance';
 
 // Cache configuration
