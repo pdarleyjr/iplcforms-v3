@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { 
-  Menu, 
-  X, 
-  LayoutDashboard, 
-  Users, 
-  CreditCard, 
-  Activity,
+import {
+  Menu,
+  X,
+  LayoutDashboard,
+  Users,
+  CreditCard,
   FileText,
   MessageSquare,
   Settings,
@@ -27,21 +26,15 @@ const sidebarLinks = [
     icon: Users,
     description: 'Manage customer accounts'
   },
-  { 
-    href: '/admin/subscriptions', 
-    label: 'Subscriptions', 
+  {
+    href: '/admin/subscriptions',
+    label: 'Subscriptions',
     icon: CreditCard,
     description: 'Billing and plans'
   },
-  { 
-    href: '/admin/performance', 
-    label: 'Performance', 
-    icon: Activity,
-    description: 'System metrics'
-  },
-  { 
-    href: '/forms', 
-    label: 'Forms', 
+  {
+    href: '/forms',
+    label: 'Forms',
     icon: FileText,
     description: 'Form builder and templates'
   },

@@ -1,10 +1,9 @@
 import { cn } from "@/lib/utils";
 
 const links = [
-  { href: "/admin", label: "Admin" },
+  { href: "/admin", label: "Dashboard" },
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
-  { href: "/admin/performance", label: "Performance" },
 ];
 
 export function Header({ currentPath }: { currentPath: string }) {
