@@ -5,6 +5,7 @@ import { Card } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import {
   Send,
   Upload,
@@ -18,7 +19,6 @@ import {
   Clock,
   Paperclip,
   ChevronRight,
-  FileEdit,
   Eye,
   EyeOff,
   X,
@@ -26,7 +26,16 @@ import {
   Check,
   Copy,
   Download,
-  AlertCircle
+  AlertCircle,
+  Search,
+  FolderOpen,
+  FileImage,
+  FileCode,
+  FilePlus,
+  BookOpen,
+  Brain,
+  Sparkles,
+  SplitSquareVertical
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -52,6 +61,7 @@ interface Document {
   uploadedAt: Date;
   chunks?: number;
   enabled?: boolean;
+  preview?: string;
 }
 
 interface Citation {
@@ -75,7 +85,7 @@ interface Conversation {
   timestamp: Date;
 }
 
-export function ChatInterface() {
+export function NotebookLMInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -83,7 +93,7 @@ export function ChatInterface() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [showDocumentDrawer, setShowDocumentDrawer] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [highlightedChunk, setHighlightedChunk] = useState<Chunk | null>(null);
   const [showChunkModal, setShowChunkModal] = useState(false);
   const [currentChunks, setCurrentChunks] = useState<Chunk[]>([]);
@@ -93,6 +103,10 @@ export function ChatInterface() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [activeTab, setActiveTab] = useState('sources');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+  const [documentContent, setDocumentContent] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -108,6 +122,7 @@ export function ChatInterface() {
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
+    loadDocuments();
   }, []);
 
   const loadConversations = async () => {
@@ -119,6 +134,18 @@ export function ChatInterface() {
       }
     } catch (error) {
       console.error('Failed to load conversations:', error);
+    }
+  };
+
+  const loadDocuments = async () => {
+    try {
+      const response = await fetch('/api/chat/documents');
+      if (response.ok) {
+        const data = await response.json();
+        setDocuments(data.documents);
+      }
+    } catch (error) {
+      console.error('Failed to load documents:', error);
     }
   };
 
@@ -547,219 +574,217 @@ export function ChatInterface() {
     }
   };
 
+  const handleDocumentClick = async (document: Document) => {
+    setSelectedDocument(document);
+    setShowDocumentPreview(true);
+    
+    // Fetch document content for preview
+    try {
+      const response = await fetch(`/api/chat/documents/${document.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDocumentContent(data.content || 'No preview available');
+      }
+    } catch (error) {
+      console.error('Failed to load document content:', error);
+      setDocumentContent('Failed to load document content');
+    }
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.includes('image')) return FileImage;
+    if (fileType.includes('code') || fileType.includes('json')) return FileCode;
+    return FileText;
+  };
+
+  const filteredDocuments = documents.filter(doc =>
+    doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="flex h-full">
-      {/* Left Sidebar - Conversation History */}
-      <div className="w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col">
+      {/* Left Panel - Sources & Documents */}
+      <div className="w-96 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col">
         <div className="p-4 border-b">
-          <Button
-            className="w-full gradient-metallic-primary"
-            onClick={handleNewConversation}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
-        </div>
-        
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-2">
-            {conversations.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                <p className="text-sm">No conversations yet</p>
-                <p className="text-xs mt-1">Start a new chat to begin</p>
-              </div>
-            ) : (
-              conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => loadConversation(conv.id)}
-                  className={`w-full text-left p-3 rounded-lg transition-all group relative ${
-                    conv.id === currentConversationId
-                      ? 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white shadow-sm'
-                      : 'hover:bg-muted/80'
-                  }`}
-                >
-                  <div className="pr-6">
-                    <p className={`font-medium text-sm truncate ${
-                      conv.id === currentConversationId ? 'text-white' : ''
-                    }`}>
-                      {conv.title}
-                    </p>
-                    <p className={`text-xs truncate mt-1 ${
-                      conv.id === currentConversationId
-                        ? 'text-white/80'
-                        : 'text-muted-foreground'
-                    }`}>
-                      {conv.lastMessage}
-                    </p>
-                    <div className={`flex items-center gap-1 mt-1 text-xs ${
-                      conv.id === currentConversationId
-                        ? 'text-white/60'
-                        : 'text-muted-foreground'
-                    }`}>
-                      <Clock className="w-3 h-3" />
-                      {new Date(conv.timestamp).toLocaleDateString()}
-                    </div>
-              
-                    {/* Document Drawer */}
-                    {showDocumentDrawer && (
-                      <div className="w-80 border-l bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col">
-                        <div className="p-4 border-b flex items-center justify-between">
-                          <h3 className="font-semibold">Uploaded Documents</h3>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setShowDocumentDrawer(false)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        
-                        <ScrollArea className="flex-1">
-                          <div className="p-4 space-y-3">
-                            {documents.length === 0 ? (
-                              <div className="text-center text-muted-foreground py-8">
-                                <FileText className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                                <p className="text-sm">No documents uploaded</p>
-                              </div>
-                            ) : (
-                              documents.map((doc) => (
-                                <Card key={doc.id} className="p-3">
-                                  <div className="flex items-start gap-3">
-                                    <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-medium text-sm truncate">{doc.name}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {formatFileSize(doc.size)} • {doc.chunks} chunks
-                                          </p>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="w-8 h-8"
-                                            onClick={() => toggleDocumentEnabled(doc.id)}
-                                            title={doc.enabled ? 'Disable document' : 'Enable document'}
-                                          >
-                                            {doc.enabled ? (
-                                              <Eye className="w-4 h-4" />
-                                            ) : (
-                                              <EyeOff className="w-4 h-4 text-muted-foreground" />
-                                            )}
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="w-8 h-8 hover:text-destructive"
-                                            onClick={() => handleDeleteDocument(doc.id)}
-                                          >
-                                            <Trash2 className="w-4 h-4" />
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </Card>
-                              ))
-                            )}
-                          </div>
-                        </ScrollArea>
-                        
-                        <div className="p-4 border-t">
-                          <Button
-                            className="w-full"
-                            variant="outline"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading}
-                          >
-                            {isUploading ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Uploading...
-                              </>
-                            ) : (
-                              <>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Add Documents
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-              
-                    {/* Citation Modal */}
-                    <Dialog open={showChunkModal} onOpenChange={setShowChunkModal}>
-                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2">
-                            <FileText className="w-5 h-5" />
-                            Source: {highlightedChunk?.documentName}
-                          </DialogTitle>
-                        </DialogHeader>
-                        <ScrollArea className="flex-1 mt-4">
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span className="font-medium">Relevance:</span>
-                              <span>{highlightedChunk ? (highlightedChunk.score * 100).toFixed(1) : 0}%</span>
-                            </div>
-                            <div className="p-4 bg-muted rounded-lg">
-                              <pre className="whitespace-pre-wrap text-sm font-mono">
-                                {highlightedChunk?.text}
-                              </pre>
-                            </div>
-                          </div>
-                        </ScrollArea>
-                      </DialogContent>
-                    </Dialog>
-              
-                    {/* Share Modal */}
-                    <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2">
-                            <Share2 className="w-5 h-5" />
-                            Share This Conversation
-                          </DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 mt-4">
-                          <p className="text-sm text-muted-foreground">
-                            Anyone with this link can view this Q&A snippet. The link will expire in 30 days.
-                          </p>
-                          <div className="flex gap-2">
-                            <Input
-                              value={shareUrl}
-                              readOnly
-                              className="font-mono text-xs"
-                            />
-                            <Button
-                              onClick={handleCopyShareLink}
-                              variant="outline"
-                              size="icon"
-                              className="flex-shrink-0"
-                            >
-                              {copySuccess ? (
-                                <Check className="w-4 h-4 text-green-600" />
-                              ) : (
-                                <Copy className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </div>
-                          {copySuccess && (
-                            <p className="text-sm text-green-600">Link copied to clipboard!</p>
-                          )}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </button>
-              ))
-            )}
+          <div className="flex items-center gap-2 mb-4">
+            <BookOpen className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold">NotebookLM</h2>
           </div>
-        </ScrollArea>
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="sources">Sources</TabsTrigger>
+              <TabsTrigger value="notebook">Notebook</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="sources" className="mt-4">
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search documents..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                <Button
+                  className="w-full gradient-metallic-primary"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FilePlus className="w-4 h-4 mr-2" />
+                      Add Sources
+                    </>
+                  )}
+                </Button>
+
+                <ScrollArea className="h-[calc(100vh-250px)]">
+                  <div className="space-y-2">
+                    {filteredDocuments.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        <FolderOpen className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                        <p className="text-sm">No sources uploaded</p>
+                        <p className="text-xs mt-1">Add documents to get started</p>
+                      </div>
+                    ) : (
+                      filteredDocuments.map((doc) => {
+                        const FileIcon = getFileIcon(doc.type);
+                        return (
+                          <Card
+                            key={doc.id}
+                            className={`p-3 cursor-pointer transition-all hover:shadow-md ${
+                              selectedDocument?.id === doc.id ? 'ring-2 ring-primary' : ''
+                            }`}
+                            onClick={() => handleDocumentClick(doc)}
+                          >
+                            <div className="flex items-start gap-3">
+                              <FileIcon className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm truncate">{doc.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatFileSize(doc.size)} • {doc.chunks} chunks
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="w-8 h-8"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleDocumentEnabled(doc.id);
+                                      }}
+                                      title={doc.enabled ? 'Disable document' : 'Enable document'}
+                                    >
+                                      {doc.enabled ? (
+                                        <Eye className="w-4 h-4" />
+                                      ) : (
+                                        <EyeOff className="w-4 h-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="w-8 h-8 hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteDocument(doc.id);
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="notebook" className="mt-4">
+              <div className="text-center text-muted-foreground py-8">
+                <Brain className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">Notebook coming soon</p>
+                <p className="text-xs mt-1">Your AI-generated notes and insights</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-4">
+              <ScrollArea className="h-[calc(100vh-250px)]">
+                <div className="space-y-2">
+                  {conversations.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8">
+                      <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">No conversations yet</p>
+                    </div>
+                  ) : (
+                    conversations.map((conv) => (
+                      <button
+                        key={conv.id}
+                        onClick={() => loadConversation(conv.id)}
+                        className={`w-full text-left p-3 rounded-lg transition-all group relative ${
+                          conv.id === currentConversationId
+                            ? 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white shadow-sm'
+                            : 'hover:bg-muted/80'
+                        }`}
+                      >
+                        <p className={`font-medium text-sm truncate ${
+                          conv.id === currentConversationId ? 'text-white' : ''
+                        }`}>
+                          {conv.title}
+                        </p>
+                        <p className={`text-xs truncate mt-1 ${
+                          conv.id === currentConversationId
+                            ? 'text-white/80'
+                            : 'text-muted-foreground'
+                        }`}>
+                          {conv.lastMessage}
+                        </p>
+                        <div className={`flex items-center gap-1 mt-1 text-xs ${
+                          conv.id === currentConversationId
+                            ? 'text-white/60'
+                            : 'text-muted-foreground'
+                        }`}>
+                          <Clock className="w-3 h-3" />
+                          {new Date(conv.timestamp).toLocaleDateString()}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".txt,.pdf,.doc,.docx,.md,.json,.csv"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
       </div>
 
       {/* Main Chat Area */}
@@ -768,26 +793,29 @@ export function ChatInterface() {
         <div className="border-b px-6 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Bot className="w-5 h-5 text-primary" />
+              <Sparkles className="w-5 h-5 text-primary" />
               <h2 className="font-semibold">AI Assistant</h2>
+              {documents.filter(d => d.enabled).length > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  ({documents.filter(d => d.enabled).length} sources active)
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              {documents.length > 0 && (
-                <button
-                  onClick={() => setShowDocumentDrawer(!showDocumentDrawer)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Paperclip className="w-4 h-4" />
-                  <span>{documents.length} document{documents.length !== 1 ? 's' : ''}</span>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${showDocumentDrawer ? 'rotate-90' : ''}`} />
-                </button>
-              )}
+              <Button
+                onClick={handleNewConversation}
+                variant="outline"
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Chat
+              </Button>
               
               {/* Export dropdown */}
               {currentConversationId && messages.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="ml-2">
+                    <Button variant="ghost" size="icon">
                       <Download className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -835,6 +863,7 @@ export function ChatInterface() {
                 </AlertDescription>
               </Alert>
             )}
+            
             {messages.length === 0 ? (
               <div className="text-center py-12">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end mb-4">
@@ -844,16 +873,34 @@ export function ChatInterface() {
                 <p className="text-muted-foreground mb-6">
                   Upload documents and ask questions to get started
                 </p>
-                <div className="flex flex-wrap gap-3 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="gap-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Upload Documents
-                  </Button>
+                <div className="space-y-4 max-w-md mx-auto">
+                  <Card className="p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => setInputValue("Summarize the key points from my documents")}>
+                    <div className="flex items-center gap-3">
+                      <BookOpen className="w-5 h-5 text-primary" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Summarize documents</p>
+                        <p className="text-xs text-muted-foreground">Get key insights from your sources</p>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => setInputValue("Create an outline based on the main topics")}>
+                    <div className="flex items-center gap-3">
+                      <Brain className="w-5 h-5 text-primary" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Generate outline</p>
+                        <p className="text-xs text-muted-foreground">Structure your content logically</p>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => setInputValue("What are the most important findings?")}>
+                    <div className="flex items-center gap-3">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Extract insights</p>
+                        <p className="text-xs text-muted-foreground">Discover key findings and patterns</p>
+                      </div>
+                    </div>
+                  </Card>
                 </div>
               </div>
             ) : (
@@ -937,56 +984,9 @@ export function ChatInterface() {
 
         {/* Input Area */}
         <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          {/* Documents Bar */}
-          {documents.length > 0 && (
-            <div className="px-6 py-3 border-b">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium">Attached Documents</h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {documents.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm"
-                  >
-                    <FileText className="w-3 h-3" />
-                    <span className="max-w-[150px] truncate">{doc.name}</span>
-                    <button
-                      onClick={() => handleDeleteDocument(doc.id)}
-                      className="ml-1 hover:text-destructive transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Message Input */}
           <div className="px-6 py-4">
             <div className="max-w-3xl mx-auto">
               <div className="flex gap-2">
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  variant="outline"
-                  size="icon"
-                  disabled={isUploading}
-                  className="flex-shrink-0"
-                >
-                  {isUploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Paperclip className="w-4 h-4" />
-                  )}
-                </Button>
                 <Input
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
@@ -996,7 +996,7 @@ export function ChatInterface() {
                       handleSendMessage();
                     }
                   }}
-                  placeholder={isStreaming ? "AI is responding..." : "Type your message..."}
+                  placeholder={isStreaming ? "AI is responding..." : "Ask a question about your documents..."}
                   disabled={isLoading || isStreaming}
                   className="flex-1"
                 />
@@ -1013,18 +1013,93 @@ export function ChatInterface() {
                   )}
                 </Button>
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".txt,.pdf,.doc,.docx,.md,.json,.csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
             </div>
           </div>
         </div>
       </div>
+
+      {/* Document Preview Modal */}
+      <Dialog open={showDocumentPreview} onOpenChange={setShowDocumentPreview}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              {selectedDocument?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 mt-4">
+            <div className="p-4 bg-muted rounded-lg">
+              <pre className="whitespace-pre-wrap text-sm font-mono">
+                {documentContent}
+              </pre>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Citation Modal */}
+      <Dialog open={showChunkModal} onOpenChange={setShowChunkModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Source: {highlightedChunk?.documentName}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 mt-4">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-medium">Relevance:</span>
+                <span>{highlightedChunk ? (highlightedChunk.score * 100).toFixed(1) : 0}%</span>
+              </div>
+              <div className="p-4 bg-muted rounded-lg">
+                <pre className="whitespace-pre-wrap text-sm font-mono">
+                  {highlightedChunk?.text}
+                </pre>
+              </div>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Modal */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="w-5 h-5" />
+              Share This Conversation
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Anyone with this link can view this Q&A snippet. The link will expire in 30 days.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={shareUrl}
+                readOnly
+                className="font-mono text-xs"
+              />
+              <Button
+                onClick={handleCopyShareLink}
+                variant="outline"
+                size="icon"
+                className="flex-shrink-0"
+              >
+                {copySuccess ? (
+                  <Check className="w-4 h-4 text-green-600" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            {copySuccess && (
+              <p className="text-sm text-green-600">Link copied to clipboard!</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

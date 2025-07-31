@@ -36,6 +36,10 @@ id = "f0468576601a4935b68069b4e54157e4"
 name = "FORM_SESSION"
 class_name = "FormSessionDO"
 
+[[durable_objects.bindings]]
+name = "AI_GATE"
+class_name = "AIGate"
+
 # Vectorize
 [[vectorize]]
 binding = "VECTORIZE"

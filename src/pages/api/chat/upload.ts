@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
-import { callAIWithRetry } from '../../../lib/utils/ai-retry';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
@@ -19,15 +18,43 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const uploadedDocuments = [];
 
+    // Check if AI_WORKER binding exists
+    if (!env.AI_WORKER) {
+      throw new Error('AI_WORKER binding not configured');
+    }
+
     for (const file of files) {
       const documentId = nanoid();
       const buffer = await file.arrayBuffer();
       const text = await extractTextFromFile(file, buffer);
       
-      // Split text into chunks for vectorization
-      const chunks = splitTextIntoChunks(text, 1000); // 1000 chars per chunk
+      // Forward to iplc-ai worker for embedding
+      const embedResponse = await env.AI_WORKER.fetch('https://iplc-ai.workers.dev/embed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          texts: [text], // The iplc-ai worker expects a texts array
+          metadata: {
+            documentId,
+            conversationId,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            uploadedAt: new Date().toISOString()
+          }
+        })
+      });
+
+      if (!embedResponse.ok) {
+        const errorData = await embedResponse.json();
+        throw new Error(errorData.error || 'Failed to embed document');
+      }
+
+      const result = await embedResponse.json();
       
-      // Store document metadata in KV
+      // Store document metadata locally for listing
       const documentMetadata = {
         id: documentId,
         name: file.name,
@@ -35,7 +62,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         type: file.type,
         uploadedAt: new Date().toISOString(),
         conversationId,
-        chunks: chunks.length
+        chunks: result.chunks
       };
       
       await env.CHAT_HISTORY.put(
@@ -48,50 +75,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
           }
         }
       );
-
-      // Store chunks and create vector embeddings
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkId = `${documentId}-${i}`;
-        const chunkText = chunks[i];
-        
-        // Store chunk in KV
-        await env.CHAT_HISTORY.put(
-          `chunk:${chunkId}`,
-          JSON.stringify({
-            id: chunkId,
-            documentId,
-            conversationId,
-            text: chunkText,
-            index: i
-          })
-        );
-
-        // Create vector embedding using Workers AI with retry logic
-        try {
-          const embedding = await callAIWithRetry(
-            env,
-            '@cf/baai/bge-base-en-v1.5',
-            {
-              text: chunkText
-            }
-          );
-          
-          // Store in Vectorize
-          await env.VECTORIZE.insert([{
-            id: chunkId,
-            values: embedding.data[0],
-            metadata: {
-              documentId,
-              conversationId,
-              documentName: file.name,
-              chunkIndex: i
-            }
-          }]);
-        } catch (error) {
-          console.error('Failed to create embedding for chunk:', error);
-          // Continue processing other chunks even if one fails
-        }
-      }
 
       uploadedDocuments.push(documentMetadata);
     }

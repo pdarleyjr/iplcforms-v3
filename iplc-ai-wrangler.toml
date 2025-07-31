@@ -1,0 +1,26 @@
+name = "iplc-ai"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+# AI binding configuration
+[ai]
+binding = "AI"
+
+# Vectorize configuration for document embeddings
+[[vectorize]]
+binding = "DOC_INDEX"
+index_name = "iplc-chat-index"
+
+# KV namespace for document metadata
+[[kv_namespaces]]
+binding = "DOC_METADATA"
+# ID will be automatically generated on first deployment
+
+# Durable Objects for session management
+[[durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionDO"
+
+# Cron triggers for scheduled cleanup
+[triggers]
+crons = ["0 2 * * *"]  # Run daily at 2 AM UTC

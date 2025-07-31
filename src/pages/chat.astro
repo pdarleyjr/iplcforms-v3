@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import { ChatInterface } from '@/components/chat/ChatInterface';
+import { NotebookLMInterface } from '@/components/chat/NotebookLMInterface';
 
 const title = 'AI Assistant Chat';
 const description = 'Chat with AI assistant and analyze documents';
@@ -8,6 +8,6 @@ const description = 'Chat with AI assistant and analyze documents';
 
 <AdminLayout title={title}>
   <div class="h-full">
-    <ChatInterface client:load />
+    <NotebookLMInterface client:load />
   </div>
 </AdminLayout>

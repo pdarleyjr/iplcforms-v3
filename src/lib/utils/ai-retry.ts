@@ -227,31 +227,39 @@ export function isRetryableError(error: any): boolean {
   // Check for specific error codes and messages
   const errorMessage = error.message?.toLowerCase() || '';
   const errorStatus = error.status || 0;
+  const errorCode = error.cause?.code;
   
   // Retryable conditions:
   // - 429 (Rate limit)
   // - 503 (Service unavailable)
-  // - Capacity errors (3040)
+  // - 3040 (Capacity exceeded)
   // - Temporary unavailability messages
+  
+  // Check HTTP status codes
   if (errorStatus === 429 || errorStatus === 503) {
     return true;
   }
   
-  if (errorMessage.includes('3040') || 
-      errorMessage.includes('capacity') ||
-      errorMessage.includes('temporarily unavailable') ||
-      errorMessage.includes('timeout') ||
-      errorMessage.includes('try again')) {
+  // Check for capacity error code 3040
+  if (errorCode === 3040) {
     return true;
   }
   
-  // Check for Cloudflare-specific error codes
-  if (error.cause?.code === 3040 || // Capacity
-      error.cause?.code === 3036 || // Account limited
-      error.cause?.code === 5016 || // Binding not allowed
-      error.cause?.code === 3041) { // Model not allowed
-    // Only retry capacity errors
-    return error.cause?.code === 3040;
+  // Check error messages for retryable patterns
+  if (errorMessage.includes('3040') ||
+      errorMessage.includes('capacity') ||
+      errorMessage.includes('temporarily unavailable') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('try again') ||
+      errorMessage.includes('service unavailable')) {
+    return true;
+  }
+  
+  // Non-retryable error codes
+  if (errorCode === 3036 || // Account limited (quota)
+      errorCode === 5016 || // Binding not allowed (config issue)
+      errorCode === 3041) { // Model not allowed (permission)
+    return false;
   }
   
   return false;
