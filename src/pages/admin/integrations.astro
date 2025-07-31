@@ -1,0 +1,379 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Alert, AlertDescription } from '../../components/ui/alert';
+import { Shield, Cloud, MessageSquare, Mail } from 'lucide-react';
+
+// Check authentication
+const auth = Astro.request.headers.get('authorization');
+if (!auth) {
+  return new Response(null, {
+    status: 401,
+    headers: {
+      'WWW-Authenticate': 'Basic realm="IPLC Forms"'
+    }
+  });
+}
+---
+
+<Layout title="Integrations - IPLC Forms">
+  <main class="container mx-auto p-6">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold tracking-tight">Third-Party Integrations</h1>
+      <p class="text-muted-foreground mt-2">
+        Connect IPLC Forms with external services for data export and notifications.
+      </p>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2">
+      <!-- Nextcloud Integration -->
+      <Card>
+        <CardHeader>
+          <div class="flex items-center gap-3">
+            <Cloud className="h-8 w-8 text-primary" />
+            <div>
+              <CardTitle>Nextcloud Export</CardTitle>
+              <CardDescription>
+                Export form submissions to your Nextcloud instance via WebDAV
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form id="nextcloud-form" class="space-y-4">
+            <div>
+              <Label htmlFor="nextcloud-url">Nextcloud URL</Label>
+              <Input
+                id="nextcloud-url"
+                name="nextcloudUrl"
+                type="url"
+                placeholder="https://your-nextcloud.com"
+                required
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Your Nextcloud instance URL (without trailing slash)
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="nextcloud-username">Username</Label>
+              <Input
+                id="nextcloud-username"
+                name="nextcloudUsername"
+                type="text"
+                placeholder="your-username"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="nextcloud-password">App Password</Label>
+              <Input
+                id="nextcloud-password"
+                name="nextcloudPassword"
+                type="password"
+                placeholder="xxxx-xxxx-xxxx-xxxx"
+                required
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Use an app-specific password for security
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="nextcloud-path">Export Path</Label>
+              <Input
+                id="nextcloud-path"
+                name="nextcloudPath"
+                type="text"
+                placeholder="/Documents/IPLC Forms"
+                value="/Documents/IPLC Forms"
+                required
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Folder path in Nextcloud where exports will be saved
+              </p>
+            </div>
+            
+            <Button type="submit" className="w-full">
+              <Shield className="mr-2 h-4 w-4" />
+              Save Nextcloud Configuration
+            </Button>
+          </form>
+          
+          <Alert id="nextcloud-status" className="mt-4 hidden">
+            <AlertDescription></AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      <!-- Slack Notifications -->
+      <Card>
+        <CardHeader>
+          <div class="flex items-center gap-3">
+            <MessageSquare className="h-8 w-8 text-primary" />
+            <div>
+              <CardTitle>Slack Notifications</CardTitle>
+              <CardDescription>
+                Get real-time notifications for new form submissions
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form id="slack-form" class="space-y-4">
+            <div>
+              <Label htmlFor="slack-webhook">Webhook URL</Label>
+              <Input
+                id="slack-webhook"
+                name="slackWebhook"
+                type="url"
+                placeholder="https://hooks.slack.com/services/..."
+                required
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Get this from your Slack app's Incoming Webhooks
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="slack-channel">Channel Name (Optional)</Label>
+              <Input
+                id="slack-channel"
+                name="slackChannel"
+                type="text"
+                placeholder="#form-submissions"
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Override the default webhook channel
+              </p>
+            </div>
+            
+            <Button type="submit" className="w-full">
+              <Shield className="mr-2 h-4 w-4" />
+              Save Slack Configuration
+            </Button>
+          </form>
+          
+          <Alert id="slack-status" className="mt-4 hidden">
+            <AlertDescription></AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      <!-- Email Notifications -->
+      <Card>
+        <CardHeader>
+          <div class="flex items-center gap-3">
+            <Mail className="h-8 w-8 text-primary" />
+            <div>
+              <CardTitle>Email Notifications</CardTitle>
+              <CardDescription>
+                Send form submissions via email using MailChannels
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form id="email-form" class="space-y-4">
+            <div>
+              <Label htmlFor="email-to">Recipient Email(s)</Label>
+              <Input
+                id="email-to"
+                name="emailTo"
+                type="email"
+                placeholder="admin@example.com"
+                required
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Comma-separated for multiple recipients
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="email-from">From Email</Label>
+              <Input
+                id="email-from"
+                name="emailFrom"
+                type="email"
+                placeholder="noreply@iplcforms.com"
+                value="noreply@iplcforms.com"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="email-subject">Subject Template</Label>
+              <Input
+                id="email-subject"
+                name="emailSubject"
+                type="text"
+                placeholder="New Form Submission: {formTitle}"
+                value="New Form Submission: {formTitle}"
+                required
+              />
+              <p class="text-sm text-muted-foreground mt-1">
+                Use {formTitle} and {submissionId} as placeholders
+              </p>
+            </div>
+            
+            <Button type="submit" className="w-full">
+              <Shield className="mr-2 h-4 w-4" />
+              Save Email Configuration
+            </Button>
+          </form>
+          
+          <Alert id="email-status" className="mt-4 hidden">
+            <AlertDescription></AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      <!-- Webhook Integration -->
+      <Card>
+        <CardHeader>
+          <div class="flex items-center gap-3">
+            <Shield className="h-8 w-8 text-primary" />
+            <div>
+              <CardTitle>Custom Webhook</CardTitle>
+              <CardDescription>
+                Send form data to any HTTP endpoint
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form id="webhook-form" class="space-y-4">
+            <div>
+              <Label htmlFor="webhook-url">Endpoint URL</Label>
+              <Input
+                id="webhook-url"
+                name="webhookUrl"
+                type="url"
+                placeholder="https://api.example.com/webhook"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="webhook-method">HTTP Method</Label>
+              <select
+                id="webhook-method"
+                name="webhookMethod"
+                className="w-full rounded-md border border-input bg-background px-3 py-2"
+                required
+              >
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+              </select>
+            </div>
+            
+            <div>
+              <Label htmlFor="webhook-headers">Headers (JSON)</Label>
+              <textarea
+                id="webhook-headers"
+                name="webhookHeaders"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 min-h-[80px] font-mono text-sm"
+                placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
+              ></textarea>
+              <p class="text-sm text-muted-foreground mt-1">
+                Optional JSON object with custom headers
+              </p>
+            </div>
+            
+            <Button type="submit" className="w-full">
+              <Shield className="mr-2 h-4 w-4" />
+              Save Webhook Configuration
+            </Button>
+          </form>
+          
+          <Alert id="webhook-status" className="mt-4 hidden">
+            <AlertDescription></AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    </div>
+  </main>
+
+  <script>
+    // Generic form handler for saving integration configurations
+    async function handleIntegrationForm(formId: string, endpoint: string) {
+      const form = document.getElementById(formId) as HTMLFormElement;
+      const statusAlert = document.getElementById(`${formId.split('-')[0]}-status`) as HTMLElement;
+      
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+          statusAlert.classList.remove('hidden');
+          statusAlert.querySelector('.text-sm')!.textContent = 'Saving configuration...';
+          statusAlert.classList.remove('border-destructive', 'text-destructive');
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            statusAlert.querySelector('.text-sm')!.textContent = result.message || 'Configuration saved successfully!';
+            statusAlert.classList.add('border-green-500', 'text-green-600');
+            
+            // Clear sensitive fields
+            form.querySelectorAll('input[type="password"]').forEach((input) => {
+              (input as HTMLInputElement).value = '';
+            });
+          } else {
+            throw new Error(result.error || 'Failed to save configuration');
+          }
+        } catch (error) {
+          statusAlert.querySelector('.text-sm')!.textContent = error instanceof Error ? error.message : 'An error occurred';
+          statusAlert.classList.add('border-destructive', 'text-destructive');
+        }
+      });
+    }
+    
+    // Initialize all form handlers
+    handleIntegrationForm('nextcloud-form', '/api/integrations/nextcloud');
+    handleIntegrationForm('slack-form', '/api/integrations/slack');
+    handleIntegrationForm('email-form', '/api/integrations/email');
+    handleIntegrationForm('webhook-form', '/api/integrations/webhook');
+    
+    // Load existing configurations on page load
+    async function loadConfigurations() {
+      try {
+        const response = await fetch('/api/integrations/status');
+        if (response.ok) {
+          const status = await response.json();
+          
+          // Update UI to show which integrations are configured
+          Object.entries(status).forEach(([integration, isConfigured]) => {
+            if (isConfigured) {
+              const statusAlert = document.getElementById(`${integration}-status`);
+              if (statusAlert) {
+                statusAlert.classList.remove('hidden');
+                statusAlert.querySelector('.text-sm')!.textContent = 'Integration configured';
+                statusAlert.classList.add('border-green-500', 'text-green-600');
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load integration status:', error);
+      }
+    }
+    
+    loadConfigurations();
+  </script>
+</Layout>
