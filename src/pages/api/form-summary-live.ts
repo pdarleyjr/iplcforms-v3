@@ -2,40 +2,11 @@
 // IPLC Forms v3
 
 import type { APIRoute } from 'astro';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.SUPABASE_URL;
-const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing required environment variables');
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime.env;
   
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
     // Parse request body
     const body = await request.json() as {
       selectedFields: string[];
@@ -133,16 +104,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const truncatedSummary = summary.length > maxLength 
       ? summary.substring(0, maxLength - 3) + '...'
       : summary;
-
-    // Log summary generation for audit purposes
-    await supabase.from('ai_summary_logs').insert({
-      user_id: user.id,
-      summary_content: truncatedSummary,
-      source_fields: selectedFields,
-      field_count: selectedFields.length,
-      config: summaryConfig,
-      created_at: new Date().toISOString()
-    });
 
     return new Response(JSON.stringify({
       summary: truncatedSummary,

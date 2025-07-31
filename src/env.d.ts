@@ -9,13 +9,9 @@ declare global {
 
 // Environment variable types
 interface ImportMetaEnv {
-  readonly SUPABASE_URL: string;
-  readonly SUPABASE_ANON_KEY: string;
   readonly CLOUDFLARE_D1_TOKEN: string;
   readonly CLOUDFLARE_ACCOUNT_ID: string;
   readonly CLOUDFLARE_DATABASE_ID: string;
-  readonly PUBLIC_SUPABASE_URL: string;
-  readonly PUBLIC_SUPABASE_ANON_KEY: string;
 }
 
 interface ImportMeta {
@@ -30,8 +26,6 @@ interface WorkerEnv {
   METRICS_KV: KVNamespace;
   CACHE_KV: KVNamespace;
   CHAT_HISTORY: KVNamespace;
-  SUPABASE_URL: string;
-  SUPABASE_ANON_KEY: string;
   AI: any; // Cloudflare AI binding
   AI_WORKER: Fetcher; // AI Worker service binding
   VECTORIZE: any; // Vectorize index binding

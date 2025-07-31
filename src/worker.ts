@@ -190,8 +190,6 @@ export function createExports(manifest: SSRManifest) {
       const astroEnv = {
         // Environment variables from .dev.vars
         API_TOKEN: env.API_TOKEN,
-        SUPABASE_URL: env.SUPABASE_URL,
-        SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY,
         CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
         CLOUDFLARE_D1_TOKEN: env.CLOUDFLARE_D1_TOKEN,
         CLOUDFLARE_DATABASE_ID: env.CLOUDFLARE_DATABASE_ID,
