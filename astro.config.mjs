@@ -73,7 +73,7 @@ export default defineConfig({
       minify: "esbuild",
       sourcemap: true,
       rollupOptions: {
-        external: ["openai", "@supabase/supabase-js"],
+        external: ["openai"],
         output: {
           manualChunks: {
             'react-vendor': ['react', 'react-dom'],
@@ -86,7 +86,7 @@ export default defineConfig({
     },
     // Enhanced SSR optimization
     ssr: {
-      external: ["@astrojs/cloudflare", "openai", "@supabase/supabase-js"],
+      external: ["@astrojs/cloudflare", "openai"],
       noExternal: ["react-hook-form", "lucide-react"]
     }
   },
