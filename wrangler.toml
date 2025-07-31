@@ -1,0 +1,53 @@
+name = "iplcforms-v3"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+# AI binding for Cloudflare Workers AI
+# Configured via API on 2025-07-31 to fix production AI service
+[ai]
+binding = "AI"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "admin-db"
+database_id = "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "SESSION"
+id = "b68836e642d84fd08a40b96879cbda47"
+
+[[kv_namespaces]]
+binding = "CHAT_HISTORY"
+id = "11baf1c1465d4b03afbe59fdfcdfe1b8"
+
+[[kv_namespaces]]
+binding = "METRICS_KV"
+id = "b34d60620f6b422c84f196271228c56b"
+
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "f0468576601a4935b68069b4e54157e4"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "FORM_SESSION"
+class_name = "FormSessionDO"
+
+# Vectorize
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "iplc-forms-chat"
+
+# Service bindings
+[[services]]
+binding = "AI_WORKER"
+service = "iplc-ai"
+
+# Workflows
+[[workflows]]
+name = "saas-admin-template-customer-workflow"
+binding = "CUSTOMER_WORKFLOW"
+class_name = "CustomerWorkflow"
