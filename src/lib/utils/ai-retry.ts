@@ -6,7 +6,8 @@ export const AI_MAX_RETRIES = 3;
 export const AI_INITIAL_RETRY_DELAY = 1000; // 1 second
 export const AI_MAX_RETRY_DELAY = 16000; // 16 seconds
 export const AI_RATE_LIMIT_WINDOW = 60000; // 1 minute window
-export const AI_RATE_LIMIT_MAX_REQUESTS = 300; // 300 requests per minute
+export const AI_RATE_LIMIT_MAX_REQUESTS = 20; // Free tier: 20 requests per minute
+export const AI_MAX_CONCURRENT_REQUESTS = 2; // Free tier: 2 concurrent GPU jobs
 
 // Rate limiter for AI requests
 export class RateLimiter {
@@ -37,8 +38,52 @@ export class RateLimiter {
   }
 }
 
+// Concurrent request tracking
+export class ConcurrencyLimiter {
+  private activeRequests = 0;
+  private queue: Array<() => void> = [];
+  
+  constructor(private maxConcurrent: number) {}
+  
+  async acquire(): Promise<void> {
+    if (this.activeRequests < this.maxConcurrent) {
+      this.activeRequests++;
+      return;
+    }
+    
+    // Wait in queue
+    return new Promise<void>((resolve) => {
+      this.queue.push(resolve);
+    });
+  }
+  
+  release(): void {
+    this.activeRequests--;
+    
+    // Process next in queue if any
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) {
+        this.activeRequests++;
+        next();
+      }
+    }
+  }
+  
+  getActiveCount(): number {
+    return this.activeRequests;
+  }
+  
+  getQueueLength(): number {
+    return this.queue.length;
+  }
+}
+
 // Shared rate limiter instance
 export const aiRateLimiter = new RateLimiter(AI_RATE_LIMIT_WINDOW, AI_RATE_LIMIT_MAX_REQUESTS);
+
+// Shared concurrency limiter instance
+export const aiConcurrencyLimiter = new ConcurrencyLimiter(AI_MAX_CONCURRENT_REQUESTS);
 
 // Exponential retry wrapper for AI calls
 export async function callAIWithRetry(
@@ -50,17 +95,35 @@ export async function callAIWithRetry(
   let lastError: Error | null = null;
   let retryDelay = AI_INITIAL_RETRY_DELAY;
   
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      // Check rate limit
-      const canProceed = await aiRateLimiter.checkLimit();
-      if (!canProceed) {
-        const waitTime = aiRateLimiter.getTimeUntilNextRequest();
-        console.log(`Rate limit reached, waiting ${waitTime}ms before retry`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        // Recheck after waiting
-        await aiRateLimiter.checkLimit();
-      }
+  // Check if we're at concurrency limit
+  const activeCount = aiConcurrencyLimiter.getActiveCount();
+  const queueLength = aiConcurrencyLimiter.getQueueLength();
+  
+  if (activeCount >= AI_MAX_CONCURRENT_REQUESTS && queueLength > 0) {
+    console.log(`Concurrency limit reached: ${activeCount} active requests, ${queueLength} queued`);
+  }
+  
+  // Acquire concurrency slot
+  await aiConcurrencyLimiter.acquire();
+  
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Check rate limit
+        const canProceed = await aiRateLimiter.checkLimit();
+        if (!canProceed) {
+          const waitTime = aiRateLimiter.getTimeUntilNextRequest();
+          console.log(`Rate limit reached (20 req/min), waiting ${waitTime}ms before retry`);
+          
+          // If we're hitting rate limits, it might be due to free tier restrictions
+          if (waitTime > 30000) {
+            throw new Error('Rate limit exceeded. Free tier allows 20 requests per minute. Please wait before trying again.');
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          // Recheck after waiting
+          await aiRateLimiter.checkLimit();
+        }
       
       // Make the AI call
       // Since native AI binding doesn't exist in production, use AI_WORKER
@@ -101,7 +164,19 @@ export async function callAIWithRetry(
         // Fallback to native AI binding if available (development)
         response = await env.AI.run(model, params);
       } else {
-        throw new Error('No AI service available');
+        // More detailed error for missing AI binding
+        console.error('AI Binding Configuration Error:', {
+          AI_WORKER: !!env.AI_WORKER,
+          AI: !!env.AI,
+          availableBindings: Object.keys(env).filter(key => !key.startsWith('__'))
+        });
+        
+        const bindingError = new Error('workers-ai-failed: AI service binding not configured');
+        bindingError.cause = {
+          code: 5016,
+          message: 'No AI binding available. Please ensure AI binding is configured in wrangler.toml and deployed.'
+        };
+        throw bindingError;
       }
       
       // Success! Return the response
@@ -139,8 +214,12 @@ export async function callAIWithRetry(
     }
   }
   
-  // Should never reach here, but just in case
-  throw lastError || new Error('AI call failed after all retries');
+    // Should never reach here, but just in case
+    throw lastError || new Error('AI call failed after all retries');
+  } finally {
+    // Always release concurrency slot
+    aiConcurrencyLimiter.release();
+  }
 }
 
 // Check if error is retryable
@@ -219,6 +298,10 @@ export function getErrorType(error: any): string {
     return 'unavailable';
   }
   
+  if (errorMessage.includes('workers-ai-failed') || errorMessage.includes('binding not configured')) {
+    return 'configuration';
+  }
+  
   return 'unknown';
 }
 
@@ -244,6 +327,9 @@ export function formatAIError(error: any): { message: string; details: string } 
       break;
     case 'unavailable':
       message = 'AI service is temporarily unavailable';
+      break;
+    case 'configuration':
+      message = 'AI service is not properly configured. Please contact support.';
       break;
     default:
       message = 'AI service error occurred';

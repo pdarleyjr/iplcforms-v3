@@ -4,6 +4,7 @@ import { Input } from '../ui/input';
 import { Card } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import {
   Send,
   Upload,
@@ -24,7 +25,8 @@ import {
   Share2,
   Check,
   Copy,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -89,6 +91,7 @@ export function ChatInterface() {
   const [shareUrl, setShareUrl] = useState('');
   const [sharingMessageId, setSharingMessageId] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -193,6 +196,7 @@ export function ChatInterface() {
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
+    setAiError(null); // Clear any previous errors
 
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
@@ -332,15 +336,44 @@ export function ChatInterface() {
           )
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Chat error:', error);
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === assistantMessage.id 
-            ? { ...msg, content: 'Sorry, an error occurred. Please try again.', streaming: false }
+      
+      let errorMessage = 'Sorry, an error occurred. Please try again.';
+      let showErrorBanner = false;
+      
+      // Check for specific AI service errors
+      if (error instanceof Error) {
+        if (error.message.includes('workers-ai-failed') ||
+            error.message.includes('AI service is at capacity') ||
+            error.message.includes('Rate limit exceeded') ||
+            error.message.includes('rate limit') ||
+            error.message.includes('Daily quota limit reached') ||
+            error.message.includes('AI service access denied') ||
+            error.message.includes('AI service is temporarily unavailable') ||
+            error.message.includes('AI service is not properly configured') ||
+            error.message.includes('Concurrency limit') ||
+            error.message.includes('concurrent')) {
+          // Extract the user-friendly message part (before the dash)
+          const parts = error.message.split(' - ');
+          errorMessage = parts[0] || error.message;
+          showErrorBanner = true;
+          setAiError(errorMessage);
+        }
+      }
+      
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantMessage.id
+            ? { ...msg, content: showErrorBanner ? '' : errorMessage, streaming: false }
             : msg
         )
       );
+      
+      // Remove empty assistant message if we're showing the banner
+      if (showErrorBanner) {
+        setMessages(prev => prev.filter(msg => msg.id !== assistantMessage.id));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -773,6 +806,31 @@ export function ChatInterface() {
         {/* Chat Messages */}
         <ScrollArea className="flex-1 px-6">
           <div className="max-w-3xl mx-auto py-6">
+            {/* AI Error Banner */}
+            {aiError && (
+              <Alert variant="warning" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>AI Service Issue</AlertTitle>
+                <AlertDescription>
+                  {aiError}
+                  {(aiError.includes('quota') || aiError.toLowerCase().includes('rate limit')) && (
+                    <p className="mt-2 text-sm">
+                      Free tier limits: 100k requests/day, 20 requests/minute, 2 concurrent GPU jobs. Consider upgrading for better performance.
+                    </p>
+                  )}
+                  {aiError.includes('capacity') && (
+                    <p className="mt-2 text-sm">
+                      The AI service is experiencing high demand. Please wait a moment and try again.
+                    </p>
+                  )}
+                  {(aiError.toLowerCase().includes('concurrent') || aiError.includes('Concurrency limit')) && (
+                    <p className="mt-2 text-sm">
+                      The free tier allows only 2 concurrent AI requests. Your request has been queued and will process when a slot becomes available.
+                    </p>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
             {messages.length === 0 ? (
               <div className="text-center py-12">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end mb-4">
