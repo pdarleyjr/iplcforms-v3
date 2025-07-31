@@ -168,6 +168,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
       } catch (error) {
         console.error('Vector search error:', error);
+        // Don't throw here, just continue without vector search results
+        // This allows the chat to work even if vector search fails
       }
     }
 
@@ -275,51 +277,75 @@ Instructions:
           });
 
           // Call AI with streaming
-          const aiResponse = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
-            messages,
-            stream: true,
-            max_tokens: 1024,
-            temperature: 0.7
-          });
+          let aiResponse;
+          try {
+            aiResponse = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
+              messages,
+              stream: true,
+              max_tokens: 1024,
+              temperature: 0.7
+            });
+          } catch (aiError) {
+            console.error('AI API error:', aiError);
+            throw new Error(`AI service error: ${aiError instanceof Error ? aiError.message : 'Failed to call AI service'}`);
+          }
 
           let fullResponse = '';
           
           // Process streaming response
-          for await (const chunk of aiResponse) {
-            if (chunk.response) {
-              fullResponse += chunk.response;
-              writeData({ content: chunk.response });
+          try {
+            for await (const chunk of aiResponse) {
+              if (chunk.response) {
+                fullResponse += chunk.response;
+                writeData({ content: chunk.response });
+              }
             }
+          } catch (streamError) {
+            console.error('Stream processing error:', streamError);
+            throw new Error(`Stream processing error: ${streamError instanceof Error ? streamError.message : 'Failed to process AI response'}`);
           }
           
           // Flush any remaining buffer
           flushBuffer();
 
-          // Store assistant message
-          const assistantMessageId = `${convId}:${nanoid()}`;
-          const assistantMessageData = {
-            id: assistantMessageId,
-            conversationId: convId,
-            role: 'assistant',
-            content: fullResponse,
-            timestamp: new Date().toISOString()
-          };
-          await env.CHAT_HISTORY.put(
-            `msg:${assistantMessageId}`,
-            JSON.stringify(assistantMessageData)
-          );
+          // Store assistant message only if we have a response
+          if (fullResponse) {
+            const assistantMessageId = `${convId}:${nanoid()}`;
+            const assistantMessageData = {
+              id: assistantMessageId,
+              conversationId: convId,
+              role: 'assistant',
+              content: fullResponse,
+              timestamp: new Date().toISOString()
+            };
+            
+            try {
+              await env.CHAT_HISTORY.put(
+                `msg:${assistantMessageId}`,
+                JSON.stringify(assistantMessageData)
+              );
+            } catch (kvError) {
+              console.error('Failed to store assistant message:', kvError);
+              // Don't throw here, just log the error
+            }
 
-          // Update conversation metadata
-          await env.CHAT_HISTORY.put(
-            `conv:${convId}`,
-            JSON.stringify({
-              id: convId,
-              title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
-              lastMessage: fullResponse.substring(0, 100) + (fullResponse.length > 100 ? '...' : ''),
-              timestamp: new Date().toISOString(),
-              messageCount: conversationHistory.length + 2
-            })
-          );
+            // Update conversation metadata
+            try {
+              await env.CHAT_HISTORY.put(
+                `conv:${convId}`,
+                JSON.stringify({
+                  id: convId,
+                  title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+                  lastMessage: fullResponse.substring(0, 100) + (fullResponse.length > 100 ? '...' : ''),
+                  timestamp: new Date().toISOString(),
+                  messageCount: conversationHistory.length + 2
+                })
+              );
+            } catch (kvError) {
+              console.error('Failed to update conversation metadata:', kvError);
+              // Don't throw here, just log the error
+            }
+          }
 
           // Send completion signal
           writeData({ done: true });
@@ -340,9 +366,29 @@ Instructions:
         } catch (error) {
           console.error('Streaming error:', error);
           monitor.recordError(connectionId);
+          
+          // Provide more specific error messages
+          let errorMessage = 'An error occurred while processing your request';
+          let errorDetails = 'Unknown error';
+          
+          if (error instanceof Error) {
+            errorDetails = error.message;
+            
+            // Check for specific error types
+            if (error.message.includes('AI service error')) {
+              errorMessage = 'AI service is temporarily unavailable';
+            } else if (error.message.includes('Stream processing error')) {
+              errorMessage = 'Failed to process AI response';
+            } else if (error.message.includes('Vector search error')) {
+              errorMessage = 'Document search failed';
+            } else if (error.message.includes('KV')) {
+              errorMessage = 'Storage service error';
+            }
+          }
+          
           writeData({
-            error: 'An error occurred while processing your request',
-            details: error instanceof Error ? error.message : 'Unknown error'
+            error: errorMessage,
+            details: errorDetails
           });
           flushBuffer();
           controller.close();

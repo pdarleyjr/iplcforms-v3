@@ -4,6 +4,7 @@
 declare global {
   const METRICS_KV: KVNamespace;
   const CACHE_KV: KVNamespace;
+  const CHAT_HISTORY: KVNamespace;
 }
 
 // Environment variable types
@@ -27,8 +28,12 @@ interface WorkerEnv {
   CUSTOMER_WORKFLOW: DurableObjectNamespace;
   METRICS_KV: KVNamespace;
   CACHE_KV: KVNamespace;
+  CHAT_HISTORY: KVNamespace;
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
+  AI: any; // Cloudflare AI binding
+  AI_WORKER: Fetcher; // AI Worker service binding
+  VECTORIZE: any; // Vectorize index binding
 }
 
 // Export to ensure this is treated as a module
