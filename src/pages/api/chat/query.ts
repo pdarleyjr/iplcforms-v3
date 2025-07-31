@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
-import { getSSEPerformanceMonitor } from '../../lib/utils/sse-performance';
+import { getSSEPerformanceMonitor } from '../../../lib/utils/sse-performance';
 
 // Cache configuration
 const VECTORIZE_CACHE_TTL = 3600; // 1 hour cache for vector search results
