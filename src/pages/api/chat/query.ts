@@ -1,5 +1,14 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
+import { getSSEPerformanceMonitor } from '../../lib/utils/sse-performance';
+
+// Cache configuration
+const VECTORIZE_CACHE_TTL = 3600; // 1 hour cache for vector search results
+const CONVERSATION_CACHE_TTL = 1800; // 30 minutes for conversation history
+
+// Optimized SSE configuration
+const SSE_PING_INTERVAL = 30000; // Send ping every 30 seconds to keep connection alive
+const SSE_BUFFER_SIZE = 1024 * 16; // 16KB buffer for optimal streaming
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
@@ -16,83 +25,140 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // Create or use existing conversation
     const convId = conversationId || nanoid();
-
-    // Retrieve conversation history for context window management
-    const conversationHistory: any[] = [];
-    const historyKeys = await env.CHAT_HISTORY.list({ prefix: `msg:` });
     
-    for (const key of historyKeys.keys) {
-      const msgData = await env.CHAT_HISTORY.get(key.name);
-      if (msgData) {
-        const msg = JSON.parse(msgData);
-        if (msg.conversationId === convId) {
-          conversationHistory.push(msg);
-        }
+    // Optimize conversation history retrieval with caching
+    const historyCacheKey = `conv_history:${convId}`;
+    let conversationHistory: any[] = [];
+    
+    // Try to get from cache first
+    const cachedHistory = await env.CACHE_KV?.get(historyCacheKey, { type: 'json' });
+    if (cachedHistory) {
+      conversationHistory = cachedHistory as any[];
+    } else {
+      // Retrieve from KV with pagination for better performance
+      const historyKeys = await env.CHAT_HISTORY.list({
+        prefix: `msg:${convId}:`,
+        limit: 100 // Limit to recent 100 messages
+      });
+      
+      // Batch fetch messages
+      const batchSize = 10;
+      for (let i = 0; i < historyKeys.keys.length; i += batchSize) {
+        const batch = historyKeys.keys.slice(i, i + batchSize);
+        const promises = batch.map(key => env.CHAT_HISTORY.get(key.name));
+        const results = await Promise.all(promises);
+        
+        results.forEach((msgData, index) => {
+          if (msgData) {
+            conversationHistory.push(JSON.parse(msgData));
+          }
+        });
+      }
+      
+      // Sort and cache
+      conversationHistory.sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      
+      if (env.CACHE_KV) {
+        await env.CACHE_KV.put(
+          historyCacheKey,
+          JSON.stringify(conversationHistory),
+          { expirationTtl: CONVERSATION_CACHE_TTL }
+        );
       }
     }
 
-    // Sort messages by timestamp
-    conversationHistory.sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    // Context window management: prune old messages if exceeding 128KB
+    // Optimized context window management
     const MAX_CONTEXT_SIZE = 128 * 1024; // 128KB
     let contextSize = 0;
     const recentMessages = [];
     
-    // Start from the most recent messages and work backwards
     for (let i = conversationHistory.length - 1; i >= 0; i--) {
       const msg = conversationHistory[i];
       const msgSize = new TextEncoder().encode(JSON.stringify(msg)).length;
       
       if (contextSize + msgSize > MAX_CONTEXT_SIZE && recentMessages.length > 0) {
-        break; // Stop if we exceed the limit (but keep at least one message)
+        break;
       }
       
       contextSize += msgSize;
-      recentMessages.unshift(msg); // Add to beginning to maintain order
+      recentMessages.unshift(msg);
     }
     
-    // Build conversation context from pruned messages for AI
+    // Build conversation context
     const conversationContext = recentMessages.map(msg => ({
       role: msg.role,
       content: msg.content
     }));
     
-    // Retrieve relevant context from uploaded documents using vector search
+    // Optimized vector search with caching
     let context = '';
     let relevantChunks: any[] = [];
+    
     if (documentIds && documentIds.length > 0) {
       try {
-        // Create embedding for the user's query
-        const queryEmbedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-          text: message
-        });
+        // Generate cache key for this query + documents combination
+        const queryHash = btoa(message + documentIds.join(',')).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+        const vectorCacheKey = `vector_search:${queryHash}`;
         
-        // Search for relevant chunks
-        const searchResults = await env.VECTORIZE.query(queryEmbedding.data[0], {
-          topK: 5,
-          filter: {
-            conversationId: convId
-          }
-        });
+        // Check cache first
+        const cachedResults = await env.CACHE_KV?.get(vectorCacheKey, { type: 'json' });
         
-        // Retrieve the actual chunk text from KV
-        const relevantChunks = [];
-        for (const result of searchResults.matches) {
-          const chunkData = await env.CHAT_HISTORY.get(`chunk:${result.id}`);
-          if (chunkData) {
-            const chunk = JSON.parse(chunkData);
-            relevantChunks.push({
-              text: chunk.text,
-              score: result.score,
-              documentName: result.metadata?.documentName
-            });
+        if (cachedResults) {
+          relevantChunks = cachedResults as any[];
+        } else {
+          // Create embedding for the user's query
+          const queryEmbedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+            text: message
+          });
+          
+          // Parallel vector searches for better performance
+          const searchPromises = documentIds.map(docId =>
+            env.VECTORIZE.query(queryEmbedding.data[0], {
+              topK: 3, // Reduced from 5 for better performance
+              filter: {
+                documentId: docId
+              }
+            })
+          );
+          
+          const searchResults = await Promise.all(searchPromises);
+          const allMatches = searchResults.flatMap(result => result.matches);
+          
+          // Sort by score and take top 5
+          allMatches.sort((a, b) => b.score - a.score);
+          const topMatches = allMatches.slice(0, 5);
+          
+          // Batch retrieve chunk text
+          const chunkPromises = topMatches.map(match =>
+            env.CHAT_HISTORY.get(`chunk:${match.id}`)
+          );
+          const chunkResults = await Promise.all(chunkPromises);
+          
+          relevantChunks = topMatches.map((match, index) => {
+            if (chunkResults[index]) {
+              const chunk = JSON.parse(chunkResults[index]);
+              return {
+                text: chunk.text,
+                score: match.score,
+                documentName: match.metadata?.documentName || chunk.documentName
+              };
+            }
+            return null;
+          }).filter(Boolean);
+          
+          // Cache the results
+          if (env.CACHE_KV && relevantChunks.length > 0) {
+            await env.CACHE_KV.put(
+              vectorCacheKey,
+              JSON.stringify(relevantChunks),
+              { expirationTtl: VECTORIZE_CACHE_TTL }
+            );
           }
         }
         
-        // Build context from relevant chunks with citation markers
+        // Build context from chunks
         if (relevantChunks.length > 0) {
           context = '\n\nRelevant context from uploaded documents:\n' +
             relevantChunks.map((chunk, index) =>
@@ -104,8 +170,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    // Store user message in conversation history
-    const userMessageId = nanoid();
+    // Store user message
+    const userMessageId = `${convId}:${nanoid()}`;
     const userMessageData = {
       id: userMessageId,
       conversationId: convId,
@@ -118,12 +184,57 @@ export const POST: APIRoute = async ({ request, locals }) => {
       JSON.stringify(userMessageData)
     );
 
-    // Create streaming response
+    // Invalidate conversation cache
+    if (env.CACHE_KV) {
+      await env.CACHE_KV.delete(historyCacheKey);
+    }
+
+    // Create optimized streaming response
     const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    
+    // Buffer for optimal streaming
+    let buffer = '';
+    let bufferSize = 0;
+    
     const stream = new ReadableStream({
       async start(controller) {
+        // Initialize performance monitoring
+        const connectionId = nanoid();
+        const monitor = getSSEPerformanceMonitor(env.CACHE_KV);
+        monitor.startConnection(connectionId);
+        
+        // Helper to flush buffer
+        const flushBuffer = () => {
+          if (buffer) {
+            const data = encoder.encode(buffer);
+            controller.enqueue(data);
+            monitor.recordChunk(connectionId, data.length);
+            buffer = '';
+            bufferSize = 0;
+          }
+        };
+        
+        // Helper to write data
+        const writeData = (data: any) => {
+          const chunk = `data: ${JSON.stringify(data)}\n\n`;
+          buffer += chunk;
+          bufferSize += chunk.length;
+          
+          if (bufferSize >= SSE_BUFFER_SIZE) {
+            flushBuffer();
+          }
+        };
+        
+        // Set up ping interval to keep connection alive
+        const pingInterval = setInterval(() => {
+          writeData({ ping: true });
+          flushBuffer();
+          monitor.recordPing(connectionId);
+        }, SSE_PING_INTERVAL);
+        
         try {
-          // Build the prompt with context and citation instructions
+          // Build the prompt
           const prompt = `You are a helpful AI assistant analyzing documents and answering questions.
 
 IMPORTANT: When referencing information from the provided documents, you MUST include inline citations using the format ^[n] where n is the document number shown in brackets below. Place citations immediately after the relevant statement.
@@ -138,7 +249,7 @@ Instructions:
 3. If the context doesn't contain relevant information, let the user know
 4. Use multiple citations if information comes from multiple sources`;
 
-          // Build messages array with conversation history
+          // Build messages array
           const messages = [
             {
               role: 'system',
@@ -151,16 +262,8 @@ Instructions:
             }
           ];
 
-          // Call the AI model with streaming
-          const aiResponse = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
-            messages,
-            stream: true
-          });
-
-          let fullResponse = '';
-          
-          // Send initial data with conversation ID and chunk metadata for citations
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          // Send initial data
+          writeData({
             conversationId: convId,
             chunks: relevantChunks.map((chunk, index) => ({
               id: index + 1,
@@ -168,18 +271,31 @@ Instructions:
               text: chunk.text,
               score: chunk.score
             }))
-          })}\n\n`));
+          });
 
-          // Stream the response
+          // Call AI with streaming
+          const aiResponse = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
+            messages,
+            stream: true,
+            max_tokens: 1024,
+            temperature: 0.7
+          });
+
+          let fullResponse = '';
+          
+          // Process streaming response
           for await (const chunk of aiResponse) {
             if (chunk.response) {
               fullResponse += chunk.response;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: chunk.response })}\n\n`));
+              writeData({ content: chunk.response });
             }
           }
+          
+          // Flush any remaining buffer
+          flushBuffer();
 
-          // Store assistant message in conversation history
-          const assistantMessageId = nanoid();
+          // Store assistant message
+          const assistantMessageId = `${convId}:${nanoid()}`;
           const assistantMessageData = {
             id: assistantMessageId,
             conversationId: convId,
@@ -192,13 +308,6 @@ Instructions:
             JSON.stringify(assistantMessageData)
           );
 
-          // Log context window size for monitoring
-          const totalSize = contextSize +
-            new TextEncoder().encode(JSON.stringify(userMessageData)).length +
-            new TextEncoder().encode(JSON.stringify(assistantMessageData)).length;
-          
-          console.log(`Context window size: ${(totalSize / 1024).toFixed(2)}KB of 128KB`);
-
           // Update conversation metadata
           await env.CHAT_HISTORY.put(
             `conv:${convId}`,
@@ -206,28 +315,51 @@ Instructions:
               id: convId,
               title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
               lastMessage: fullResponse.substring(0, 100) + (fullResponse.length > 100 ? '...' : ''),
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              messageCount: conversationHistory.length + 2
             })
           );
 
-          // Send final message
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          // Send completion signal
+          writeData({ done: true });
+          flushBuffer();
+          
           controller.close();
+          
+          // End performance monitoring
+          const metrics = await monitor.endConnection(connectionId);
+          if (metrics) {
+            console.log(`SSE Connection metrics: ${JSON.stringify({
+              duration: `${(metrics.totalDuration! / 1000).toFixed(2)}s`,
+              throughput: `${(metrics.throughput! / 1024).toFixed(2)}KB/s`,
+              chunks: metrics.chunksTransferred,
+              errors: metrics.errors
+            })}`);
+          }
         } catch (error) {
           console.error('Streaming error:', error);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            error: 'An error occurred while processing your request' 
-          })}\n\n`));
+          monitor.recordError(connectionId);
+          writeData({
+            error: 'An error occurred while processing your request',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          });
+          flushBuffer();
           controller.close();
+          await monitor.endConnection(connectionId);
+        } finally {
+          clearInterval(pingInterval);
         }
       }
     });
 
+    // Return optimized SSE response
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable Nginx buffering
+        'Transfer-Encoding': 'chunked'
       }
     });
 
