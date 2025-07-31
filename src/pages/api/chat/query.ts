@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
 // Force rebuild - correct import path
 import { getSSEPerformanceMonitor } from '../../../lib/utils/sse-performance';
+import { callAIWithRetry, formatAIError, getErrorType } from '../../../lib/utils/ai-retry';
 
 // Cache configuration
 const VECTORIZE_CACHE_TTL = 3600; // 1 hour cache for vector search results
@@ -109,10 +110,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (cachedResults) {
           relevantChunks = cachedResults as any[];
         } else {
-          // Create embedding for the user's query
-          const queryEmbedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-            text: message
-          });
+          // Create embedding for the user's query with retry logic
+          const queryEmbedding = await callAIWithRetry(
+            env,
+            '@cf/baai/bge-base-en-v1.5',
+            {
+              text: message
+            }
+          );
           
           // Parallel vector searches for better performance
           const searchPromises = documentIds.map(docId =>
@@ -276,33 +281,46 @@ Instructions:
             }))
           });
 
-          // Call AI with streaming
+          // Call AI with streaming and retry logic
           let aiResponse;
-          try {
-            aiResponse = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
-              messages,
-              stream: true,
-              max_tokens: 1024,
-              temperature: 0.7
-            });
-          } catch (aiError) {
-            console.error('AI API error:', aiError);
-            throw new Error(`AI service error: ${aiError instanceof Error ? aiError.message : 'Failed to call AI service'}`);
-          }
-
           let fullResponse = '';
           
-          // Process streaming response
           try {
-            for await (const chunk of aiResponse) {
-              if (chunk.response) {
-                fullResponse += chunk.response;
-                writeData({ content: chunk.response });
+            // Use the retry wrapper for AI calls
+            aiResponse = await callAIWithRetry(
+              env,
+              '@cf/meta/llama-2-7b-chat-int8',
+              {
+                messages,
+                stream: true,
+                max_tokens: 1024,
+                temperature: 0.7
+              }
+            );
+            
+            // Process streaming response
+            // Important: Don't double-read the stream, pipe it directly
+            if (aiResponse && typeof aiResponse[Symbol.asyncIterator] === 'function') {
+              for await (const chunk of aiResponse) {
+                if (chunk.response) {
+                  fullResponse += chunk.response;
+                  writeData({ content: chunk.response });
+                }
+              }
+            } else {
+              // Non-streaming response fallback
+              console.warn('AI response is not a stream, handling as regular response');
+              if (aiResponse?.response) {
+                fullResponse = aiResponse.response;
+                writeData({ content: fullResponse });
               }
             }
-          } catch (streamError) {
-            console.error('Stream processing error:', streamError);
-            throw new Error(`Stream processing error: ${streamError instanceof Error ? streamError.message : 'Failed to process AI response'}`);
+          } catch (aiError: any) {
+            console.error('AI service error after retries:', aiError);
+            
+            // Format error for better user experience
+            const { message, details } = formatAIError(aiError);
+            throw new Error(`${message} - ${details}`);
           }
           
           // Flush any remaining buffer
@@ -375,8 +393,17 @@ Instructions:
             errorDetails = error.message;
             
             // Check for specific error types
-            if (error.message.includes('AI service error')) {
-              errorMessage = 'AI service is temporarily unavailable';
+            if (error.message.includes('AI service is at capacity') ||
+                error.message.includes('Rate limit exceeded') ||
+                error.message.includes('Daily quota limit reached') ||
+                error.message.includes('AI service access denied') ||
+                error.message.includes('AI service is temporarily unavailable')) {
+              // Use the formatted error message directly
+              const parts = error.message.split(' - ');
+              errorMessage = parts[0];
+              if (parts[1]) {
+                errorDetails = parts[1];
+              }
             } else if (error.message.includes('Stream processing error')) {
               errorMessage = 'Failed to process AI response';
             } else if (error.message.includes('Vector search error')) {

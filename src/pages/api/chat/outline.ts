@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
+import { callAIWithRetry, formatAIError } from '../../../lib/utils/ai-retry';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
@@ -60,19 +61,30 @@ Please create a detailed outline of the key topics, main ideas, and important co
 
 Also include a brief executive summary at the beginning.`;
 
-    const aiResponse = await env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
-      messages: [
+    let aiResponse;
+    try {
+      aiResponse = await callAIWithRetry(
+        env,
+        '@cf/meta/llama-2-7b-chat-int8',
         {
-          role: 'system',
-          content: 'You are an expert document analyzer. Create clear, hierarchical outlines that capture the essence of documents.'
-        },
-        {
-          role: 'user',
-          content: prompt
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert document analyzer. Create clear, hierarchical outlines that capture the essence of documents.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 1500
         }
-      ],
-      max_tokens: 1500
-    });
+      );
+    } catch (aiError: any) {
+      console.error('AI service error:', aiError);
+      const { message, details } = formatAIError(aiError);
+      throw new Error(`${message} - ${details}`);
+    }
 
     const outlineId = nanoid();
     const outline = {

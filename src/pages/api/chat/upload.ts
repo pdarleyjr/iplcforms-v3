@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
+import { callAIWithRetry } from '../../../lib/utils/ai-retry';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
@@ -65,11 +66,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
           })
         );
 
-        // Create vector embedding using Workers AI
+        // Create vector embedding using Workers AI with retry logic
         try {
-          const embedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-            text: chunkText
-          });
+          const embedding = await callAIWithRetry(
+            env,
+            '@cf/baai/bge-base-en-v1.5',
+            {
+              text: chunkText
+            }
+          );
           
           // Store in Vectorize
           await env.VECTORIZE.insert([{
@@ -84,6 +89,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           }]);
         } catch (error) {
           console.error('Failed to create embedding for chunk:', error);
+          // Continue processing other chunks even if one fails
         }
       }
 
