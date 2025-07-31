@@ -59,7 +59,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const env = (locals as any).runtime?.env;
-    const body = await request.json() as {
+    
+    // Clone the request to read the body without consuming it
+    const requestClone = request.clone();
+    const body = await requestClone.json() as {
       sessionId: string;
       formData?: any;
       templateId?: number;
@@ -99,16 +102,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const id = env.FORM_SESSION.idFromName(sessionId);
     const stub = env.FORM_SESSION.get(id);
     
-    // Forward request to Durable Object
+    // Forward the original request to Durable Object
     const doUrl = new URL(request.url);
     doUrl.searchParams.set('sessionId', sessionId);
     
+    // Use the original request body
     const response = await stub.fetch(doUrl.toString(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
+      headers: request.headers,
+      body: request.body
     });
 
     return response;

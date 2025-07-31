@@ -231,52 +231,103 @@ export function ChatInterface() {
       if (reader) {
         let accumulatedContent = '';
         let citations: Citation[] = [];
+        let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          // Decode the chunk and add to buffer
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Split by double newline (SSE message separator)
+          const messages = buffer.split('\n\n');
+          
+          // Keep the last part in buffer (might be incomplete)
+          buffer = messages.pop() || '';
 
+          for (const message of messages) {
+            // Skip empty messages
+            if (!message.trim()) continue;
+            
+            // Process each line in the message
+            const lines = message.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const dataStr = line.slice(6).trim();
+                
+                // Skip empty data or ping messages
+                if (!dataStr || dataStr === '[DONE]') continue;
+                
+                try {
+                  const data = JSON.parse(dataStr);
+                  
+                  if (data.chunks) {
+                    // Store chunks for citation references
+                    setCurrentChunks(data.chunks);
+                    citations = data.chunks;
+                  }
+                  
+                  if (data.content) {
+                    accumulatedContent += data.content;
+                    setMessages(prev =>
+                      prev.map(msg =>
+                        msg.id === assistantMessage.id
+                          ? { ...msg, content: accumulatedContent, citations }
+                          : msg
+                      )
+                    );
+                  }
+
+                  if (data.conversationId && !currentConversationId) {
+                    setCurrentConversationId(data.conversationId);
+                    await loadConversations();
+                  }
+                  
+                  if (data.error) {
+                    console.error('SSE Error:', data.error);
+                    setMessages(prev =>
+                      prev.map(msg =>
+                        msg.id === assistantMessage.id
+                          ? { ...msg, content: data.error || 'An error occurred', streaming: false }
+                          : msg
+                      )
+                    );
+                    return;
+                  }
+                } catch (e) {
+                  console.error('Failed to parse SSE data:', e, 'Data:', dataStr);
+                }
+              }
+            }
+          }
+        }
+
+        // Process any remaining buffer
+        if (buffer.trim()) {
+          const lines = buffer.split('\n');
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                
-                if (data.chunks) {
-                  // Store chunks for citation references
-                  setCurrentChunks(data.chunks);
-                  citations = data.chunks;
+              const dataStr = line.slice(6).trim();
+              if (dataStr && dataStr !== '[DONE]') {
+                try {
+                  const data = JSON.parse(dataStr);
+                  if (data.content) {
+                    accumulatedContent += data.content;
+                  }
+                } catch (e) {
+                  console.error('Failed to parse final SSE data:', e);
                 }
-                
-                if (data.content) {
-                  accumulatedContent += data.content;
-                  setMessages(prev =>
-                    prev.map(msg =>
-                      msg.id === assistantMessage.id
-                        ? { ...msg, content: accumulatedContent, citations }
-                        : msg
-                    )
-                  );
-                }
-
-                if (data.conversationId && !currentConversationId) {
-                  setCurrentConversationId(data.conversationId);
-                  await loadConversations();
-                }
-              } catch (e) {
-                console.error('Failed to parse SSE data:', e);
               }
             }
           }
         }
 
         // Mark streaming as complete
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === assistantMessage.id 
-              ? { ...msg, streaming: false }
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMessage.id
+              ? { ...msg, content: accumulatedContent || 'No response received', streaming: false }
               : msg
           )
         );
