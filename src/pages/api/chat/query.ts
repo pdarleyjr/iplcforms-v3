@@ -299,8 +299,45 @@ Instructions:
             );
             
             // Process streaming response
-            // Important: Don't double-read the stream, pipe it directly
-            if (aiResponse && typeof aiResponse[Symbol.asyncIterator] === 'function') {
+            if (aiResponse instanceof Response) {
+              // Handle streaming response from AI_WORKER
+              const reader = aiResponse.body!.getReader();
+              const textDecoder = new TextDecoder();
+              
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  
+                  const text = textDecoder.decode(value, { stream: true });
+                  const lines = text.split('\n');
+                  
+                  for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                      const data = line.slice(6).trim();
+                      if (data === '[DONE]') continue;
+                      
+                      try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.response) {
+                          fullResponse += parsed.response;
+                          writeData({ content: parsed.response });
+                        } else if (parsed.content) {
+                          // Alternative format
+                          fullResponse += parsed.content;
+                          writeData({ content: parsed.content });
+                        }
+                      } catch (e) {
+                        // Skip invalid JSON lines
+                      }
+                    }
+                  }
+                }
+              } finally {
+                reader.releaseLock();
+              }
+            } else if (aiResponse && typeof aiResponse[Symbol.asyncIterator] === 'function') {
+              // Handle native AI streaming (for development)
               for await (const chunk of aiResponse) {
                 if (chunk.response) {
                   fullResponse += chunk.response;
@@ -312,6 +349,9 @@ Instructions:
               console.warn('AI response is not a stream, handling as regular response');
               if (aiResponse?.response) {
                 fullResponse = aiResponse.response;
+                writeData({ content: fullResponse });
+              } else if (aiResponse?.content) {
+                fullResponse = aiResponse.content;
                 writeData({ content: fullResponse });
               }
             }

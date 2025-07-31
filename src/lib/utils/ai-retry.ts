@@ -63,7 +63,46 @@ export async function callAIWithRetry(
       }
       
       // Make the AI call
-      const response = await env.AI.run(model, params);
+      // Since native AI binding doesn't exist in production, use AI_WORKER
+      let response;
+      
+      if (env.AI_WORKER) {
+        // Use AI_WORKER service (this is what's configured in production)
+        const aiRequest = new Request('https://ai-worker/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: params.messages,
+            stream: params.stream || false,
+            max_tokens: params.max_tokens || 1024,
+            temperature: params.temperature || 0.7,
+            // For embeddings
+            text: params.text
+          })
+        });
+        
+        const aiResponse = await env.AI_WORKER.fetch(aiRequest);
+        
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          throw new Error(`AI service error: ${aiResponse.status} - ${errorText}`);
+        }
+        
+        // Return the response as-is for streaming or parse JSON for non-streaming
+        if (params.stream) {
+          response = aiResponse;
+        } else {
+          response = await aiResponse.json();
+        }
+      } else if (env.AI) {
+        // Fallback to native AI binding if available (development)
+        response = await env.AI.run(model, params);
+      } else {
+        throw new Error('No AI service available');
+      }
       
       // Success! Return the response
       return response;
