@@ -33,11 +33,11 @@ id = "f0468576601a4935b68069b4e54157e4"
 
 [[kv_namespaces]]
 binding = "DOC_METADATA"
-id = "doc-metadata-kv-namespace"
+id = "bcb326be651d44e98eb4d2220003d6473"
 
 [[kv_namespaces]]
 binding = "RATELIMIT_KV"
-id = "ratelimit-kv-namespace"
+id = "9c58f1c60ef64dafb0f8c13c9f7d534f"
 
 # Durable Objects
 [[durable_objects.bindings]]
