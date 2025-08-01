@@ -7,7 +7,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   
   try {
     console.log('checkRateLimit function:', typeof checkRateLimit);
-    const { question, history = [], conversationId, options = {} } = await request.json();
+    // Parse request with defensive defaults
+    const body = await request.json();
+    const question = String(body.question ?? '').trim();
+    const history = Array.isArray(body.history) ? body.history : [];
+    const conversationId = body.conversationId ?? undefined;
+    const options = body.options ?? {};
     
     if (!question) {
       return new Response(JSON.stringify({ error: 'No question provided' }), {
@@ -54,20 +59,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Validate each message in history
+    // Validate and sanitize each message in history
+    const sanitizedHistory: ChatMessage[] = [];
     for (const msg of history) {
-      if (!msg.role || !msg.content) {
-        return new Response(JSON.stringify({ error: 'Each message must have role and content' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      if (!msg || typeof msg !== 'object') continue;
+      
+      const role = String(msg.role ?? '').trim();
+      const content = String(msg.content ?? '').trim();
+      
+      if (!role || !content) {
+        console.warn('Skipping invalid message:', msg);
+        continue;
       }
-      if (!['user', 'assistant', 'system'].includes(msg.role)) {
-        return new Response(JSON.stringify({ error: 'Invalid message role' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      
+      if (!['user', 'assistant', 'system'].includes(role)) {
+        console.warn('Skipping message with invalid role:', role);
+        continue;
       }
+      
+      sanitizedHistory.push({ role, content } as ChatMessage);
     }
 
     console.log('Generating RAG response for question:', question);
@@ -85,15 +95,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
     let stream;
     try {
       console.log('About to call generateRAGResponse...');
-      // Generate RAG response with streaming
+      // Generate RAG response with streaming and safe options
       stream = await generateRAGResponse(
         question,
-        history as ChatMessage[],
+        sanitizedHistory,
         env,
         {
-          maxTokens: options.maxTokens || 1000,
-          temperature: options.temperature || 0.7,
-          topK: options.topK || 5,
+          maxTokens: Math.min(Number(options.maxTokens) || 1000, 2048),
+          temperature: Math.min(Math.max(Number(options.temperature) || 0.7, 0), 1),
+          topK: Math.min(Number(options.topK) || 5, 10),
           conversationId: conversationId || undefined
         }
       );

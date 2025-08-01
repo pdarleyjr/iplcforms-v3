@@ -47,7 +47,7 @@ export async function generateRAGResponse(
   } = options;
 
   try {
-    // Validate question
+    // Validate question with proper coalescing
     const cleanQuestion = String(question ?? '').trim();
     if (!cleanQuestion) {
       console.error('Empty question provided');
@@ -69,6 +69,7 @@ export async function generateRAGResponse(
       ...history.slice(-6), // Keep last 6 messages for context (3 exchanges)
       {
         role: 'user',
+        // Ensure content is always a non-empty string
         content: safeContext.includes('No relevant context')
           ? `Question: ${cleanQuestion}\n\n${safeContext}`
           : `Context from your documents:\n\n${safeContext}\n\n---\n\nQuestion: ${cleanQuestion}`,
@@ -204,16 +205,29 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
           while (true) {
             const { done, value } = await reader.read();
             
+            // Check done FIRST before processing value
             if (done) {
+              console.log('Stream reading complete');
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               break;
             }
             
-            // Parse the chunk and format as SSE with defensive handling
-            const chunk = value ? decoder.decode(value) : '';
-            if (chunk) {
-              const sseMessage = `data: ${JSON.stringify({ response: chunk })}\n\n`;
-              controller.enqueue(encoder.encode(sseMessage));
+            // Defensive handling: value could be undefined even when done is false
+            if (!value) {
+              console.warn('Received undefined value in stream');
+              continue;
+            }
+            
+            // Parse the chunk and format as SSE with try/catch for JSON building
+            try {
+              const chunk = decoder.decode(value);
+              if (chunk) {
+                const sseMessage = `data: ${JSON.stringify({ response: chunk })}\n\n`;
+                controller.enqueue(encoder.encode(sseMessage));
+              }
+            } catch (chunkError) {
+              console.error('Error processing stream chunk:', chunkError);
+              // Don't throw, just log and continue to next chunk
             }
           }
         } catch (error) {

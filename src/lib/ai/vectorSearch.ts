@@ -42,24 +42,23 @@ export async function queryDocuments(
       return [];
     }
 
-    // Query the Vectorize index
+    // Query the Vectorize index with defensive defaults
     const vectorizeResponse = await env.VECTORIZE.query(queryEmbeddings[0], {
-      topK: limit,
+      topK: Math.min(limit, 100), // Clamp to free tier limit
     });
 
-    // Defensive check for Vectorize response
+    // Defensive check for Vectorize response with proper guard pattern
     if (!vectorizeResponse) {
       console.warn('Null response from Vectorize');
       return [];
     }
 
-    // Handle both matches array and matches property formats
-    const matches = Array.isArray(vectorizeResponse)
-      ? vectorizeResponse
-      : (vectorizeResponse.matches || []);
+    // Extract matches with defensive default - Vectorize returns {matches: [], count: 0} when empty
+    const { matches = [] } = vectorizeResponse;
 
-    if (!Array.isArray(matches) || matches.length === 0) {
-      console.warn('No matches returned from Vectorize');
+    // Guard against empty matches array
+    if (!matches.length) {
+      console.warn('No vector matches – skipping doc context');
       return [];
     }
 
