@@ -54,6 +54,9 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "FormSessionDO"
+      ],
+      "new_classes": [
+        "AIGate"
       ]
     }
   ],
