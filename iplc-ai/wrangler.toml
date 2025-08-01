@@ -8,7 +8,7 @@ binding = "AI"
 
 # Vectorize configuration for document embeddings
 [[vectorize]]
-binding = "DOC_INDEX"
+binding = "VECTORIZE"
 index_name = "iplc-chat-index"
 
 # KV namespace for document metadata
@@ -16,6 +16,12 @@ index_name = "iplc-chat-index"
 binding = "DOC_METADATA"
 id = "DOC_METADATA_ID_PLACEHOLDER"
 preview_id = "DOC_METADATA_ID_PLACEHOLDER"
+
+# KV namespace for session data
+[[kv_namespaces]]
+binding = "SESSION"
+id = "SESSION_ID_PLACEHOLDER"
+preview_id = "SESSION_ID_PLACEHOLDER"
 
 # Durable Objects for session management
 [[durable_objects.bindings]]
@@ -26,6 +32,10 @@ class_name = "SessionDO"
 [[migrations]]
 tag = "v1"
 new_classes = [ "SessionDO" ]
+
+[[migrations]]
+tag = "v3-aigate-sqlite"
+new_sqlite_classes = ["AIGate"]
 
 # Cron triggers for scheduled cleanup
 [triggers]

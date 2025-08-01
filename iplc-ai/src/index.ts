@@ -3,8 +3,9 @@ import { embedAndStore, queryDocuments } from './vectorize';
 import { generateRAGResponse } from './rag';
 import { SessionDO } from './durable-objects/session';
 import { handleScheduledCleanup } from './cleanup';
+import { AIGate } from '../../src/lib/durable-objects/ai-gate';
 
-export { SessionDO };
+export { SessionDO, AIGate };
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

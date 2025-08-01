@@ -42,19 +42,26 @@ export async function queryDocuments(
       return [];
     }
 
-    // Query the Vectorize index with defensive defaults
-    const vectorizeResponse = await env.VECTORIZE.query(queryEmbeddings[0], {
-      topK: Math.min(limit, 100), // Clamp to free tier limit
-    });
-
-    // Defensive check for Vectorize response with proper guard pattern
-    if (!vectorizeResponse) {
-      console.warn('Null response from Vectorize');
-      return [];
+    // Check if VECTORIZE binding exists
+    if (!env.VECTORIZE) {
+      throw new Error("VECTORIZE binding missing");
     }
 
-    // Extract matches with defensive default - Vectorize returns {matches: [], count: 0} when empty
-    const { matches = [] } = vectorizeResponse;
+    // Query the Vectorize index with defensive defaults
+    const response = await env.VECTORIZE.query(queryEmbeddings[0], {
+      topK: Math.min(limit, 100) // Clamp to free tier limit
+    });
+
+    // Handle both array and object responses from Vectorize
+    let matches: any[] = [];
+    if (Array.isArray(response)) {
+      matches = response;
+    } else if (response && typeof response === 'object' && 'matches' in response) {
+      matches = (response as any).matches || [];
+    } else {
+      console.warn('Invalid response format from Vectorize:', typeof response);
+      return [];
+    }
 
     // Guard against empty matches array
     if (!matches.length) {

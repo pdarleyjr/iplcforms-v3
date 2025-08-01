@@ -57,6 +57,13 @@ export async function generateRAGResponse(
     // Get relevant document context with defensive handling
     const context = await getDocumentContext(cleanQuestion, topK, env);
     
+    // Graceful handling when no relevant documents found
+    if (!context || context === '(No relevant context found in documents)') {
+      console.log('No relevant documents found for query:', cleanQuestion);
+      // Return a graceful response instead of error
+      return createErrorStream("No relevant documents found for your query. Please ensure documents are uploaded.");
+    }
+    
     // Ensure context is never empty for AI model
     const safeContext = context || '(No relevant context found)';
     
@@ -110,12 +117,28 @@ export async function generateRAGResponse(
 
     console.log('AI response received:', response ? 'exists' : 'null');
     console.log('AI response type:', typeof response);
-    if (response) {
-      console.log('AI response keys:', Object.keys(response));
-    }
+    
+    // Wrap all response inspection in try-catch to isolate logging issues
+    try {
+      if (response) {
+        try {
+          // Be very careful about what we log to avoid toString errors
+          const responseKeys = response && typeof response === 'object' ? Object.keys(response) : [];
+          console.log('AI response keys count:', responseKeys.length);
+          console.log('AI response has getReader:', typeof response.getReader === 'function');
+          // Don't log constructor name as it might trigger toString
+        } catch (e) {
+          console.error('Error inspecting AI response:', e);
+        }
+      }
 
-    // Convert to SSE stream with error handling
-    return createSSEStream(response, stream);
+      // Convert to SSE stream with error handling
+      return createSSEStream(response, stream);
+    } catch (streamError) {
+      console.error('Error creating SSE stream:', streamError);
+      // Return error stream instead of throwing
+      return createErrorStream('Failed to create response stream');
+    }
   } catch (error) {
     console.error('RAG generation error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -133,13 +156,31 @@ export async function generateRAGResponse(
  */
 function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream {
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  console.log('createSSEStream called with isStreaming:', isStreaming);
-  console.log('aiResponse type:', typeof aiResponse);
-  console.log('aiResponse value:', aiResponse);
-
-  if (!isStreaming) {
+  
+  try {
+    const decoder = new TextDecoder();
+    console.log('createSSEStream called with isStreaming:', isStreaming);
+    console.log('aiResponse type:', typeof aiResponse);
+    
+    // Don't log the aiResponse directly to avoid toString issues
+    if (aiResponse) {
+      console.log('aiResponse exists: true');
+      console.log('aiResponse has getReader:', typeof aiResponse.getReader === 'function');
+    } else {
+      console.log('aiResponse exists: false');
+    }
+    
+    // Check if the response is actually a ReadableStream
+    let isActuallyStreaming = false;
+    try {
+      isActuallyStreaming = aiResponse && typeof aiResponse.getReader === 'function';
+      console.log('isActuallyStreaming:', isActuallyStreaming);
+    } catch (e) {
+      console.error('Error checking if response is streaming:', e);
+      isActuallyStreaming = false;
+    }
+    
+    if (!isStreaming || !isActuallyStreaming) {
     // Non-streaming response
     return new ReadableStream({
       start(controller) {
@@ -163,7 +204,12 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
             } else {
               // Try to stringify the entire response as a fallback
               console.warn('Unexpected AI response format:', aiResponse);
-              responseText = JSON.stringify(aiResponse);
+              try {
+                responseText = JSON.stringify(aiResponse);
+              } catch (e) {
+                console.error('Failed to stringify response:', e);
+                responseText = '';
+              }
             }
           }
           
@@ -185,20 +231,23 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
     });
   }
 
-  // Streaming response
-  return new ReadableStream({
+    // Streaming response
+    return new ReadableStream({
     async start(controller) {
       let hasError = false;
       try {
         // Check if aiResponse has a getReader method
         if (!aiResponse || typeof aiResponse.getReader !== 'function') {
-          console.error('AI response does not have getReader method:', aiResponse);
+          console.error('AI response does not have getReader method');
+          console.error('AI response type:', typeof aiResponse);
+          // Don't log the response object or constructor to avoid toString issues
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid streaming response' })}\n\n`));
           controller.enqueue(encoder.encode('event: end\n\n'));
           controller.close();
           return;
         }
 
+        console.log('Getting reader from AI response stream');
         const reader = aiResponse.getReader();
         
         try {
@@ -221,12 +270,17 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
             // Parse the chunk and format as SSE with try/catch for JSON building
             try {
               const chunk = decoder.decode(value);
+              console.log('Decoded chunk:', chunk ? `${chunk.substring(0, 50)}...` : 'empty');
+              
               if (chunk) {
+                // For Cloudflare Workers AI, chunks are typically plain text
                 const sseMessage = `data: ${JSON.stringify({ response: chunk })}\n\n`;
                 controller.enqueue(encoder.encode(sseMessage));
               }
             } catch (chunkError) {
               console.error('Error processing stream chunk:', chunkError);
+              console.error('Chunk value type:', typeof value);
+              console.error('Chunk value:', value);
               // Don't throw, just log and continue to next chunk
             }
           }
@@ -252,7 +306,19 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
         controller.close();
       }
     },
-  });
+    });
+  } catch (error) {
+    console.error('Critical error in createSSEStream:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    // Return an error stream
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream creation failed' })}\n\n`));
+        controller.enqueue(encoder.encode('event: error\n\n'));
+        controller.close();
+      }
+    });
+  }
 }
 
 /**

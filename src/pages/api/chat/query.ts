@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
-          'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
+          'X-RateLimit-Limit': '60', // tokensPerMinute from RATE_LIMIT_CONFIG
           'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
           'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
         }
@@ -88,14 +88,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
         'Transfer-Encoding': 'chunked',
-        'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
+        'X-RateLimit-Limit': '60', // tokensPerMinute from RATE_LIMIT_CONFIG
         'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
         'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
       }
     });
 
   } catch (error) {
-    console.error('Query error:', error);
+    // Log error safely without triggering toString on problematic objects
+    console.error('Query error:', error instanceof Error ? error.message : 'Unknown error');
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
     return new Response(JSON.stringify({
       error: 'Failed to process query',
       details: error instanceof Error ? error.message : 'Unknown error'
