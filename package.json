@@ -70,7 +70,7 @@
     "check": "npm run build && wrangler deploy --dry-run",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "deploy": "npm run build && npx wrangler deploy",
+    "deploy": "npm run build",
     "dev": "npm run db:migrate && npm run build && npx wrangler dev --port 4321",
     "predeploy": "npm run db:migrate:remote",
     "preview": "npm run build && wrangler dev",
