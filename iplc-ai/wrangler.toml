@@ -9,7 +9,7 @@ binding = "AI"
 # Vectorize configuration for document embeddings
 [[vectorize]]
 binding = "VECTORIZE"
-index_name = "iplc-forms-chat"
+index_name = "iplc-chat-index"
 
 # KV namespace for document metadata
 [[kv_namespaces]]
@@ -36,6 +36,11 @@ class_name = "AIGate"
 [[migrations]]
 tag = "v1"
 new_classes = [ "FormSessionDO", "AIGate" ]
+
+# Durable-Object SQLite migration required for free tier
+[[migrations]]
+tag = "v3-aigate-sqlite"
+new_sqlite_classes = ["AIGate"]
 
 # Cron triggers for scheduled cleanup
 [triggers]

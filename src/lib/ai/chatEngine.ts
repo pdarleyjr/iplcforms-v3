@@ -61,7 +61,7 @@ export async function generateRAGResponse(
     if (!context || context.includes('No relevant context')) {
       console.log('No relevant documents found for query:', cleanQuestion);
       // Return a graceful response instead of error
-      return createErrorStream("No relevant documents found for your query. Please ensure documents are uploaded.");
+      return createErrorStream('No relevant documents found for your query.');
     }
     
     // Ensure context is never empty for AI model

@@ -9,8 +9,6 @@ declare namespace Cloudflare {
 		CACHE_KV: KVNamespace;
 		DOC_METADATA: KVNamespace;
 		API_TOKEN: "test-api-token-development";
-		SUPABASE_URL: "https://your-project.supabase.co";
-		SUPABASE_ANON_KEY: "your-supabase-anon-key-here";
 		CLOUDFLARE_ACCOUNT_ID: "your-cloudflare-account-id-here";
 		CLOUDFLARE_D1_TOKEN: "your-cloudflare-d1-token-here";
 		CLOUDFLARE_DATABASE_ID: "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a";
@@ -31,7 +29,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "API_TOKEN" | "SUPABASE_URL" | "SUPABASE_ANON_KEY" | "CLOUDFLARE_ACCOUNT_ID" | "CLOUDFLARE_D1_TOKEN" | "CLOUDFLARE_DATABASE_ID" | "DATABASE_URL" | "OPENAI_API_KEY" | "ADMIN_PASS">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "API_TOKEN" | "CLOUDFLARE_ACCOUNT_ID" | "CLOUDFLARE_D1_TOKEN" | "CLOUDFLARE_DATABASE_ID" | "DATABASE_URL" | "OPENAI_API_KEY" | "ADMIN_PASS">> {}
 }
 
 // Begin runtime types
