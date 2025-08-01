@@ -79,11 +79,11 @@
     },
     {
       "binding": "DOC_METADATA",
-      "id": "doc-metadata-kv-namespace"
+      "id": "bcb326be651d44e98eb4d2220003d6473"
     },
     {
       "binding": "RATELIMIT_KV",
-      "id": "ratelimit-kv-namespace"
+      "id": "9c58f1c60ef64dafb0f8c13c9f7d534f"
     }
   ],
   "vectorize": [
