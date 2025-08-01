@@ -6,6 +6,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env as AIEnv;
   
   try {
+    console.log('checkRateLimit function:', typeof checkRateLimit);
     const { question, history = [], conversationId, options = {} } = await request.json();
     
     if (!question) {
@@ -17,7 +18,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // Check rate limit
     const clientId = request.headers.get('CF-Connecting-IP') || 'anonymous';
+    console.log('Checking rate limit for client:', clientId);
     const rateLimitInfo = await checkRateLimit(clientId, env);
+    console.log('Rate limit info:', JSON.stringify(rateLimitInfo));
+    
+    // Defensive check for rateLimitInfo
+    if (!rateLimitInfo) {
+      console.error('Rate limit info is undefined');
+      return new Response(JSON.stringify({ error: 'Rate limit check failed' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     
     if (!rateLimitInfo.allowed) {
       return new Response(JSON.stringify({
@@ -25,11 +37,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         retryAfter: rateLimitInfo.retryAfter
       }), {
         status: 429,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
-          'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
-          'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
+          'X-RateLimit-Limit': '60', // 60 requests per minute as per rate limit config
+          'X-RateLimit-Remaining': (rateLimitInfo.remaining || 0).toString(),
+          'X-RateLimit-Reset': Math.floor((rateLimitInfo.resetAt || Date.now()) / 1000).toString()
         }
       });
     }
@@ -58,35 +70,71 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    // Generate RAG response with streaming
-    const stream = await generateRAGResponse(
-      question,
-      history as ChatMessage[],
-      env,
-      {
-        maxTokens: options.maxTokens || 1000,
-        temperature: options.temperature || 0.7,
-        topK: options.topK || 5,
-        conversationId: conversationId || undefined
-      }
-    );
+    console.log('Generating RAG response for question:', question);
+    console.log('Environment bindings:', {
+      hasAI: !!env.AI,
+      hasVectorize: !!env.VECTORIZE,
+      hasAIGate: !!env.AI_GATE,
+      hasChatHistory: !!env.CHAT_HISTORY,
+      hasDocMetadata: !!env.DOC_METADATA
+    });
+    
+    // Debug: Log the actual env object keys
+    console.log('Environment keys:', Object.keys(env));
+    
+    let stream;
+    try {
+      console.log('About to call generateRAGResponse...');
+      // Generate RAG response with streaming
+      stream = await generateRAGResponse(
+        question,
+        history as ChatMessage[],
+        env,
+        {
+          maxTokens: options.maxTokens || 1000,
+          temperature: options.temperature || 0.7,
+          topK: options.topK || 5,
+          conversationId: conversationId || undefined
+        }
+      );
+      console.log('generateRAGResponse returned, stream type:', typeof stream);
+    } catch (ragError) {
+      console.error('Error in generateRAGResponse:', ragError);
+      console.error('Error type:', typeof ragError);
+      console.error('Error message:', ragError instanceof Error ? ragError.message : String(ragError));
+      console.error('Error stack:', ragError instanceof Error ? ragError.stack : 'No stack');
+      throw ragError;
+    }
+
+    console.log('Building response headers');
+    const responseHeaders: Record<string, string> = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'Transfer-Encoding': 'chunked',
+      'X-RateLimit-Limit': '60'
+    };
+
+    // Safely add rate limit headers
+    if (rateLimitInfo && typeof rateLimitInfo.remaining !== 'undefined') {
+      responseHeaders['X-RateLimit-Remaining'] = String(rateLimitInfo.remaining);
+    }
+    if (rateLimitInfo && typeof rateLimitInfo.resetAt !== 'undefined') {
+      responseHeaders['X-RateLimit-Reset'] = String(Math.floor(rateLimitInfo.resetAt / 1000));
+    }
+
+    console.log('Response headers:', JSON.stringify(responseHeaders));
 
     // Return the streaming response
     return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-        'Transfer-Encoding': 'chunked',
-        'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
-        'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
-        'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
-      }
+      headers: responseHeaders
     });
 
   } catch (error) {
     console.error('Chat error:', error);
+    console.error('Error type:', typeof error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
     
     // Create error SSE stream
     const errorStream = new ReadableStream({

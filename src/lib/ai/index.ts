@@ -8,6 +8,9 @@
 // Export all types
 export * from './types';
 
+// Import AIEnv type for functions in this file
+import type { AIEnv } from './types';
+
 // Export embeddings functionality
 export {
   chunkText,
@@ -26,12 +29,11 @@ export {
 // Export chat engine functionality
 export {
   generateRAGResponse,
-  generateStreamingRAGResponse,
   generateSummary,
   generateOutline,
   getConversationHistory,
-  saveConversationHistory,
-  clearConversationHistory
+  storeConversationHistory,
+  handleChatRequest
 } from './chatEngine';
 
 // Export document storage functionality
@@ -49,7 +51,11 @@ export {
 // Export rate limiting functionality
 export {
   checkRateLimit,
-  rateLimitMiddleware
+  withRateLimit,
+  applyRateLimitHeaders,
+  createRateLimitResponse,
+  getClientId,
+  getRateLimitStatus
 } from './rateLimit';
 
 // Export AIGate functionality
@@ -64,7 +70,7 @@ export {
  * Initialize AI system
  * Sets up necessary configurations and checks
  */
-export async function initializeAI(env: Env): Promise<void> {
+export async function initializeAI(env: AIEnv): Promise<void> {
   try {
     // Check if all required bindings are present
     if (!env.AI) {
@@ -108,7 +114,7 @@ export function formatAIError(error: any): string {
 /**
  * Check if AI services are available
  */
-export async function checkAIAvailability(env: Env): Promise<{
+export async function checkAIAvailability(env: AIEnv): Promise<{
   available: boolean;
   reason?: string;
 }> {

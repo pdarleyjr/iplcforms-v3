@@ -47,37 +47,78 @@ export async function generateRAGResponse(
   } = options;
 
   try {
-    // Get relevant document context
-    const context = await getDocumentContext(question, topK, env);
+    // Validate question
+    const cleanQuestion = String(question ?? '').trim();
+    if (!cleanQuestion) {
+      console.error('Empty question provided');
+      return createErrorStream('Question cannot be empty');
+    }
+
+    // Get relevant document context with defensive handling
+    const context = await getDocumentContext(cleanQuestion, topK, env);
+    
+    // Ensure context is never empty for AI model
+    const safeContext = context || '(No relevant context found)';
     
     // Prepare messages with context
     const messages: ChatMessage[] = [
       {
         role: 'system',
-        content: SYSTEM_PROMPT,
+        content: SYSTEM_PROMPT || 'You are a helpful assistant.',
       },
       ...history.slice(-6), // Keep last 6 messages for context (3 exchanges)
       {
         role: 'user',
-        content: context.length > 0 
-          ? `Context from your documents:\n\n${context}\n\n---\n\nQuestion: ${question}`
-          : `Question: ${question}\n\n(No relevant documents found in your notebook)`,
+        content: safeContext.includes('No relevant context')
+          ? `Question: ${cleanQuestion}\n\n${safeContext}`
+          : `Context from your documents:\n\n${safeContext}\n\n---\n\nQuestion: ${cleanQuestion}`,
       },
     ];
 
-    // Generate response using Workers AI
-    const response = await env.AI.run(model, {
-      messages,
-      stream,
-      max_tokens: maxTokens,
-      temperature,
-    });
+    // Validate all messages have content
+    const validatedMessages = messages.map(msg => ({
+      role: msg.role,
+      content: String(msg.content ?? '').trim() || 'No content',
+    }));
 
-    // Convert to SSE stream
+    // Check if AI binding exists
+    if (!env.AI) {
+      console.error('AI binding is undefined');
+      throw new Error('AI binding not available');
+    }
+
+    console.log('AI binding exists, calling AI.run with model:', model);
+    console.log('Message count:', validatedMessages.length);
+    console.log('Stream:', stream, 'Max tokens:', maxTokens, 'Temperature:', temperature);
+
+    // Generate response using Workers AI
+    let response;
+    try {
+      response = await env.AI.run(model, {
+        messages: validatedMessages,
+        stream,
+        max_tokens: maxTokens,
+        temperature,
+      });
+    } catch (aiError) {
+      console.error('AI.run() error:', aiError);
+      console.error('Error type:', typeof aiError);
+      console.error('Error keys:', aiError ? Object.keys(aiError) : 'null');
+      throw aiError;
+    }
+
+    console.log('AI response received:', response ? 'exists' : 'null');
+    console.log('AI response type:', typeof response);
+    if (response) {
+      console.log('AI response keys:', Object.keys(response));
+    }
+
+    // Convert to SSE stream with error handling
     return createSSEStream(response, stream);
   } catch (error) {
     console.error('RAG generation error:', error);
-    return createErrorStream(error.message);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return createErrorStream(errorMessage);
   }
 }
 
@@ -93,14 +134,52 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
+  console.log('createSSEStream called with isStreaming:', isStreaming);
+  console.log('aiResponse type:', typeof aiResponse);
+  console.log('aiResponse value:', aiResponse);
+
   if (!isStreaming) {
     // Non-streaming response
     return new ReadableStream({
       start(controller) {
-        const responseText = aiResponse.response || '';
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ response: responseText })}\n\n`));
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        controller.close();
+        try {
+          let responseText = '';
+          
+          // Handle different response formats with defensive checks
+          if (typeof aiResponse === 'string') {
+            responseText = aiResponse;
+          } else if (aiResponse && typeof aiResponse === 'object') {
+            if ('response' in aiResponse) {
+              responseText = String(aiResponse.response ?? '');
+            } else if ('choices' in aiResponse && Array.isArray(aiResponse.choices) && aiResponse.choices.length > 0) {
+              // Handle OpenAI-style response format
+              const choice = aiResponse.choices[0];
+              if (choice?.message?.content != null) {
+                responseText = String(choice.message.content);
+              } else if (choice?.text != null) {
+                responseText = String(choice.text);
+              }
+            } else {
+              // Try to stringify the entire response as a fallback
+              console.warn('Unexpected AI response format:', aiResponse);
+              responseText = JSON.stringify(aiResponse);
+            }
+          }
+          
+          // Ensure responseText is never undefined/null
+          const safeResponseText = responseText || 'I apologize, but I was unable to generate a response.';
+          
+          console.log('Final responseText:', safeResponseText);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ response: safeResponseText })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } catch (error) {
+          console.error('Non-streaming SSE error:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
+          controller.enqueue(encoder.encode('event: end\n\n'));
+        } finally {
+          controller.close();
+        }
       },
     });
   }
@@ -108,29 +187,55 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
   // Streaming response
   return new ReadableStream({
     async start(controller) {
-      const reader = aiResponse.getReader();
-      
+      let hasError = false;
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          
-          if (done) {
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-            break;
+        // Check if aiResponse has a getReader method
+        if (!aiResponse || typeof aiResponse.getReader !== 'function') {
+          console.error('AI response does not have getReader method:', aiResponse);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid streaming response' })}\n\n`));
+          controller.enqueue(encoder.encode('event: end\n\n'));
+          controller.close();
+          return;
+        }
+
+        const reader = aiResponse.getReader();
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              break;
+            }
+            
+            // Parse the chunk and format as SSE with defensive handling
+            const chunk = value ? decoder.decode(value) : '';
+            if (chunk) {
+              const sseMessage = `data: ${JSON.stringify({ response: chunk })}\n\n`;
+              controller.enqueue(encoder.encode(sseMessage));
+            }
           }
-          
-          // Parse the chunk and format as SSE
-          const chunk = decoder.decode(value);
-          const sseMessage = `data: ${JSON.stringify({ response: chunk })}\n\n`;
-          controller.enqueue(encoder.encode(sseMessage));
+        } catch (error) {
+          hasError = true;
+          console.error('Stream reading error:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
+        } finally {
+          reader.releaseLock();
         }
       } catch (error) {
-        console.error('Stream error:', error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
-        controller.close();
+        hasError = true;
+        console.error('Stream setup error:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
       } finally {
-        reader.releaseLock();
+        // Always send final event
+        if (hasError) {
+          controller.enqueue(encoder.encode('event: error\n\n'));
+        }
+        controller.enqueue(encoder.encode('event: end\n\n'));
+        controller.close();
       }
     },
   });
@@ -146,9 +251,19 @@ function createErrorStream(errorMessage: string): ReadableStream {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      controller.close();
+      try {
+        const safeErrorMessage = String(errorMessage ?? 'An unknown error occurred');
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: safeErrorMessage })}\n\n`));
+        controller.enqueue(encoder.encode('event: error\n\n'));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.enqueue(encoder.encode('event: end\n\n'));
+      } catch (error) {
+        console.error('Error creating error stream:', error);
+        controller.enqueue(encoder.encode('data: {"error": "Failed to create error stream"}\n\n'));
+        controller.enqueue(encoder.encode('event: end\n\n'));
+      } finally {
+        controller.close();
+      }
     },
   });
 }
@@ -239,7 +354,8 @@ export async function generateSummary(
     return response.response || 'Failed to generate summary';
   } catch (error) {
     console.error('Summary generation error:', error);
-    throw new Error(`Failed to generate summary: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to generate summary: ${errorMessage}`);
   }
 }
 
@@ -277,7 +393,8 @@ export async function generateOutline(
     return response.response || 'Failed to generate outline';
   } catch (error) {
     console.error('Outline generation error:', error);
-    throw new Error(`Failed to generate outline: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to generate outline: ${errorMessage}`);
   }
 }
 
@@ -336,7 +453,8 @@ export async function handleChatRequest(
     });
   } catch (error) {
     console.error('Chat request error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

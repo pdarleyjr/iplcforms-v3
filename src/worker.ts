@@ -211,7 +211,7 @@ export function createExports(manifest: SSRManifest) {
         CHAT_HISTORY: env.CHAT_HISTORY,
         DOC_METADATA: env.DOC_METADATA,
         RATELIMIT_KV: env.RATELIMIT_KV,
-        AIGate: env.AIGate,
+        AI_GATE: env.AI_GATE,
         
         // Authentication secret
         ADMIN_PASS: env.ADMIN_PASS

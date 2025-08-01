@@ -60,10 +60,5 @@ binding = "CUSTOMER_WORKFLOW"
 class_name = "CustomerWorkflow"
 
 # Migrations for Durable Objects
-[[migrations]]
-tag = "v1"
-new_classes = ["AIGate"]
-
-[[migrations]]
-tag = "v2-aigate-sqlite"
-new_sqlite_classes = ["AIGate"]
+# AIGate already exists from previous deployments
+# No new migrations needed

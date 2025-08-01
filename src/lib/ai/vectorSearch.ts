@@ -29,6 +29,7 @@ export async function queryDocuments(
   env: AIEnv
 ): Promise<QueryResult[]> {
   if (!query || query.trim().length === 0) {
+    console.warn('Empty query provided to queryDocuments');
     return [];
   }
 
@@ -37,32 +38,53 @@ export async function queryDocuments(
     const queryEmbeddings = await generateEmbeddings([query], env);
     
     if (!queryEmbeddings || queryEmbeddings.length === 0) {
-      throw new Error('Failed to generate query embedding');
+      console.error('Failed to generate query embedding');
+      return [];
     }
 
     // Query the Vectorize index
-    const matches = await env.VECTORIZE.query(queryEmbeddings[0], {
+    const vectorizeResponse = await env.VECTORIZE.query(queryEmbeddings[0], {
       topK: limit,
     });
 
-    if (!matches || !Array.isArray(matches)) {
+    // Defensive check for Vectorize response
+    if (!vectorizeResponse) {
+      console.warn('Null response from Vectorize');
+      return [];
+    }
+
+    // Handle both matches array and matches property formats
+    const matches = Array.isArray(vectorizeResponse)
+      ? vectorizeResponse
+      : (vectorizeResponse.matches || []);
+
+    if (!Array.isArray(matches) || matches.length === 0) {
       console.warn('No matches returned from Vectorize');
       return [];
     }
 
-    // Filter and map results
+    // Filter and map results with defensive checks
     const results: QueryResult[] = matches
-      .filter((match: VectorizeMatch) => match.score >= MIN_RELEVANCE_SCORE)
+      .filter((match: VectorizeMatch) => {
+        // Defensive check for match object
+        if (!match || typeof match.score !== 'number') {
+          console.warn('Invalid match object:', match);
+          return false;
+        }
+        return match.score >= MIN_RELEVANCE_SCORE;
+      })
       .map((match: VectorizeMatch) => ({
-        id: match.id,
-        score: match.score,
+        id: match.id ?? '',
+        score: match.score ?? 0,
         metadata: match.metadata || {},
       }));
 
+    console.log(`Vectorize query returned ${results.length} results above threshold`);
     return results;
   } catch (error) {
     console.error('Error querying documents:', error);
-    throw new Error(`Failed to query documents: ${error.message}`);
+    // Return empty array instead of throwing to allow graceful degradation
+    return [];
   }
 }
 
@@ -84,17 +106,26 @@ export async function getDocumentContext(
     // Query for relevant documents
     const results = await queryDocuments(query, topK, env);
     
-    if (results.length === 0) {
-      return '';
+    if (!results || results.length === 0) {
+      console.log('No relevant documents found for query:', query);
+      // Return a stub context to ensure AI has something to work with
+      return '(No relevant context found in documents)';
     }
 
     // Sort by score (highest first) and extract context
     const contextChunks = results
       .sort((a, b) => b.score - a.score)
       .map(result => {
-        const chunk = result.metadata.fullChunk || result.metadata.chunk || '';
-        const source = result.metadata.documentName || 'Unknown Document';
-        const page = result.metadata.pageNumber;
+        // Defensive string extraction with fallbacks
+        const chunk = String(result.metadata?.fullChunk ?? result.metadata?.chunk ?? '').trim();
+        const source = String(result.metadata?.documentName ?? 'Unknown Document');
+        const page = result.metadata?.pageNumber;
+        
+        // Skip empty chunks
+        if (!chunk) {
+          console.warn('Empty chunk in result:', result.id);
+          return '';
+        }
         
         // Format each chunk with source information
         let formattedChunk = chunk;
@@ -106,12 +137,18 @@ export async function getDocumentContext(
       })
       .filter(chunk => chunk.length > 0);
 
+    // If all chunks were empty after filtering, return stub
+    if (contextChunks.length === 0) {
+      console.warn('All context chunks were empty after filtering');
+      return '(No relevant context found in documents)';
+    }
+
     // Join chunks with clear separation
     return contextChunks.join('\n\n---\n\n');
   } catch (error) {
     console.error('Error getting document context:', error);
-    // Return empty context on error to allow graceful degradation
-    return '';
+    // Return stub context on error to allow graceful degradation
+    return '(Error retrieving document context)';
   }
 }
 

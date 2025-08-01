@@ -65,3 +65,5 @@ test-ai-fixes.md
 
 # local development files
 namespaces.json
+wrangler.jsonc
+test-chat.json
