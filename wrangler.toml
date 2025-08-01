@@ -63,3 +63,7 @@ class_name = "CustomerWorkflow"
 [[migrations]]
 tag = "v1"
 new_classes = ["AIGate", "FormSessionDO"]
+
+# SPA not-found handling for single-page application
+[assets]
+not_found_handling = "single-page-application"

@@ -9,7 +9,7 @@ binding = "AI"
 # Vectorize configuration for document embeddings
 [[vectorize]]
 binding = "VECTORIZE"
-index_name = "iplc-chat-index"
+index_name = "iplc-forms-chat"
 
 # KV namespace for document metadata
 [[kv_namespaces]]
@@ -35,11 +35,7 @@ class_name = "AIGate"
 # Migrations for Durable Objects
 [[migrations]]
 tag = "v1"
-new_classes = [ "SessionDO" ]
-
-[[migrations]]
-tag = "v3-aigate-sqlite"
-new_sqlite_classes = ["AIGate"]
+new_classes = [ "FormSessionDO", "AIGate" ]
 
 # Cron triggers for scheduled cleanup
 [triggers]
@@ -48,3 +44,7 @@ crons = ["0 2 * * *"]  # Run daily at 2 AM UTC
 # Environment specific settings
 [env.development]
 vars = { }
+
+# SPA not-found handling for single-page application
+[assets]
+not_found_handling = "single-page-application"

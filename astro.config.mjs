@@ -86,7 +86,7 @@ export default defineConfig({
     },
     // Enhanced SSR optimization
     ssr: {
-      external: ["@astrojs/cloudflare", "openai"],
+      external: ["@astrojs/cloudflare", "openai", "crypto"],
       noExternal: ["react-hook-form", "lucide-react"]
     }
   },
