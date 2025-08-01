@@ -58,6 +58,12 @@
       "new_classes": [
         "AIGate"
       ]
+    },
+    {
+      "tag": "v2-aigate-sqlite",
+      "new_sqlite_classes": [
+        "AIGate"
+      ]
     }
   ],
   "kv_namespaces": [

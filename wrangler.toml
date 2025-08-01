@@ -63,3 +63,7 @@ class_name = "CustomerWorkflow"
 [[migrations]]
 tag = "v1"
 new_classes = ["AIGate"]
+
+[[migrations]]
+tag = "v2-aigate-sqlite"
+new_sqlite_classes = ["AIGate"]
