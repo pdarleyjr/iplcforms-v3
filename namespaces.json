@@ -1,0 +1,86 @@
+[
+  {
+    "id": "786a335542bf4f758fb3d7ad13b21ba9",
+    "title": "articeval-SESSIONS",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "33d19a17dee04624804c70d093aacfce",
+    "title": "articeval-SESSION_STORE_preview",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "f0468576601a4935b68069b4e54157e4",
+    "title": "CACHE_KV",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "4590bca3cdf9499b91dc607544ac380a",
+    "title": "CACHE_KV_preview",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "11baf1c1465d4b03afbe59fdfcdfe1b8",
+    "title": "CHAT_HISTORY",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "0c59462935aa4ae5a8f2c4bc49d1aa56",
+    "title": "CHAT_HISTORY_preview",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "29cc6219f29d48d1a5ddd38dcda1a0f0",
+    "title": "chat-metadata",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "bcb326be651d44e98eb4d220003d6473",
+    "title": "DOC_METADATA",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "053128e230ce47f7b01e2f17dcaf2547",
+    "title": "DOC_METADATA_preview",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "b34d60620f6b422c84f196271228c56b",
+    "title": "METRICS_KV",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "a5aaa400e91d44bc9d416099707b4911",
+    "title": "METRICS_KV_preview",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "9c58f1c60ef64dafb0f8c13c9f7d534f",
+    "title": "RATELIMIT_KV",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "a4926bc00e9b438a898289934457a579",
+    "title": "SESSION",
+    "supports_url_encoding": true,
+    "beta": false
+  },
+  {
+    "id": "b68836e642d84fd08a40b96879cbda47",
+    "title": "SESSION_STORE",
+    "supports_url_encoding": true,
+    "beta": false
+  }
+]

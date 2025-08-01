@@ -33,7 +33,7 @@ id = "f0468576601a4935b68069b4e54157e4"
 
 [[kv_namespaces]]
 binding = "DOC_METADATA"
-id = "bcb326be651d44e98eb4d2220003d6473"
+id = "bcb326be651d44e98eb4d220003d6473"
 
 [[kv_namespaces]]
 binding = "RATELIMIT_KV"
