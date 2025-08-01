@@ -12,6 +12,10 @@ import { CustomerWorkflow } from './workflows/customer_workflow';
 import { FormSessionDO } from './durable-objects/FormSessionDO';
 export { FormSessionDO };
 
+// Import AIGate for AI concurrency control
+import { AIGate } from './lib/ai/aiGate';
+export { AIGate };
+
 // Import WorkersPerformanceManager for performance monitoring
 import { WorkersPerformanceManager } from './lib/utils/workers-performance';
 
@@ -199,13 +203,15 @@ export function createExports(manifest: SSRManifest) {
         SESSION: env.SESSION,
         FORM_SESSION: env.FORM_SESSION,
         CUSTOMER_WORKFLOW: env.CUSTOMER_WORKFLOW,
-        AI_WORKER: env.AI_WORKER,
         ASSETS: env.ASSETS,
         METRICS_KV: env.METRICS_KV,
         CACHE_KV: env.CACHE_KV,
         AI: env.AI,
         VECTORIZE: env.VECTORIZE,
         CHAT_HISTORY: env.CHAT_HISTORY,
+        DOC_METADATA: env.DOC_METADATA,
+        RATELIMIT_KV: env.RATELIMIT_KV,
+        AIGate: env.AIGate,
         
         // Authentication secret
         ADMIN_PASS: env.ADMIN_PASS
@@ -226,5 +232,6 @@ export function createExports(manifest: SSRManifest) {
     default: handler,
     CustomerWorkflow: CustomerWorkflow,
     FormSessionDO: FormSessionDO,
+    AIGate: AIGate,
   };
 }

@@ -34,17 +34,18 @@
       "class_name": "CustomerWorkflow"
     }
   ],
-  "services": [
-    {
-      "binding": "AI_WORKER",
-      "service": "iplc-ai"
-    }
-  ],
+  "ai": {
+    "binding": "AI"
+  },
   "durable_objects": {
     "bindings": [
       {
         "name": "FORM_SESSION",
         "class_name": "FormSessionDO"
+      },
+      {
+        "name": "AI_GATE",
+        "class_name": "AIGate"
       }
     ]
   },
@@ -75,6 +76,14 @@
       "binding": "CACHE_KV",
       "id": "f0468576601a4935b68069b4e54157e4",
       "preview_id": "4590bca3cdf9499b91dc607544ac380a"
+    },
+    {
+      "binding": "DOC_METADATA",
+      "id": "doc-metadata-kv-namespace"
+    },
+    {
+      "binding": "RATELIMIT_KV",
+      "id": "ratelimit-kv-namespace"
     }
   ],
   "vectorize": [

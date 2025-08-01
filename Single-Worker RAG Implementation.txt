@@ -1,0 +1,490 @@
+Single-Worker RAG Implementation on Cloudflare (Free Tier)
+
+In this guide, we will refactor the IPLCForms-v3 Retrieval-Augmented Generation (RAG) system from a two-Worker architecture into a single Cloudflare Worker that handles all AI and retrieval logic. We’ll outline how to integrate the AI chat functionality (embedding, vector search, and answer generation) directly into the main Worker, staying within Cloudflare’s free-tier limits. The guide is organized into clear sections covering the architecture changes, module breakdowns, implementation strategies for each component, deployment steps, optimizations, and troubleshooting tips.
+Architecture Overview: From Two Workers to One
+
+    Original Two-Worker Design: The project initially split responsibilities between two Cloudflare Workers. The main worker (named iplcforms-v3) served the Astro/React frontend and core app features (form builder, etc.), while a separate AI worker (iplc-ai) handled AI tasks (document processing, Vectorize calls, and generating chat responses). The main worker forwarded requests to the AI worker via a Service Binding (env.AI_WORKER.fetch() calls)
+    GitHub
+    , and streamed responses back to the client. This separation helped manage heavy AI workloads but introduced complexity and cross-worker calls.
+
+    New Single-Worker Approach: We will eliminate the second AI worker entirely. All RAG logic will run within the main iplcforms-v3 worker process. Instead of service binding calls, the main worker will use direct function calls to perform embeddings, vector searches, and AI completions. This consolidation simplifies the architecture and avoids inter-service overhead. It’s especially suitable for Cloudflare’s free tier where we want to minimize resource usage and stay within limits.
+
+    Cloudflare Free-Tier Constraints: The unified worker must operate within the free plan limits. Key limits include ~1000 AI calls/day, 2 concurrent AI requests (GPU inference jobs)
+    GitHub
+    , 100 MB Vectorize index storage (up to ~50 million embedding dimensions), 100k KV writes/day, and approximately 100,000 requests/day overall. CPU time per request should be kept minimal (on the order of a few milliseconds) to avoid hitting any CPU limits. The design will leverage Cloudflare’s offloading (Workers AI and Vectorize) so that most heavy-lifting is done outside the Worker’s own CPU time (calls to external services do not count against CPU time). We will also use streaming and batching techniques to stay well under the limits.
+
+Module Organization in /src/lib/ai/
+
+To keep the code maintainable, all AI-related functionality will be organized into a dedicated library folder with clear modules:
+
+    embeddings.ts – Document Processing & Embeddings: Functions for parsing uploaded documents, chunking them into segments, generating embeddings (via Workers AI), and storing those vectors and metadata.
+
+    vectorSearch.ts – Semantic Search: Functions to perform similarity search on the Vectorize index. This will handle querying the vector database with an embedded user query and retrieving the top relevant chunks.
+
+    chatEngine.ts – RAG Chat Pipeline: Orchestrates the end-to-end chat query handling. It will accept a user’s question (and conversation history), retrieve relevant document context (via vectorSearch), and then invoke the AI model to generate an answer grounded in that context. It will format the AI’s streaming response, including inline citations, for sending back to the client via SSE.
+
+    documentStorage.ts – KV Storage Operations: Utilities for storing and retrieving document metadata and other persistent data in Workers KV (e.g. metadata about uploaded files, cached query results, conversation history, etc.). This module also implements duplicate detection using content hashes to avoid re-processing the same document multiple times.
+
+By separating these concerns, we can call these functions directly inside our API route handlers (e.g. the Astro API routes under src/pages/api/chat/) instead of making fetch calls to another worker. This yields cleaner, more efficient code.
+Document Processing and Embedding (embeddings.ts)
+
+This component handles uploading documents and converting them into vector embeddings ready for semantic search. Key implementation steps and strategies:
+
+    File Upload Handling: The frontend will upload PDF or DOCX files via an Astro API route (e.g. POST /api/chat/upload). In that handler, use a file parsing library or built-in approach to extract raw text from the file. For PDFs, you may use a lightweight PDF parser (e.g. PDF.js or a text-extraction library); for DOCX, libraries like Mammoth can convert to text. Keep parsing efficient to avoid high CPU usage – consider limiting file size or splitting the parsing into chunks if needed (to stay within ~10ms CPU slices). If a file is very large, you might reject it or process it in streaming fashion.
+
+    Smart Text Chunking (500–750 chars): Once text is extracted, split it into manageable chunks for embedding. We will implement sentence-aware chunking so that we don’t cut off sentences mid-way. One approach: split the text by sentence boundaries and accumulate sentences into a chunk until it’s about 500–750 characters long (up to a max of ~750, or whatever yields ~500 tokens)
+    GitHub
+    . If adding another sentence would exceed the limit, start a new chunk. This ensures chunks are coherent and not overly long. For example, the code can use a regex to split text into sentences, then group them ensuring each chunk ≤ ~750 chars. This strategy captures complete thoughts for the AI to reference, and prevents huge embeddings that might waste vector storage.
+
+    Metadata Extraction: Extract basic metadata from the document to store alongside the chunks. For a PDF, this could be the document’s title, author, and perhaps the page numbers of each chunk. For a DOCX, use file name or title. If the file format has metadata, use it; otherwise derive some (e.g. use the filename as title, current date as upload date). Also consider numbering pages or sections: if the parser can identify page breaks or headings, record those so citations can refer to “Document Title, Page X”. We will include this info in the metadata for each chunk.
+
+    Duplicate Detection via Hashing: Before processing a new document, compute a content hash of its text to detect duplicates. A simple method is to take an MD5 or SHA-1 of the entire text content. In documentStorage.ts, maintain a KV mapping of hash -> document ID (or a flag that content was seen). When a file upload comes in, calculate the hash; if it matches an existing entry, you can skip re-embedding. This saves our limited AI calls and Vectorize storage. If skipping, you might just return a message or reuse the existing doc’s ID. (Make sure to handle slight differences like if the user uploaded an updated version – you might include file size or timestamp in the hash input to reduce false matches.)
+
+    Embedding Generation with Workers AI: To vectorize the chunks, use Cloudflare Workers AI with an embedding model. Cloudflare provides some free embedding models (for example, BAAI’s bge-small-en-v1.5 which outputs 384-dimension vectors)
+    GitHub
+    . In embeddings.ts, call the AI binding directly to get embeddings for all chunks in one go. For example:
+
+    const EMBED_MODEL = '@cf/baai/bge-small-en-v1.5';  // 384-dim English embed model  
+    const embedResponse = await env.AI.run(EMBED_MODEL, { text: allChunks });
+
+    We pass the array of chunk strings as text: [...]. The Workers AI service will return an array of embedding vectors (each vector likely 384 float values) for each chunk
+    GitHub
+    . Batch embedding all chunks in one request is efficient – it counts as a single AI invocation and should be within free-tier limits (just ensure the total text isn’t too large; if it is, consider splitting into multiple calls).
+
+    Storing Vectors in Vectorize: Take the returned embeddings and upsert them into the Cloudflare Vectorize index. Each vector needs an id and metadata. We can construct IDs by combining a unique document ID with a chunk index (e.g. "doc123-0", "doc123-1", etc.). The metadata stored with each vector should include info for retrieval: document title, perhaps chunk text preview, and any other data needed for citation (page number, chunk index, etc.). Using the official Vectorize binding (accessible as env.VECTORIZE in our worker), call env.VECTORIZE.upsert(vectors) to save them
+    GitHub
+    . On free tier, inserts are asynchronous but typically quick; the index can store millions of dimensions within 100MB. (Note: Deleting individual vectors isn’t supported on free tier indexes – see Troubleshooting for how we’ll handle removals.)
+
+    Storing Document Metadata in KV: After a successful embedding, save document-level metadata to a Workers KV namespace (e.g. DOC_METADATA). This KV entry (keyed by a document ID or hash) can store a JSON blob with fields like: document name, file type, upload timestamp, number of chunks, and list of vector IDs inserted
+    GitHub
+    . This metadata is useful for listing uploaded documents, and for associating vectors back to a human-readable source. It’s lightweight (a few hundred bytes per document) so KV is appropriate. KV writes are limited (100k/day), but unless users upload thousands of docs daily, this is fine. We’ll also use KV for other caching purposes later.
+
+    Response to Frontend: The upload API route can respond with an acknowledgment and the new document’s ID or name. The frontend could update its sidebar to show the uploaded document in the “Notebook” (with metadata like title, upload time, etc., possibly retrieved via another API call that lists documents from KV).
+
+By implementing embeddings.ts with the above, whenever a file is uploaded, the system will extract text, chunk it smartly, filter out duplicates, embed all chunks in one AI call, store them in Vectorize, and record metadata. This prepares the ground for semantic search on user queries.
+Semantic Vector Search (vectorSearch.ts)
+
+The vectorSearch.ts module will handle converting user queries into vector form and finding relevant document chunks using the Vectorize index:
+
+    Query Embedding: When the user asks a question in the chat, we must embed that question (and possibly the conversation context) into the same vector space as the documents. We’ll use the same embedding model as above (for consistency, e.g. BAAI bge model) to generate a query vector. This is a quick operation since it’s just one sentence or a few sentences – a single call to env.AI.run(EMBED_MODEL, { text: [ userQuery ] }) will return the embedding array
+    GitHub
+    . This counts toward our daily AI request limit, but we will later cache common queries to avoid repeated embeddings for identical questions.
+
+    Vectorize Index Query: Using the query vector, perform a similarity search on the index. Cloudflare’s Vectorize binding allows a simple .query(vector, { topK: N }) operation to retrieve the top N closest matches
+    GitHub
+    . In our case, we want the top 5 chunks (as per requirements) that are most semantically relevant to the query. We’ll likely set N = 5 (or maybe a slightly higher number and then filter if needed). The result will be an array of matches, each containing the stored id, the similarity score, and the metadata we attached earlier when inserting. Our code should map these into a friendly format, e.g. an array of { id, score, metadata } objects (with metadata including the chunk text snippet and source info)
+    GitHub
+    .
+
+    Relevance Filtering: In practice, we might want to ignore results with very low scores (if Vectorize returns a score or distance). For example, if none of the documents are relevant (score below some threshold), we could treat it as “no relevant context found.” However, in most cases with at least a few documents, the top 5 should contain useful context.
+
+    Composite Context Construction: The search results will feed into the chat engine. We need to compile the retrieved chunks into a context passage that will be given to the AI model. A straightforward method is to join the chunk texts with clear separators. For example, we might do:
+
+const contextChunks = results.map(res => res.metadata.fullChunk).filter(Boolean);
+const contextText = contextChunks.join("\n\n---\n\n");
+
+This produces a single string with each chunk separated by a line of ---
+GitHub
+. The fullChunk is the original chunk text (we stored it in metadata earlier). Using a separator helps the model distinguish different sources. Ensure the context length is within the model’s context window; since we only take 5 chunks of a few hundred characters each, even at worst ~5*750 = ~3750 chars (a few thousand tokens) – well within a typical LLM context (the model we use likely supports thousands of tokens, possibly 4k or more). The project’s design target was a 128KB context window, likely using a model that can handle long input, so we have plenty of headroom.
+
+Metadata Handling for Citations: Alongside the raw text chunks, keep track of their source info for citation. For instance, each result’s metadata could include documentName and maybe pageNumber. We won’t literally include “(Source: X)” text in the context (to avoid confusing the model’s output), but we will use this metadata to label the chunks in the prompt or to map citations in the answer. One approach is to prepend an identifier to each chunk in the context given to the model. For example, we can list them as:
+
+    [1] {text of chunk 1}
+    [2] {text of chunk 2}
+    ...
+
+    where the numbers correspond to sources. This way the model can refer to these chunks by number. However, another strategy is to simply supply the context text and instruct the model to cite by source name/page. In our case, using numeric references might be more reliable for formatting inline citations as ^[1], ^[2], etc. We will adopt numbering in the prompt for clarity.
+
+    Cache Query Results: To optimize, we can cache the vector search results for frequently asked queries. For example, store the top 5 results for a given query string in KV (with a short TTL, say 1 hour)
+    GitHub
+    . Next time the same question is asked, we could skip the embedding and vector query and directly use the cached context (assuming the document set hasn’t changed significantly in that time). This Vectorize result caching saves both an AI embedding call and vector query operations. We need to be careful to include the query string in the cache key and perhaps the set of documents that were available (if documents can be added, a cache might become stale – using a short TTL mitigates this). The project plan mentioned caching vector results for 1 hour
+    GitHub
+    , which is a good default.
+
+With vectorSearch.ts implemented, our chat workflow can quickly fetch relevant context for any user question, ensuring the AI only sees information from the user’s own documents.
+Chat Engine and RAG Response Generation (chatEngine.ts)
+
+The chat engine ties everything together to produce the final answer with citations. It will use the vectorSearch to get context and then call Workers AI to generate a response via a chat model, streaming the answer back through SSE. Key aspects:
+
+    Assembling the Prompt with Context: When a new question comes in, the engine first obtains the top 5 context chunks (as above). Then, construct a prompt for the language model that includes these chunks and the user’s question. Typically, we use a system message to give the model instructions, followed by a user message containing the actual query and context. For example, we might create a messages array like:
+
+const messages: ChatMessage[] = [
+  { role: 'system', content: "You are an AI assistant that helps users with information from their documents. ... (instructions on citing sources, etc.)" },
+  ...historyMessages,
+  { role: 'user', content: compiledPrompt }
+];
+
+The system content can say something like: “You are IPLC Notebook Assistant. You have access to the user’s uploaded documents as context. Answer the question using the provided document excerpts, and include citations in your answer for any specific information, using the format ^[n] corresponding to the document source. If the answer is not in the documents, say you don’t know or that it’s not provided.”
+GitHub
+. These instructions ensure the model grounds its answers and uses citations.
+
+The historyMessages would be the last few turns of the conversation (if we have multi-turn chats). In code, they included the last 6 messages from history
+GitHub
+, so we will do similarly to maintain conversational context. (These messages can be fetched from KV chat history or a Durable Object if one is used for session, more on that shortly.)
+
+For the user message content (compiledPrompt): we include the document context followed by the actual question. A recommended format is:
+
+If context exists: “Context from your documents:\n\n[1] {chunk1}\n\n[2] {chunk2}\n...\n\nQuestion: {user’s question}”.
+
+If no relevant context was found (vector search returned nothing), we can prompt: “Question: {question}\n\n(No relevant documents were found in the notebook.)” to let the model know it might have to say it doesn’t know
+GitHub
+.
+
+By numbering the context excerpts as [1], [2], etc., the model can use those numbers in its answer. We explicitly instruct it (in the system message) to cite sources by number. This setup mirrors the NotebookLM-style interface we want, where the answer will have footnote references.
+
+Invoking the Chat Model: With the messages ready, call the Workers AI chat model. The project uses Cloudflare’s Workers AI with models like Qwen-14B or Llama-2 8B. Under free tier, a smaller model might be used by default (the example code uses a Meta Llama-3.1 8B instruct model)
+GitHub
+. We can configure the model via an environment variable (e.g. AI_MODEL set to @cf/qwen/qwen1.5-14b-chat-awq as in the .env) or use the default. The call looks like:
+
+const response = await env.AI.run(chatModel, {
+  messages,
+  stream: true,
+  max_tokens: 2048,
+  temperature: 0.7,
+});
+
+Setting stream: true tells Workers AI to return a ReadableStream of the model’s output tokens as they are generated
+GitHub
+. This is crucial for streaming responses. We also cap max_tokens to a reasonable length (2048 here) to ensure the response fits and to conserve usage. Temperature ~0.7 gives a balance of creativity and factualness, but this can be tuned. The model will begin generating text, guided by our prompt which includes the context chunks.
+
+Server-Sent Events (SSE) Streaming: To give a responsive UI, we will stream the AI’s answer to the frontend. Cloudflare Workers allow streaming responses by piping a ReadableStream into the HTTP response. We’ll take the response stream from env.AI.run and wrap it in an SSE format. In practice, this means reading the stream chunk by chunk and sending each as an SSE data: event. We can implement a helper like:
+
+    function createSSEStream(aiStream: ReadableStream): ReadableStream {
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      return new ReadableStream({
+        async start(controller) {
+          const reader = aiStream.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const textChunk = decoder.decode(value);
+              // Wrap chunk in SSE JSON message
+              const payload = JSON.stringify({ response: textChunk });
+              controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+            }
+            // When done, signal SSE completion
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          } catch (err) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`));
+          } finally {
+            reader.releaseLock();
+            controller.close();
+          }
+        }
+      });
+    }
+
+    This logic reads from the AI stream and for each piece of text, it sends a JSON object like {"response": "..."} as an SSE data: line
+    GitHub
+    . The client’s EventSource will receive these and append the text to the chat display in real-time. At the end, we send a special [DONE] event to mark completion. The above approach is illustrated in the existing code
+    GitHub
+    GitHub
+    . We should also periodically flush or send heartbeat comments if needed to keep the connection alive (the project’s optimizations included sending keep-alive pings every 30s and using a 16KB buffer to optimize throughput
+    GitHub
+    ). In practice, the streaming from Workers AI should emit data continuously if the answer is long, so explicit heartbeats may not be needed unless pauses are observed.
+
+    Returning the SSE Response: The Astro API route for the chat query (e.g. POST /api/chat/query) will call our chat engine function that does the above and returns a ReadableStream for SSE. We then return a new Response(stream, { headers: { "Content-Type": "text/event-stream", ... } }). Important headers for SSE include:
+
+        Content-Type: text/event-stream
+
+        Cache-Control: no-cache, no-store, must-revalidate (to prevent caching)
+
+        Connection: keep-alive
+
+        X-Accel-Buffering: no (this header disables buffering in some proxies, ensuring the stream flushes immediately to the client)
+
+    These were used in the original implementation
+    GitHub
+    . With these headers, Cloudflare will keep the connection open and stream data as we enqueue it. The front-end can then receive partial responses and render them.
+
+    Inline Citations in Answers: Thanks to our prompt setup, the AI’s answer should contain references to sources. For example, if it quotes something from the first document chunk, it might say “...^[1]” in the text (or another format we instructed). We might need to post-process the final answer to ensure the citation format is consistent. If we numbered the chunks [1]..[5] in the prompt, we expect the model to use those numbers. We should verify in testing if the model outputs something like “[1]” or “^[1]” around the info – and adjust our prompt instructions accordingly (the system prompt can explicitly say “use ^[n] format for citations”). Once the streaming is done, the client likely has the full answer text with footnote markers. To present the actual source details in the UI, the client can map each number to the corresponding document name or snippet. We can facilitate this by including, at the end of the SSE stream, a JSON with the reference mapping (or the client can already know which document was [1] etc. from the context it sent). For example, when we send the final [DONE], we could also have stored the top-5 metadata and deliver it via a separate API call or an SSE event like data: {"references": [ ... ]} prior to done. The implementation can vary, but the key is that the answer will have inline citations that correspond to the user’s documents.
+
+    Conversation History & Follow-ups: The chat engine should support multi-turn conversations. The approach is to maintain a history of messages (user and AI) either in memory (for the session) or in a Durable Object / KV so it persists across page reloads. In the current project, they use a KV (binding CHAT_HISTORY) to store each message and a conversation metadata
+    GitHub
+    GitHub
+    . When a new question comes with a conversationId, we retrieve the last few messages from KV and pass them as the historyMessages (as shown above). This way the AI can take into account what has been asked and answered before. We should limit how much history to include (e.g. last 6 exchanges or last N characters) to keep within context limits and to focus on recent context. The code already slices the history to last 6 messages
+    GitHub
+    . We can also compress older history or summarize if needed, but that’s an advanced optimization.
+
+    For now, ensure that chatEngine.ts can accept an optional conversationId and fetch prior messages. If using KV, messages might be stored with keys like msg:{conversationId}:{msgId} and conversation metadata under conv:{conversationId} (this seems to be the case in the code)
+    GitHub
+    . Use list() or known keys to retrieve recent messages. Alternatively, you could manage conversation state in a Durable Object (as the SessionDO in the old AI worker was intended to do), but to keep things simple, KV is sufficient for low-volume usage. We will also cache conversation history in KV with a TTL (e.g. 30 minutes)
+    GitHub
+    , so that idle conversations don’t persist forever. The TTL can be set on the KV put (for example, set each message and conversation record to expire after 30 minutes of inactivity).
+
+In summary, chatEngine.ts will coordinate the RAG process: take the user query, get context via vector search, formulate the prompt (with context, history, and instructions), call the AI model, and stream back the answer with citations. The client sees a live response with references to their own documents, all served from our single Worker.
+KV Storage and Caching (documentStorage.ts)
+
+This module will contain helper functions to use Workers KV for various storage needs in the AI system:
+
+    Document Metadata KV: As described earlier, store document info (title, type, etc.) keyed by a document ID. Provide functions like saveDocumentMeta(id, metadata) and getDocumentMeta(id). Also include a function to list all documents (you can use KV list with a prefix if you store keys with a prefix, or store a separate index key listing all docs). The API route GET /api/chat/documents can use this to return a list of uploaded documents to the frontend (the existing AI worker had a /documents endpoint that did this, listing all KV keys and retrieving each metadata
+    GitHub
+    ).
+
+    Content Hash Index: Use KV to store the mapping of content hashes to document IDs. For example, a KV key like hash:<md5> with value being the doc ID that has that content. A function isDuplicate(hash) can check KV. If a duplicate is found, decide whether to skip embedding or not. You might still allow the user to upload a duplicate file under a different name, but perhaps warn that it’s already uploaded. Implementation detail: if you skip, you could simply not insert vectors again but still record the doc under a new name referencing the same vectors. However, managing references to the same vector set from multiple docs might complicate things. Simpler: just prevent exact duplicates to save resources (e.g. respond “This document has already been uploaded previously”).
+
+    Query Result Cache: Provide functions to cache query embeddings or results. For instance, putQueryResult(query, results) storing the top results array in KV (with a short TTL), and getQueryResult(query) to retrieve it if present. The key can be something like qcache:${query} (perhaps hash the query string if it’s long or to avoid key length issues). The data includes the top 5 chunks (or their IDs) and maybe the answer if we wanted to cache complete answers. However, caching the final answer is tricky if the conversation context or follow-up questions differ, so caching the context results is safer. We can also cache embeddings specifically: e.g. store the 384-dim vector for a query so we don’t recompute it. But since vector generation is one call, caching the whole result (which includes indirectly the vector) is effectively the same thing. If we did want to cache embeddings, we could store them as a JSON array under embed:${query} and reuse it to call Vectorize.query() without hitting the AI embedding API.
+
+    Conversation History: Functions to add a message to conversation KV and to fetch conversation messages. E.g. appendMessage(conversationId, role, content) and getConversation(conversationId). The code currently generates an ID for each message (like using nanoid)
+    GitHub
+    and stores it. We can simplify by storing the entire conversation thread JSON under one key, but that could get large. The existing approach of one key per message is fine for low volume. documentStorage.ts can encapsulate these KV operations. Also handle TTL as needed when storing messages, to enforce the 30-minute cache window on conversation data.
+
+    Rate Limiter State: Though not exactly “AI” logic, the project uses KV (CACHE_KV) to track rate limiting information (tokens and counters) per IP
+    GitHub
+    GitHub
+    . If not already in a separate module, we can include a utility here to interact with the rate limit KV entries (though the logic largely lives in the middleware). Ensure the KV is properly bound and available.
+
+All KV usage should be mindful of limits: each KV.put is a write that counts toward the daily quota (100k writes). With caching and chats, we should stay within this (e.g. each message is a write, each query result cached is a write; with a single user or small number of users, 100k is plenty of headroom per day).
+Rate Limiting and Request Queueing
+
+Even on a single-worker setup, we must guard against abuse and ensure compliance with free-tier limits:
+
+    Client-Side Rate Limiting: On the frontend, it’s good UX to prevent users from spamming the “Ask” button. Implement a simple rate limit in the UI (for example, disable the input or show a “please wait” if more than X queries in a short time). The specifics can be a 1-2 queries per second at most from the UI. However, client-side checks are easily bypassed, so the real enforcement is on the server.
+
+    Worker Rate Limiting (Token Bucket): The project has already implemented a token bucket algorithm in a global middleware that runs for each request
+    GitHub
+    GitHub
+    . This uses KV to track requests per IP. It allows 60 requests per minute with a burst of 10
+    GitHub
+    . We will continue using this in the single worker. Ensure that in wrangler.toml the KV namespace for this (likely CACHE_KV or a dedicated RATE_LIMITER) is bound, and the middleware (src/middleware/index.ts) is applied to all API routes. This will automatically respond with HTTP 429 if a user exceeds the limit, including a Retry-After header
+    GitHub
+    . The limits can be adjusted if needed, but 60/min is reasonable. Keep in mind that each SSE stream that remains open counts as a single request; the token is consumed at start, and the stream could last many seconds. That’s fine, and subsequent SSE messages do not count as separate requests.
+
+    Durable Object Queue for AI (AIGate): Cloudflare Workers AI free tier allows at most 2 concurrent model executions at a time per account
+    GitHub
+    . If a third request comes in while two are still processing, one will fail or be rejected unless we queue it. To handle this, the project created a Durable Object called AIGate
+    GitHub
+    . In the single-worker architecture, we will use this DO to serialize AI requests beyond concurrency limit. Here’s how to integrate it:
+
+        DO Binding: Ensure the DO class is bound in wrangler.toml. The main worker config already has AI_GATE binding with class AIGate
+        GitHub
+        . We will remove the old AI_WORKER service binding and keep AI_GATE instead.
+
+        Using AIGate: Before invoking the AI model (for embeddings or chat completions), acquire a slot via the DO. For example, in embeddings.ts when calling env.AI.run for embeddings, and in chatEngine.ts before calling the chat model, we can route the request through the DO:
+
+            Obtain a DO stub: const gateId = env.AI_GATE.idFromName("global"); const gate = env.AI_GATE.get(gateId);
+
+            Send a request to the DO, e.g. await gate.fetch("/queue", { method: "POST", body: JSON.stringify({ model: modelName, params: modelParams }) });.
+
+            The DO’s fetch() handler will queue this request. The AIGate DO as written uses blockConcurrencyWhile to only allow up to 2 concurrent executions of executeAIRequest
+            GitHub
+            GitHub
+            . If more are queued, it waits until one finishes.
+
+            We will implement executeAIRequest in the DO to actually call env.AI.run with the provided model and params and return the result. The DO has access to the AI binding if we include it. (If not directly accessible, we can pass necessary data and have the DO call a global function – but simpler is to give the DO environment an AI binding, which should be the case since it’s the same worker environment.)
+
+            The DO will return the AI response. For non-streaming calls (like embedding generation), it can return the data immediately as JSON. For streaming chat responses, it’s trickier because we want to stream out to the client directly. We might actually handle streaming outside the DO but use the DO just to obtain permission to proceed. One strategy: before starting an AI stream, do a short DO call to increment the counter (or use blockConcurrencyWhile as a lock) and then release it when done. However, using DO for streaming might complicate piping the response.
+
+    Given that our SSE streaming already chunk-splits the output, a simpler approach could be:
+
+        For embeddings and other short AI calls, route through AIGate (it will queue if needed, then call env.AI and return results).
+
+        For chat streaming, since it can last many seconds, we might not want to route the whole stream through the DO (which would tie up the DO and potentially block other operations). Instead, we can do: have AIGate DO allow or delay the start of a new stream until <2 are active, then immediately return control to the main worker to perform the stream. For example, use DO to implement a counting semaphore:
+
+            Call DO at /queue with model info; in blockConcurrencyWhile, increment active count and return success if below limit (or wait if at limit)
+            GitHub
+            GitHub
+            .
+
+            Once DO returns saying “go ahead”, the main worker calls env.AI.run for streaming and begins sending SSE.
+
+            When the stream finishes, call the DO again (maybe an /done endpoint) to decrement the activeRequests count.
+
+    This pattern would keep the DO logic simple (just count control) and let the main thread do streaming. It avoids the DO being a middleman for the actual stream data. We will implement this approach. Essentially, before starting any Workers AI call, do await gate.fetch('/queue') to acquire a slot, and ensure to notify the DO on completion to release the slot.
+
+    This guarantees at most 2 AI model inferences run in parallel, preventing the third from potentially hitting a Workers AI concurrency error. It’s especially important if multiple users or multiple features (e.g. someone uploading a document while another asks a question) happen simultaneously.
+
+    Global Request Limits: Cloudflare free allows 100k requests/day and 1000 requests/min burst
+    developers.cloudflare.com
+    . Our app should stay well under this (unless someone really hammers it). The built-in rate limiter and Cloudflare’s own enforcement will handle extreme cases. We should note that SSE connections count as one open request, but if a user kept many SSE open or repeatedly restarted them, the rate limiter will cap that.
+
+By combining client-side throttling, the KV-based token bucket rate limiter, and the AIGate Durable Object for AI concurrency, our single worker will be robust against both abuse and platform limits. These measures ensure we don’t exceed free-tier quotas for requests and concurrent AI jobs.
+Deployment and Configuration
+
+Deploying the unified worker requires adjusting the Cloudflare Worker configuration (Wrangler config) and ensuring all resources (KV, DO, Vectorize, etc.) are properly set up:
+
+    Worker Name: We will continue using the main worker’s name (e.g. "iplcforms-v3"). The secondary worker (iplc-ai) will be retired. If it was deployed, you may want to remove it from your Cloudflare account to avoid confusion. The single worker will handle both the web frontend and AI logic under one name/URL.
+
+    Wrangler Configuration Changes: In your wrangler.toml (or wrangler.jsonc), make the following updates:
+
+        Remove Service Binding: Delete the [[services]] section that bound AI_WORKER to iplc-ai
+        GitHub
+        . We no longer need to call an external service.
+
+        AI Binding: Ensure the [ai] binding is present so we can use Workers AI in the worker. The config should have:<br>[ai]\n binding = "AI"
+        GitHub
+        (if it was previously only in the AI worker’s config, copy it here). Cloudflare might require enabling Workers AI on your account and maybe an API call to associate a model – check that AI_MODEL env variable or any needed model selection is configured. The example .env uses AI_MODEL for the model name, but in code we can also hardcode or use that var.
+
+        Vectorize Binding: Ensure a [[vectorize]] binding exists. For instance:<br>[[vectorize]]\n binding = "VECTORIZE"\n index_name = "iplc-chat-index" (or whatever name you choose). In the main config, it was previously named "iplc-forms-chat"
+        GitHub
+        ; to avoid confusion, we can rename the index to "iplc-chat-index" as planned (you may need to create it via wrangler vectorize create iplc-chat-index --preset @cf/baai/bge-base-en-v1.5 if not already created). Update index_name accordingly and use that binding name (VECTORIZE) in code.
+
+        KV Namespaces: Add any new KV namespaces we need:
+
+            DOC_METADATA for storing document info (if not already defined). For example:<br>[[kv_namespaces]]\n binding = "DOC_METADATA"\n id = "<your KV ID>". Create the namespace via Wrangler CLI if needed.
+
+            If not already present, also define KV for rate limiter (e.g. CACHE_KV as in code)
+            GitHub
+            , for chat history (CHAT_HISTORY), and any other caches (the README setup listed RATE_LIMITER, CONVERSATION_CACHE, etc. — just ensure all referenced bindings in code have an entry in wrangler config with the correct IDs).
+
+        Durable Objects: Verify the Durable Object bindings. We have at least two DOs in use:
+
+            AI_GATE (class AIGate)
+            GitHub
+            – should be in the config. If not, add:<br>[[durable_objects.bindings]]\n name = "AI_GATE"\n class_name = "AIGate".
+
+            FORM_SESSION (class FormSessionDO) is for form autosave and unrelated to chat, but it’s already configured
+            GitHub
+            . We can leave it as is.
+
+            If we plan to use the Session Durable Object from the old AI worker for chat sessions, we’d need to bring it over. However, since we opted to use KV for conversation history, we may not need to register SessionDO. (In the AI worker, SESSION_DO was defined
+            GitHub
+            . We can skip it to simplify unless we find a need for it.)
+
+        D1 Database: The config should already have the D1 binding for the forms database (unrelated to chat, but ensure it remains).
+
+        Environment Variables: In production, set any needed secrets or variables. For example, ADMIN_PASS for basic auth (already used in code
+        GitHub
+        ), and possibly AI_MODEL if your code reads from it. Also, if using any third-party API fallback (we’re not here, but just note any keys needed).
+
+    Build Process: Since the project uses Astro, make sure the server output is configured for Cloudflare (likely it is, given the existence of src/worker.ts and the use of Astro’s Cloudflare adapter). Running npm run build should produce the worker bundle. Then npm run deploy (as per README
+    GitHub
+    ) will publish it. The GitHub Actions pipeline (if set up) might automate deployment on push to main.
+
+    Verification Before Deployment: Double-check that all references to the old AI worker are removed or replaced:
+
+        In code, calls like env.AI_WORKER.fetch(...)
+        GitHub
+        should be replaced with direct function calls. For example, in src/pages/api/chat/query.ts, instead of forwarding to AI_WORKER, you might directly call something like:
+
+        const resultStream = await chatEngine.handleQuery(message, conversationId, documentIds, env);
+        return new Response(resultStream, { headers: { ...SSE_HEADERS } });
+
+        where chatEngine.handleQuery internally uses the modules as described. Remove any CORS handling that was only needed for cross-worker; since everything is same origin now, CORS Access-Control-Allow-Origin: * is not strictly needed on these internal API responses (unless you plan to call them from a different domain).
+
+        Remove any leftover fetch() calls to iplc-ai endpoints (for instance, if any admin or testing tools were calling the second worker). They should be unnecessary once merged.
+
+    Correct Worker Routes: Ensure that the worker is configured to serve both the front-end pages and the API routes. The Astro integration likely handles this via the worker.ts entry. We should confirm that the API routes like /api/chat/* will be handled by our code and not treated as static. In Astro, API routes should just work, but since we have a custom fetch handler in worker.ts, it already calls app.render(request, { ... }) which covers Astro’s routing
+    GitHub
+    . Our modifications inside the Astro routes will naturally take effect.
+
+    Testing After Deployment: Once deployed, test the system end-to-end on the free worker subdomain (e.g. your-user.workers.dev or your custom domain if used):
+
+        Upload a small PDF, check the response (should indicate success). Then query something from that document, ensure the answer comes with a citation.
+
+        Test multiple concurrent queries (to see the gating in action – e.g. start one long question then quickly another; the third one you attempt should wait or be queued).
+
+        Verify the rate limiting by sending >60 requests in a minute from one IP (you should get a 429 error after the limit).
+
+        Use the admin metrics endpoint (if exists at /api/admin/sse-metrics) to confirm SSE performance metrics are being collected
+        GitHub
+        – this is optional, but part of the feature set.
+
+        Try deleting a document (the /api/chat/documents/[id] DELETE route) to ensure it removes the KV entry and that our strategy for Vectorize cleanup is understood (since Vectorize free can’t delete vectors individually, the chunk vectors will remain until we purge the index or run a cleanup job).
+
+Deploying on the free tier means no usage costs as long as we stay within limits. If the app grows, consider upgrading or monitoring usage via Cloudflare’s dashboard.
+Performance Optimizations and Resource Management
+
+To ensure the single-worker system runs efficiently under free-tier constraints, consider these optimization tips:
+
+    Minimize CPU Work: Avoid heavy in-worker computations. Parsing documents can be expensive; prefer streaming parsing or offload to the client if possible (for example, performing OCR on images in the browser and sending text, if that’s viable). Cloudflare Workers have generous CPU time (up to 30s), but on free tier you don’t want to tie up the worker too long. The design of offloading embedding to Workers AI and search to Vectorize means most heavy tasks are network calls, which is good (waiting on those doesn’t count as CPU time). Just be careful with any synchronous loops or large JSON handling in your code.
+
+    Batch wherever possible: We already batch chunk embeddings in one request. Similarly, if multiple small documents are uploaded at once, you could batch them, though it’s usually one file at a time. For vector queries, a single query per user question is fine (Vectorize is fast). If you had a feature to query multiple questions at once, batching those could save calls, but that’s outside normal usage.
+
+    Caching to reduce duplicate work: We covered caching query results and skipping duplicate docs. Also consider caching embeddings of documents on disk or KV if re-deployments happen often – not too relevant here since Vectorize persists them. But, for instance, if you had to rebuild the vector index for any reason, you could keep a backup of chunk texts and vectors in D1 or KV to restore without recomputing all embeddings (to save hitting the AI embedding model again). This is a complex scenario; under normal ops, the vector index is persistent and can be relied on.
+
+    Avoid KV Hot Loops: KV is reasonably fast (tens of milliseconds reads), but avoid designs that require many sequential KV reads/writes in one request. For example, listing 1000 documents by calling KV.get on each in one request would be slow. Instead, the KV list API can fetch multiple keys at once. In our usage, we store small data per file or message, which is fine. Writing on every request (like our rate limiter does) is okay given the limits. Just keep an eye on not making too many KV operations synchronously in a single request handler. Use Promise.all if you can parallelize independent KV calls, to hide latency.
+
+    Memory Considerations: The worker can hold some things in memory (global state). For example, caching a frequently used prompt template or keeping a small LRU cache of recent query results in a global variable could save KV calls. But memory is limited to 128MB per Worker isolate. Our use case is light, so memory won’t be an issue. Just note that large documents aren’t stored in memory long – we stream or chunk them out.
+
+    Workers AI Usage Efficiency: Each call to the AI uses some of your daily free quota (10k neurons/day, which roughly corresponds to model usage – e.g. a 1000-token request + 1000-token response might consume ~2000 “neurons”). Our worst-case per query might be a prompt of a couple thousand tokens (with context) and answer of similar size, so maybe ~4k tokens = a fraction of the free allowance. 1000 such queries could approach the free limit. To be safe, encourage users to ask clear, specific questions (which yields shorter answers) and use smaller models if appropriate. The chosen model Qwen 14B is large; perhaps Cloudflare counts its usage differently. If usage becomes an issue, consider switching to a smaller model (the code default of Llama-3.1-8b instruct might be lighter)
+    GitHub
+    , or using a paid plan for more capacity. But for a single-user or small scale, free should suffice.
+
+    SSE Connection Handling: Streaming responses keep connections open longer. Cloudflare allows 6 minutes by default for a single request. If an answer or inactivity goes beyond that, the connection might drop. Our SSE keep-alive pings (every 30s) help avoid some proxies closing the connection. We should also handle the case where the client disconnects: the Worker’s fetch handler can check request.signal or ctx.waitUntil with an abort to stop processing if the client is gone. Cloudflare might automatically handle it, but it’s good to consider. Also, send a final [DONE] as in our implementation to clearly terminate the stream on the client side.
+
+    Cron-based Cleanup: Since Vectorize free tier doesn’t support targeted vector deletion, consider scheduling a daily maintenance (which the old AI worker did via a cron trigger
+    GitHub
+    ). You can implement a scheduled event in the single worker to, for example, rebuild the vector index or remove old data:
+
+        One idea: scan KV DOC_METADATA and if any document is marked deleted (we set a flag when user deletes it), and if the index can’t remove those vectors individually, you might recreate the index without them. (This could involve re-inserting all remaining vectors, which is expensive if many – perhaps not needed unless storage is nearly full.)
+
+        Alternatively, as a simpler cleanup, just purge old conversation history from KV (which TTL already does), remove any stale cache entries, and maybe log Vectorize usage. If storage usage becomes high, you might alert the admin to manually reset the index or upgrade.
+
+    Testing at Scale (within free limits): If you expect multiple simultaneous users, test how the system behaves. The Durable Object gating ensures no overload of AI calls, but it will queue them – test that the queue wait is acceptable (maybe add a message like “System is busy, waiting...” if queueing occurs). Also test uploading several documents and querying across them to ensure the answer cites multiple sources correctly.
+
+Troubleshooting and Common Issues
+
+Finally, let’s cover some common issues and how to address them in this architecture:
+
+    CORS Issues: If your front-end and Workers backend are on the same domain (which is typical for an Astro site served by the Worker), you usually don’t need special CORS headers for API calls. All requests are same-origin. However, if you open up some API (like document listing or snippet sharing) to other origins or if you do local development on a different port, you might need to enable CORS. The previous AI worker code set Access-Control-Allow-Origin: * for all responses
+    GitHub
+    . You can keep a lightweight CORS handler in case, but be careful to not include it on SSE responses if not needed – or at least handle OPTIONS preflight properly. If you see requests being blocked, check the browser console for CORS errors and adjust the headers accordingly. (Often, for SSE, the default behavior is fine as long as the request is same-origin or the correct headers are present.)
+
+    Server-Sent Events Not Streaming: If the client isn’t receiving the streamed messages progressively, a few things to verify:
+
+        Ensure the Content-Type: text/event-stream header is set and no Content-Length header is present (the Response should be chunked). Cloudflare will chunk automatically if you use a ReadableStream.
+
+        Include X-Accel-Buffering: no header to dissuade any intermediary from buffering the response. In some cases Cloudflare may buffer initial chunks; using that header and sending an initial event promptly can help.
+
+        Make sure you’re actually consuming the response.body properly. In our merged solution, we directly return a Response with the stream. In the original code, they did return new Response(ragResponse.body, { headers: ... }) when proxying
+        GitHub
+        . In our case, since we create the SSE stream ourselves, we do return new Response(myStream, { headers: ... }). If you accidentally await the stream or convert it to text, you’ll break streaming – so be careful to pass the stream through.
+
+        If using a reverse proxy or Cloudflare Pages in front, ensure it is configured to allow streaming. When using Workers directly (workers.dev or custom domain route), it should just work.
+
+        On the client side, use the EventSource API or Fetch API correctly. EventSource automatically expects text/event-stream. If using Fetch, you need to read the body as a stream and parse lines – typically EventSource is simpler for SSE.
+
+    Cloudflare Workers AI Errors: If the AI model invocation fails, you might see errors like 500 responses or specific error messages. Common causes:
+
+        Using a model not available or not authorized. Make sure the model identifier is correct and your account has access (some larger models might require requesting access). The Qwen 14B model in config might or might not be freely available – if you get errors, try a smaller default model (like the Llama instruct).
+
+        Hitting the daily or concurrency limits. If you exceed 10k neurons/day or have too many parallel requests, the AI call might error out or return a message. The AIGate DO should prevent concurrency errors by queueing. If you hit daily limit, Cloudflare might return an error like “Rate limit exceeded for Workers AI”. If that happens, you either need to wait until the quota resets or upgrade the plan. In our guide context, we assume moderate usage, so it shouldn’t occur often. But if it does, consider implementing a graceful fallback – e.g. return an error to the user like “AI capacity reached, try again later.”
+
+        Timeout: The Workers AI call could possibly hang or take too long (especially if a model is slow or the output is very long). Cloudflare might time out the entire request if it goes beyond ~30 seconds (there’s a 30s default request limit). If you have a very long document and ask a complex question, the model might take a while. To mitigate, ensure your prompts and max_tokens are not excessive. If truly needed, you could break the answer into parts or reduce complexity.
+
+    Vectorize Anomalies: Cloudflare Vectorize is relatively new, and a few things can happen:
+
+        If you query the index before any vectors are inserted, the query might return an error or empty result. Make sure to handle an empty result set gracefully (e.g. “No context found” as above).
+
+        Index capacity: 100 MB can store quite a lot (many thousands of chunks), but if you approach that limit, further upserts might fail or evict older data (depending on CF’s implementation). If you start nearing the limit (you can monitor index size via API or estimate by number of docs * average chunk size in bytes), you might need to either purge some data or create a new index. A strategy could be to periodically rebuild only the latest N documents or enforce a limit on document uploads (maybe only allow e.g. 100 documents on free tier).
+
+        Deletion of Vectors: As noted, free tier doesn’t support individual vector deletes. Our DELETE /api/chat/documents/:id route will remove the doc metadata from KV
+        GitHub
+        GitHub
+        , but the vectors remain in the index. The code comment mentions that the cron job will clean them up later
+        GitHub
+        . If implementing that, one way is: run a daily cron that drops the entire index and rebuilds it from the KV metadata of remaining docs. This is heavy but if document count is low, it’s manageable. Another approach: mark deleted documents in KV and modify the query logic to ignore results whose documentId is in a deleted list (so even if vectors linger, they won’t be used). This way you don’t necessarily rebuild daily. For now, just be aware of this limitation – if a user deletes a document and immediately later asks something, the answer might still find vectors from the deleted doc until cleaned up. To truly remove immediately, you’d need a paid plan for Vectorize which supports vector deletion.
+
+        Vector dimension mismatches: Ensure the embedding model you use corresponds to the Vectorize index’s expected dimensions. If you accidentally use a different model (e.g. 768-dim embeddings on a 384-dim index), you’ll get errors inserting or querying. Cloudflare likely prevents creating an index with mismatched data. In our config we used @cf/baai/bge-base-en-v1.5 preset when creating the index
+        GitHub
+        , which matches using BGE model for embeddings. Stick to that model for all embeddings and queries.
+
+    Durable Object Gotchas: If the AIGate DO isn’t behaving, check:
+
+        That you created a unique name for idFromName (we used "global" as a fixed name for the gate – this ensures a single instance globally). If each user somehow got a different DO, it would defeat the purpose. So use a constant name or a single instance.
+
+        If you see errors like “AI execution needs to be implemented” it means you didn’t implement the DO’s call to the AI (the placeholder error in executeAIRequest
+        GitHub
+        ). Make sure to replace that with actual return await env.AI.run(model, params). Also, pass only what’s needed to the DO: in our adjusted approach we might not even need to pass env or anything, just model and params. The DO’s env has env.AI available (assuming we bind it similarly in its environment interface).
+
+        If the DO queue logic causes slowdowns: e.g. if one long query is running, a second is queued (good), but a third arrives – it will also queue and wait for a slot. This is intended. However, if the queue gets long, maybe inform users. In a single-admin scenario, this is unlikely (you won’t normally run 3 questions at the exact same time by yourself). But if it happens, know that they’ll be processed sequentially.
+
+    Miscellaneous: Other issues that might come up include:
+
+        Basic Auth / Admin Access: The app uses basic auth for admin features (username admin, password from env). If you combined everything in one worker, that continues to protect the whole site (except static assets) by default
+        GitHub
+        GitHub
+        . If you only want auth on certain routes, adjust the logic.
+
+        Form Builder vs Chat resources: Ensure the form builder features (D1 database, DO for forms) still work after our changes. They should, since we didn’t remove anything related to those. Our new AI modules and KV usage shouldn’t conflict with form data.
+
+        Logging and Debugging: Use console.log generously in the Worker (especially for SSE events, AI responses, and any error catch blocks) while testing. Cloudflare’s Wrangler dev or tail can show logs. This helps diagnose if, say, the AI returned an error message that got buried in the SSE. For example, our SSE wraps errors as data: {"error": "..."}\n\n
+        GitHub
+        – ensure the frontend handles that (maybe it displays an error to user). Monitoring logs and the admin SSE metrics can inform if something’s off (like repeated reconnections or unusual latency).
+
+By following this guide, you will have a single Cloudflare Worker powering the entire application – from serving the Astro frontend to handling AI-driven chat with RAG. All operations remain within the free tier capabilities: using Workers KV and Durable Objects for state, Workers AI for LLM and embeddings, and Vectorize for similarity search, without any external servers. This unified approach reduces complexity and should make the system easier to maintain and scale (when needed, you can upgrade the plan or individual features like Vectorize capacity without changing the architecture). Happy deploying, and enjoy your fully on-the-edge AI form assistant!
+GitHub
+GitHub

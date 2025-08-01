@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
+import { generateSummary } from '../../lib/ai/chatEngine';
+import { checkRateLimit } from '../../lib/ai/rateLimit';
+import type { AIEnv } from '../../lib/ai/types';
 
 const SummaryRequestSchema = z.object({
   formId: z.string(),
@@ -42,10 +45,36 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
     
-    // Prepare data for AI worker
-    const aiPrompt = {
-      systemPrompt: "You are an AI assistant specialized in analyzing forms and generating comprehensive summaries. Your task is to analyze the provided form structure and components to create a clear, informative summary that highlights the form's purpose, structure, and key features.",
-      userPrompt: `Please analyze this form and generate a comprehensive summary:
+    // Create AI environment object
+    const aiEnv: AIEnv = {
+      AI: env.AI,
+      VECTORIZE: env.VECTORIZE,
+      DOC_METADATA: env.DOC_METADATA,
+      CHAT_HISTORY: env.CHAT_HISTORY || env.FORMS_KV, // Use FORMS_KV if CHAT_HISTORY not available
+      AI_GATE: env.AIGate
+    };
+    
+    // Check rate limit
+    const clientIp = request.headers.get('cf-connecting-ip') || 'unknown';
+    const clientId = `form-summary:${clientIp}`;
+    const rateLimitResult = await checkRateLimit(clientId, aiEnv);
+    
+    if (!rateLimitResult.allowed) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return new Response(JSON.stringify({
+        error: 'Rate limit exceeded',
+        retryAfter: retryAfter
+      }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': retryAfter.toString()
+        }
+      });
+    }
+    
+    // Prepare content for summarization
+    const contentToSummarize = `Form Analysis Request
 
 Form Name: ${formData.name}
 ${formData.description ? `Form Description: ${formData.description}` : ''}
@@ -68,28 +97,17 @@ Please provide a structured summary that includes:
 - Accessibility considerations
 - Suggestions for improvement (if any)
 
-Format the summary using markdown with clear sections.`
-    };
+Format the summary using markdown with clear sections.`;
     
-    // Call AI_WORKER service
-    const aiResponse = await env.AI_WORKER.fetch(new Request('https://ai-worker/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(aiPrompt)
-    }));
-    
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      throw new Error(`AI Worker error: ${aiResponse.status} - ${errorText}`);
-    }
-    
-    const aiResult = await aiResponse.json();
-    const summary = aiResult.response || aiResult.text || aiResult.summary;
+    // Generate AI summary
+    const summary = await generateSummary(
+      contentToSummarize,
+      aiEnv,
+      500 // Max words for summary
+    );
     
     if (!summary) {
-      throw new Error('AI Worker returned empty summary');
+      throw new Error('Failed to generate summary');
     }
     
     // Store summary in database

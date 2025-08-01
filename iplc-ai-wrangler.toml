@@ -14,12 +14,7 @@ index_name = "iplc-chat-index"
 # KV namespace for document metadata
 [[kv_namespaces]]
 binding = "DOC_METADATA"
-# ID will be automatically generated on first deployment
-
-# Durable Objects for session management
-[[durable_objects.bindings]]
-name = "SESSION_DO"
-class_name = "SessionDO"
+id = "bcb326be651d44e98eb4d220003d6473"
 
 # Cron triggers for scheduled cleanup
 [triggers]

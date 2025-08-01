@@ -27,8 +27,11 @@ interface WorkerEnv {
   CACHE_KV: KVNamespace;
   CHAT_HISTORY: KVNamespace;
   AI: any; // Cloudflare AI binding
-  AI_WORKER: Fetcher; // AI Worker service binding
   VECTORIZE: any; // Vectorize index binding
+  FORMS_KV: KVNamespace; // Forms KV namespace
+  RATELIMIT_KV: KVNamespace; // Rate limiting KV namespace
+  DOC_METADATA: KVNamespace; // Document metadata KV namespace
+  AIGate: DurableObjectNamespace; // AI Gate Durable Object for concurrency control
 }
 
 // Export to ensure this is treated as a module

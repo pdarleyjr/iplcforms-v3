@@ -1,8 +1,10 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
+import { generateRAGResponse, checkRateLimit } from '../../../lib/ai';
+import type { AIEnv, ChatMessage } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
+  const env = locals.runtime.env as AIEnv;
   
   try {
     const { message, conversationId, documentIds } = await request.json();
@@ -14,14 +16,27 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Check if AI_WORKER binding exists
-    if (!env.AI_WORKER) {
-      throw new Error('AI_WORKER binding not configured');
-    }
-
     // Create or use existing conversation
     const convId = conversationId || nanoid();
     
+    // Check rate limit
+    const clientId = request.headers.get('CF-Connecting-IP') || 'anonymous';
+    const rateLimitInfo = await checkRateLimit(clientId, env);
+    
+    if (!rateLimitInfo.allowed) {
+      return new Response(JSON.stringify({
+        error: 'Rate limit exceeded',
+        retryAfter: rateLimitInfo.retryAfter
+      }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
+          'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
+          'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
+        }
+      });
+    }
 
     // Store user message locally
     const userMessageId = `${convId}:${nanoid()}`;
@@ -48,38 +63,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
       })
     );
 
-    // Forward to iplc-ai worker for RAG processing
-    const ragResponse = await env.AI_WORKER.fetch('http://ai-worker/rag', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: message,
-        conversationId: convId,
-        documentIds: documentIds || []
-      })
-    });
+    // Get conversation history
+    const history: ChatMessage[] = [];
+    // TODO: Implement history retrieval from CHAT_HISTORY KV
 
-    if (!ragResponse.ok) {
-      const errorData = await ragResponse.json();
-      throw new Error(errorData.error || 'Failed to process query');
-    }
+    // Generate RAG response with streaming
+    const stream = await generateRAGResponse(
+      message,
+      history,
+      env,
+      {
+        maxTokens: 1000,
+        temperature: 0.7,
+        topK: 5,
+        conversationId: convId
+      }
+    );
 
-    // Return the streaming response from iplc-ai worker
-    return new Response(ragResponse.body, {
+    // Return the streaming response
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Transfer-Encoding': 'chunked'
+        'Transfer-Encoding': 'chunked',
+        'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
+        'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
+        'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
       }
     });
 
   } catch (error) {
     console.error('Query error:', error);
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       error: 'Failed to process query',
       details: error instanceof Error ? error.message : 'Unknown error'
     }), {

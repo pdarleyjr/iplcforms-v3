@@ -1,8 +1,10 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
+import { storeDocument } from '../../../lib/ai';
+import type { AIEnv, EmbedMetadata } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
+  const env = locals.runtime.env as AIEnv;
   
   try {
     const formData = await request.formData();
@@ -18,65 +20,38 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const uploadedDocuments = [];
 
-    // Check if AI_WORKER binding exists
-    if (!env.AI_WORKER) {
-      throw new Error('AI_WORKER binding not configured');
-    }
-
     for (const file of files) {
       const documentId = nanoid();
       const buffer = await file.arrayBuffer();
       const text = await extractTextFromFile(file, buffer);
       
-      // Forward to iplc-ai worker for embedding
-      const embedResponse = await env.AI_WORKER.fetch('http://ai-worker/embed', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          texts: [text], // The iplc-ai worker expects a texts array
-          metadata: {
-            documentId,
-            conversationId,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            uploadedAt: new Date().toISOString()
-          }
-        })
-      });
-
-      if (!embedResponse.ok) {
-        const errorData = await embedResponse.json();
-        throw new Error(errorData.error || 'Failed to embed document');
-      }
-
-      const result = await embedResponse.json();
+      // Split text into chunks for better retrieval
+      const chunks = splitTextIntoChunks(text, 600);
       
-      // Store document metadata locally for listing
-      const documentMetadata = {
+      // Store document with embeddings using the new AI module
+      const metadata: EmbedMetadata = {
+        documentId,
+        documentName: file.name,
+        documentType: file.type,
+        pageNumber: 1
+      };
+      
+      const result = await storeDocument(chunks, metadata, env);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to store document');
+      }
+      
+      uploadedDocuments.push({
         id: documentId,
         name: file.name,
         size: file.size,
         type: file.type,
         uploadedAt: new Date().toISOString(),
         conversationId,
-        chunks: result.chunks
-      };
-      
-      await env.CHAT_HISTORY.put(
-        `doc:${documentId}`,
-        JSON.stringify(documentMetadata),
-        {
-          metadata: {
-            conversationId,
-            type: 'document'
-          }
-        }
-      );
-
-      uploadedDocuments.push(documentMetadata);
+        chunks: chunks.length,
+        vectorIds: result.vectorIds
+      });
     }
 
     // Create or update conversation

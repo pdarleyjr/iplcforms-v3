@@ -125,48 +125,15 @@ export async function callAIWithRetry(
           await aiRateLimiter.checkLimit();
         }
       
-      // Make the AI call
-      // Since native AI binding doesn't exist in production, use AI_WORKER
+      // Make the AI call using the native AI binding
       let response;
       
-      if (env.AI_WORKER) {
-        // Use AI_WORKER service (this is what's configured in production)
-        const aiRequest = new Request('https://ai-worker/generate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            messages: params.messages,
-            stream: params.stream || false,
-            max_tokens: params.max_tokens || 1024,
-            temperature: params.temperature || 0.7,
-            // For embeddings
-            text: params.text
-          })
-        });
-        
-        const aiResponse = await env.AI_WORKER.fetch(aiRequest);
-        
-        if (!aiResponse.ok) {
-          const errorText = await aiResponse.text();
-          throw new Error(`AI service error: ${aiResponse.status} - ${errorText}`);
-        }
-        
-        // Return the response as-is for streaming or parse JSON for non-streaming
-        if (params.stream) {
-          response = aiResponse;
-        } else {
-          response = await aiResponse.json();
-        }
-      } else if (env.AI) {
-        // Fallback to native AI binding if available (development)
+      if (env.AI) {
+        // Use native AI binding
         response = await env.AI.run(model, params);
       } else {
         // More detailed error for missing AI binding
         console.error('AI Binding Configuration Error:', {
-          AI_WORKER: !!env.AI_WORKER,
           AI: !!env.AI,
           availableBindings: Object.keys(env).filter(key => !key.startsWith('__'))
         });

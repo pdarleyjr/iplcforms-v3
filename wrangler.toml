@@ -31,6 +31,14 @@ id = "b34d60620f6b422c84f196271228c56b"
 binding = "CACHE_KV"
 id = "f0468576601a4935b68069b4e54157e4"
 
+[[kv_namespaces]]
+binding = "DOC_METADATA"
+id = "doc-metadata-kv-namespace"
+
+[[kv_namespaces]]
+binding = "RATELIMIT_KV"
+id = "ratelimit-kv-namespace"
+
 # Durable Objects
 [[durable_objects.bindings]]
 name = "FORM_SESSION"
@@ -44,11 +52,6 @@ class_name = "AIGate"
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "iplc-forms-chat"
-
-# Service bindings
-[[services]]
-binding = "AI_WORKER"
-service = "iplc-ai"
 
 # Workflows
 [[workflows]]

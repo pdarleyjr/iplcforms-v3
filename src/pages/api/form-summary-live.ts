@@ -2,6 +2,9 @@
 // IPLC Forms v3
 
 import type { APIRoute } from 'astro';
+import { generateSummary } from '../../lib/ai/chatEngine';
+import { checkRateLimit } from '../../lib/ai/rateLimit';
+import type { AIEnv } from '../../lib/ai/types';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime.env;
@@ -24,6 +27,34 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return new Response(JSON.stringify({ error: 'No fields selected for summary' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Create AI environment object
+    const aiEnv: AIEnv = {
+      AI: env.AI,
+      VECTORIZE: env.VECTORIZE,
+      DOC_METADATA: env.DOC_METADATA,
+      CHAT_HISTORY: env.CHAT_HISTORY || env.FORMS_KV,
+      AI_GATE: env.AIGate
+    };
+
+    // Check rate limit
+    const clientIp = request.headers.get('cf-connecting-ip') || 'unknown';
+    const clientId = `form-summary-live:${clientIp}`;
+    const rateLimitResult = await checkRateLimit(clientId, aiEnv);
+    
+    if (!rateLimitResult.allowed) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return new Response(JSON.stringify({
+        error: 'Rate limit exceeded',
+        retryAfter: retryAfter
+      }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': retryAfter.toString()
+        }
       });
     }
 
@@ -70,43 +101,23 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
     systemPrompt += `Create a concise summary of the provided information in no more than ${maxLength} characters.`;
 
-    // Build the user prompt
-    let userPrompt = '';
+    // Build the full prompt
+    let fullPrompt = '';
     if (defaultPrompt) {
-      userPrompt = `${defaultPrompt}\n\nData to summarize:\n${contentToSummarize}`;
+      fullPrompt = `${systemPrompt}\n\n${defaultPrompt}\n\nData to summarize:\n${contentToSummarize}`;
     } else {
-      userPrompt = `Please summarize the following form data:\n\n${contentToSummarize}`;
+      fullPrompt = `${systemPrompt}\n\nPlease summarize the following form data:\n\n${contentToSummarize}`;
     }
 
-    // Call AI Worker service
-    const aiPrompt = {
-      systemPrompt,
-      userPrompt
-    };
-    
-    const aiResponse = await env.AI_WORKER.fetch(new Request('https://ai-worker/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(aiPrompt)
-    }));
-    
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      throw new Error(`AI Worker error: ${aiResponse.status} - ${errorText}`);
-    }
-    
-    const aiResult = await aiResponse.json();
-    const summary = aiResult.response || aiResult.text || aiResult.summary || 'Unable to generate summary';
+    // Generate AI summary
+    const summary = await generateSummary(fullPrompt, aiEnv, maxLength);
 
-    // Truncate if needed
-    const truncatedSummary = summary.length > maxLength 
-      ? summary.substring(0, maxLength - 3) + '...'
-      : summary;
+    if (!summary) {
+      throw new Error('Failed to generate summary');
+    }
 
     return new Response(JSON.stringify({
-      summary: truncatedSummary,
+      summary: summary,
       generatedAt: new Date().toISOString(),
       sourceFields: selectedFields
     }), {

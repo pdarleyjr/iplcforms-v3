@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
+import { getDocument, deleteDocument } from '../../../../lib/ai';
+import type { AIEnv } from '../../../../lib/ai';
 
 export const GET: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env;
+  const env = locals.runtime.env as AIEnv;
   const documentId = params.id;
   
   if (!documentId) {
@@ -12,29 +14,17 @@ export const GET: APIRoute = async ({ params, locals }) => {
   }
   
   try {
-    // Check if AI_WORKER binding exists
-    if (!env.AI_WORKER) {
-      throw new Error('AI_WORKER binding not configured');
-    }
-
-    // Forward to iplc-ai worker
-    const response = await env.AI_WORKER.fetch(`http://ai-worker/documents/${documentId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return new Response(JSON.stringify(errorData), {
-        status: response.status,
+    // Get document metadata from DOC_METADATA KV
+    const document = await getDocument(documentId, env);
+    
+    if (!document) {
+      return new Response(JSON.stringify({ error: 'Document not found' }), {
+        status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify(document), {
       headers: { 'Content-Type': 'application/json' }
     });
     
@@ -51,7 +41,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env;
+  const env = locals.runtime.env as AIEnv;
   const documentId = params.id;
   
   if (!documentId) {
@@ -62,50 +52,23 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
   }
   
   try {
-    // Check if AI_WORKER binding exists
-    if (!env.AI_WORKER) {
-      // Fallback to direct deletion if AI worker not available
-      // Get document metadata
-      const docData = await env.CHAT_HISTORY.get(`doc:${documentId}`);
-      if (!docData) {
-        return new Response(JSON.stringify({ error: 'Document not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      // Delete from local KV
-      await env.CHAT_HISTORY.delete(`doc:${documentId}`);
-      
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Document metadata deleted (embeddings remain in AI worker)'
-      }), {
+    // Delete document and its metadata
+    const success = await deleteDocument(documentId, env);
+    
+    if (!success) {
+      return new Response(JSON.stringify({ error: 'Document not found' }), {
+        status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-
-    // Forward to iplc-ai worker for complete deletion
-    const response = await env.AI_WORKER.fetch(`http://ai-worker/documents/${documentId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return new Response(JSON.stringify(errorData), {
-        status: response.status,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Also delete from local KV
+    
+    // Also delete from CHAT_HISTORY if it exists there
     await env.CHAT_HISTORY.delete(`doc:${documentId}`);
-
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Document and metadata deleted successfully'
+    }), {
       headers: { 'Content-Type': 'application/json' }
     });
     
