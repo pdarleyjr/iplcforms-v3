@@ -14,14 +14,14 @@ index_name = "iplc-chat-index"
 # KV namespace for document metadata
 [[kv_namespaces]]
 binding = "DOC_METADATA"
-id = "DOC_METADATA_ID_PLACEHOLDER"
-preview_id = "DOC_METADATA_ID_PLACEHOLDER"
+id = "bcb326be651d44e98eb4d220003d6473"
+preview_id = "053128e230ce47f7b01e2f17dcaf2547"
 
 # KV namespace for session data
 [[kv_namespaces]]
 binding = "SESSION"
-id = "SESSION_ID_PLACEHOLDER"
-preview_id = "SESSION_ID_PLACEHOLDER"
+id = "a4926bc00e9b438a898289934457a579"
+preview_id = "b68836e642d84fd08a40b96879cbda47"
 
 # Durable Objects for session management
 [[durable_objects.bindings]]
@@ -48,6 +48,7 @@ crons = ["0 2 * * *"]  # Run daily at 2 AM UTC
 
 # Environment specific settings
 [env.development]
+# Remove inline vars from repo; manage real values via Cloudflare Dashboard or `wrangler secret`
 vars = { }
 
 # SPA not-found handling for single-page application
