@@ -18,7 +18,7 @@ export default defineConfig({
     },
     workerEntryPoint: {
       path: "src/worker.ts",
-      namedExports: ["CustomerWorkflow", "FormSessionDO"]
+      namedExports: ["CustomerWorkflow", "FormSessionDO", "AIGate"]
     },
     // Enhanced Cloudflare-specific optimizations
     routes: {
