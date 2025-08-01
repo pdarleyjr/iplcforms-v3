@@ -48,7 +48,7 @@ export async function queryDocuments(
     }
 
     // Query the Vectorize index with defensive defaults
-    const response = await env.VECTORIZE.query(queryEmbeddings[0], {
+    const response = await env.VECTORIZE.queryEmbedding(queryEmbeddings[0], {
       topK: Math.min(limit, 100) // Clamp to free tier limit
     });
 

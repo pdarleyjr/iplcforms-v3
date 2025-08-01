@@ -58,7 +58,7 @@ export async function generateRAGResponse(
     const context = await getDocumentContext(cleanQuestion, topK, env);
     
     // Graceful handling when no relevant documents found
-    if (!context || context === '(No relevant context found in documents)') {
+    if (!context || context.includes('No relevant context')) {
       console.log('No relevant documents found for query:', cleanQuestion);
       // Return a graceful response instead of error
       return createErrorStream("No relevant documents found for your query. Please ensure documents are uploaded.");
@@ -231,81 +231,34 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
     });
   }
 
-    // Streaming response
+    // Streaming response - fixed to handle ReadableStream properly
     return new ReadableStream({
-    async start(controller) {
-      let hasError = false;
-      try {
-        // Check if aiResponse has a getReader method
-        if (!aiResponse || typeof aiResponse.getReader !== 'function') {
-          console.error('AI response does not have getReader method');
-          console.error('AI response type:', typeof aiResponse);
-          // Don't log the response object or constructor to avoid toString issues
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid streaming response' })}\n\n`));
-          controller.enqueue(encoder.encode('event: end\n\n'));
-          controller.close();
-          return;
-        }
-
-        console.log('Getting reader from AI response stream');
-        const reader = aiResponse.getReader();
+      async start(controller) {
+        const enc = encoder;
+        const dec = decoder;
         
         try {
+          const reader = aiResponse.getReader?.();
+          if (!reader) throw new Error("AI response is not a ReadableStream");
+          
           while (true) {
-            const { done, value } = await reader.read();
-            
-            // Check done FIRST before processing value
+            const { value, done } = await reader.read();
             if (done) {
-              console.log('Stream reading complete');
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.enqueue(enc.encode('data: [DONE]\n\n'));
               break;
             }
-            
-            // Defensive handling: value could be undefined even when done is false
-            if (!value) {
-              console.warn('Received undefined value in stream');
-              continue;
-            }
-            
-            // Parse the chunk and format as SSE with try/catch for JSON building
-            try {
-              const chunk = decoder.decode(value);
-              console.log('Decoded chunk:', chunk ? `${chunk.substring(0, 50)}...` : 'empty');
-              
-              if (chunk) {
-                // For Cloudflare Workers AI, chunks are typically plain text
-                const sseMessage = `data: ${JSON.stringify({ response: chunk })}\n\n`;
-                controller.enqueue(encoder.encode(sseMessage));
-              }
-            } catch (chunkError) {
-              console.error('Error processing stream chunk:', chunkError);
-              console.error('Chunk value type:', typeof value);
-              console.error('Chunk value:', value);
-              // Don't throw, just log and continue to next chunk
+            if (value) {
+              controller.enqueue(enc.encode(`data: ${JSON.stringify({ response: dec.decode(value) })}\n\n`));
             }
           }
         } catch (error) {
-          hasError = true;
-          console.error('Stream reading error:', error);
+          console.error('Stream error:', error);
           const errorMessage = error instanceof Error ? error.message : String(error);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
         } finally {
-          reader.releaseLock();
+          controller.close();
         }
-      } catch (error) {
-        hasError = true;
-        console.error('Stream setup error:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
-      } finally {
-        // Always send final event
-        if (hasError) {
-          controller.enqueue(encoder.encode('event: error\n\n'));
-        }
-        controller.enqueue(encoder.encode('event: end\n\n'));
-        controller.close();
-      }
-    },
+      },
     });
   } catch (error) {
     console.error('Critical error in createSSEStream:', error);

@@ -28,6 +28,10 @@ preview_id = "SESSION_ID_PLACEHOLDER"
 name = "SESSION_DO"
 class_name = "SessionDO"
 
+[[durable_objects.bindings]]
+name = "AI_GATE"
+class_name = "AIGate"
+
 # Migrations for Durable Objects
 [[migrations]]
 tag = "v1"
