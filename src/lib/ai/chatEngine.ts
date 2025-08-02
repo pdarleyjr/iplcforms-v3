@@ -58,9 +58,9 @@ export async function generateRAGResponse(
     const context = await getDocumentContext(cleanQuestion, topK, env);
     
     // Graceful handling when no relevant documents found
-    if (!context || context.includes('No relevant context')) {
+    if (!context || /\(No relevant/i.test(context)) {
       console.log('No relevant documents found for query:', cleanQuestion);
-      // Return 204 No Content for no relevant documents
+      // Return an empty stream; the route can map this to 204 if needed
       return new ReadableStream({
         start(controller) {
           controller.close();
@@ -235,24 +235,30 @@ function createSSEStream(aiResponse: any, isStreaming: boolean): ReadableStream 
     });
   }
 
-    // Streaming response - fixed to handle ReadableStream properly
+    // Streaming response - handle ReadableStream properly using getReader()
     return new ReadableStream({
       async start(controller) {
         const enc = encoder;
         const dec = decoder;
-        
+
         try {
-          const reader = aiResponse.getReader?.();
-          if (!reader) throw new Error("AI response is not a ReadableStream");
-          
+          const reader = aiResponse?.getReader?.();
+          if (!reader || typeof reader.read !== 'function') {
+            throw new Error("AI response is not a ReadableStream");
+          }
+
           while (true) {
             const { value, done } = await reader.read();
             if (done) {
               controller.enqueue(enc.encode('data: [DONE]\n\n'));
               break;
             }
-            if (value) {
-              controller.enqueue(enc.encode(`data: ${JSON.stringify({ response: dec.decode(value) })}\n\n`));
+            if (value != null) {
+              // decode chunk and forward as SSE
+              const chunk = dec.decode(value, { stream: true });
+              if (chunk && chunk.length) {
+                controller.enqueue(enc.encode(`data: ${JSON.stringify({ response: chunk })}\n\n`));
+              }
             }
           }
         } catch (error) {

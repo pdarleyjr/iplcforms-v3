@@ -6,7 +6,7 @@ compatibility_date = "2025-04-01"
 binding = "AI"
 
 [[vectorize]]
-binding    = "DOC_INDEX"           # matches dashboard
+binding    = "DOC_INDEX"
 index_name = "iplc-chat-index"
 
 [[kv_namespaces]]
@@ -24,4 +24,4 @@ class_name = "AIGate"
 
 [[migrations]]
 tag = "v3-aigate-sqlite"
-new_sqlite_classes = ["AIGate"]     # mandatory on Free plan
+new_sqlite_classes = ["AIGate"]
