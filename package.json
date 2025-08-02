@@ -61,7 +61,7 @@
     "@tailwindcss/postcss": "^4.1.11",
     "@types/sortablejs": "^1.15.8",
     "esbuild": "^0.25.6",
-    "wrangler": "^4.24.3"
+    "wrangler": "^4.27.0"
   },
   "scripts": {
     "astro": "astro",

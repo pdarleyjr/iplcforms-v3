@@ -2,55 +2,26 @@ name = "iplc-ai"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 
-# AI binding configuration
 [ai]
 binding = "AI"
 
-# Vectorize configuration for document embeddings
 [[vectorize]]
-binding = "VECTORIZE"
+binding    = "DOC_INDEX"         # matches dashboard
 index_name = "iplc-chat-index"
 
-# KV namespace for document metadata
 [[kv_namespaces]]
-binding = "DOC_METADATA"
-id = "bcb326be651d44e98eb4d220003d6473"
+binding    = "DOC_METADATA"
+id         = "bcb326be651d44e98eb4d220003d6473"
 preview_id = "053128e230ce47f7b01e2f17dcaf2547"
 
-# KV namespace for session data
 [[kv_namespaces]]
-binding = "SESSION"
-id = "a4926bc00e9b438a898289934457a579"
-preview_id = "b68836e642d84fd08a40b96879cbda47"
-
-# Durable Objects for session management
-[[durable_objects.bindings]]
-name = "SESSION_DO"
-class_name = "SessionDO"
+binding    = "SESSION"
+id         = "a4926bc00e9b438a898289934457a579"
 
 [[durable_objects.bindings]]
-name = "AI_GATE"
+name       = "AI_GATE"
 class_name = "AIGate"
 
-# Migrations for Durable Objects
-[[migrations]]
-tag = "v1"
-new_classes = [ "FormSessionDO", "AIGate" ]
-
-# Durable-Object SQLite migration required for free tier
 [[migrations]]
 tag = "v3-aigate-sqlite"
-new_sqlite_classes = ["AIGate"]
-
-# Cron triggers for scheduled cleanup
-[triggers]
-crons = ["0 2 * * *"]  # Run daily at 2 AM UTC
-
-# Environment specific settings
-[env.development]
-# Remove inline vars from repo; manage real values via Cloudflare Dashboard or `wrangler secret`
-vars = { }
-
-# SPA not-found handling for single-page application
-[assets]
-not_found_handling = "single-page-application"
+new_sqlite_classes = ["AIGate"]   # required on free tier
