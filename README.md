@@ -159,6 +159,67 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 AI_MODEL=@cf/qwen/qwen1.5-14b-chat-awq
 ```
 
+## 🔒 Security Best Practices
+
+### Secure Token Management
+
+1. **Never commit secrets to version control**
+   - Use `.env` files for local development only
+   - Copy `.env.example` to `.env` and fill in your values
+   - The `.env` file is gitignored and should never be committed
+
+2. **Use Wrangler Secrets for Production**
+   ```bash
+   # Set production secrets
+   npx wrangler secret put CLOUDFLARE_API_TOKEN
+   npx wrangler secret put ADMIN_PASSWORD
+   npx wrangler secret put NEXTCLOUD_PASSWORD
+   npx wrangler secret put SLACK_WEBHOOK_URL
+   ```
+
+3. **Rotate Exposed Tokens Immediately**
+   - If a token is accidentally exposed, rotate it immediately in your Cloudflare dashboard
+   - Update all deployments with the new token
+   - Review commit history to ensure the old token is not accessible
+
+4. **Environment-Specific Configuration**
+   - Use different tokens for development, staging, and production
+   - Implement least-privilege access for each environment
+   - Regularly audit and rotate credentials
+
+5. **Secure Storage Guidelines**
+   - Store tokens in Cloudflare Worker Secrets for production
+   - Use environment variables for local development only
+   - Never log or display tokens in console output
+   - Implement proper access controls on your Cloudflare account
+
+### Pre-commit Hooks
+
+This project uses pre-commit hooks to prevent accidental exposure of secrets and ensure code quality:
+
+1. **Automatic Installation**
+   - Pre-commit hooks are installed automatically when you run `npm install`
+   - Husky manages the Git hooks lifecycle
+
+2. **What the hooks check:**
+   - **TypeScript compilation**: Ensures all TypeScript code compiles without errors
+   - **Secret scanning**: Scans staged files for potential secrets like API keys, tokens, and passwords
+   - **Code formatting**: Runs on TypeScript, JavaScript, JSON, and Markdown files (when configured)
+
+3. **Bypassing hooks in emergencies**
+   - Use `git commit --no-verify` to bypass pre-commit hooks
+   - ⚠️ **WARNING**: Only bypass hooks when absolutely necessary and after manually verifying no secrets are exposed
+
+4. **Secret patterns detected:**
+   - GitHub tokens (`ghp_`, `ghs_`, `github_pat_`)
+   - API keys and tokens
+   - Passwords and private keys
+   - AWS credentials
+   - Cloudflare tokens
+   - And many more common secret patterns
+
+For detailed security guidelines, see [docs/SECURITY.md](docs/SECURITY.md).
+
 ## 📊 Admin Features
 
 ### SSE Performance Metrics
