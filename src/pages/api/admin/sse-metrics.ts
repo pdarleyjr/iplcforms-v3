@@ -6,7 +6,8 @@ export const GET: APIRoute = async ({ locals }) => {
   
   try {
     // Check authentication
-    if (!locals.user || locals.user.role !== 'admin') {
+    const user = (locals as any).user;
+    if (!user || user.role !== 'admin') {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
@@ -50,9 +51,9 @@ export const GET: APIRoute = async ({ locals }) => {
     // Calculate additional insights
     const insights = {
       activeConnections: monitor.getActiveConnections(),
-      averageChunkSize: aggregateData.totalBytes / Math.max(1, aggregateData.totalConnections),
-      errorRate: aggregateData.totalConnections > 0 
-        ? (aggregateData.totalErrors / aggregateData.totalConnections * 100).toFixed(2) + '%'
+      averageChunkSize: (aggregateData as any).totalBytes / Math.max(1, (aggregateData as any).totalConnections),
+      errorRate: (aggregateData as any).totalConnections > 0
+        ? ((aggregateData as any).totalErrors / (aggregateData as any).totalConnections * 100).toFixed(2) + '%'
         : '0%',
       uptimeHours: 24, // Metrics are kept for 24 hours
     };

@@ -21,11 +21,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const config = JSON.parse(configStr);
     
     // Get export data from request
-    const { formTitle, submissionId, data, format = 'json' } = await request.json();
+    const body = await request.json() as any;
+    
+    if (!body || typeof body !== 'object') {
+      return new Response(JSON.stringify({
+        error: 'Invalid request body'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const { formTitle, submissionId, data, format = 'json' } = body;
     
     if (!formTitle || !submissionId || !data) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing required export data' 
+      return new Response(JSON.stringify({
+        error: 'Missing required export data'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }

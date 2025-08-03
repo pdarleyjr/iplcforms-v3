@@ -6,7 +6,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const env = runtime.env;
     
     // Validate request
-    const data = await request.json();
+    const data = await request.json() as any;
+    
+    if (!data || typeof data !== 'object') {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     const { webhookUrl, webhookMethod, webhookHeaders } = data;
     
     if (!webhookUrl || !webhookMethod) {

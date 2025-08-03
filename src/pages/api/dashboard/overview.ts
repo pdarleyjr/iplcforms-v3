@@ -42,7 +42,7 @@ export const GET: APIRoute = async ({ locals }: APIContext) => {
       'landing_page_dashboard_stats',
       async (): Promise<DashboardStats> => {
         // Get total active forms (representing active patients)
-        const activeTemplates = await templateService.getAll({ is_active: true });
+        const activeTemplates = await templateService.getAll({ status: true } as any);
         const activePatients = activeTemplates.length;
 
         // Get total forms created (all templates)
@@ -51,9 +51,9 @@ export const GET: APIRoute = async ({ locals }: APIContext) => {
 
         // Get submission statistics for completion rate
         const submissionStats = await submissionService.getSubmissionStats();
-        const totalSubmissions = submissionStats.total || 0;
-        const completedSubmissions = submissionStats.byStatus?.submitted || 0;
-        const reviewedSubmissions = submissionStats.byStatus?.reviewed || 0;
+        const totalSubmissions = (submissionStats as any).total || 0;
+        const completedSubmissions = (submissionStats as any).byStatus?.submitted || 0;
+        const reviewedSubmissions = (submissionStats as any).byStatus?.reviewed || 0;
 
         // Calculate completion rate (submitted + reviewed vs total)
         const completedCount = completedSubmissions + reviewedSubmissions;
@@ -79,10 +79,8 @@ export const GET: APIRoute = async ({ locals }: APIContext) => {
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, max-age=300, stale-while-revalidate=60',
-        'X-Powered-By': 'Cloudflare D1',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Access-Control-Allow-Headers': 'Content-Type'
+        'X-Powered-By': 'Cloudflare D1'
+        // CORS headers are now handled by middleware
       }
     });
 

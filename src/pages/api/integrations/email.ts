@@ -6,7 +6,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const env = runtime.env;
     
     // Validate request
-    const data = await request.json();
+    const data = await request.json() as any;
+    
+    if (!data || typeof data !== 'object') {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     const { emailTo, emailFrom, emailSubject } = data;
     
     if (!emailTo || !emailFrom || !emailSubject) {
@@ -66,7 +74,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const testEmail = {
         personalizations: [
           {
-            to: recipients.map(email => ({ email }))
+            to: recipients.map((email: string) => ({ email }))
           }
         ],
         from: {
