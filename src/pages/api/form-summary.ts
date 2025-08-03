@@ -48,7 +48,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // Create AI environment object
     const aiEnv: AIEnv = {
       AI: env.AI,
-      VECTORIZE: env.VECTORIZE,
+      DOC_INDEX: env.DOC_INDEX,
       DOC_METADATA: env.DOC_METADATA,
       CHAT_HISTORY: env.CHAT_HISTORY || env.FORMS_KV, // Use FORMS_KV if CHAT_HISTORY not available
       AI_GATE: env.AIGate

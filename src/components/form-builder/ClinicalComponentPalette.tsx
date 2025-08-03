@@ -27,7 +27,8 @@ interface ClinicalConfigData {
         discipline: string;
         description?: string;
         fields?: any[];
-        config?: any;
+        // Some entries may omit config in JSON; treat missing as {}
+        config?: Record<string, unknown>;
       }>;
     }>;
   }>;
@@ -60,7 +61,8 @@ interface ClinicalComponentDefinition {
   discipline: 'OT' | 'SLP' | 'Both';
   description?: string;
   fields?: any[];
-  config?: any;
+  // Optional; normalize to {} where absent
+  config?: Record<string, unknown>;
 }
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -110,14 +112,15 @@ export function ClinicalComponentPalette({
     subcategories: cat.subcategories.map(subcat => ({
       id: subcat.id,
       name: subcat.name,
-      components: subcat.components.map(comp => ({
+      components: subcat.components.map((comp): ClinicalComponentDefinition => ({
         id: comp.id,
         name: comp.name,
         type: comp.type,
         discipline: comp.discipline as 'OT' | 'SLP' | 'Both',
         description: comp.description,
         fields: comp.fields,
-        config: comp.config
+        // Normalize: if config missing, provide {}
+        config: (comp as { config?: Record<string, unknown> }).config ?? {}
       }))
     }))
   }));
@@ -153,6 +156,7 @@ export function ClinicalComponentPalette({
   };
 
   const handleComponentClick = (component: ClinicalComponentDefinition) => {
+    const cfg = (component.config ?? {}) as Record<string, unknown>;
     const formComponent: FormComponent = {
       id: `${component.type}_${Date.now()}`,
       type: 'clinical_component',
@@ -161,7 +165,7 @@ export function ClinicalComponentPalette({
       props: {
         componentType: component.type,
         discipline: component.discipline,
-        ...component.config
+        ...(cfg as object)
       },
       // Store the field definitions if this is a structured component
       fields: component.fields
@@ -171,6 +175,7 @@ export function ClinicalComponentPalette({
   };
 
   const handleDragStart = (e: React.DragEvent, component: ClinicalComponentDefinition) => {
+    const cfg = (component.config ?? {}) as Record<string, unknown>;
     const formComponent: FormComponent = {
       id: `${component.type}_${Date.now()}`,
       type: 'clinical_component',
@@ -179,7 +184,7 @@ export function ClinicalComponentPalette({
       props: {
         componentType: component.type,
         discipline: component.discipline,
-        ...component.config
+        ...(cfg as object)
       },
       fields: component.fields
     };

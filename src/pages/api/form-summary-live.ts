@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // Create AI environment object
     const aiEnv: AIEnv = {
       AI: env.AI,
-      VECTORIZE: env.VECTORIZE,
+      DOC_INDEX: env.DOC_INDEX,
       DOC_METADATA: env.DOC_METADATA,
       CHAT_HISTORY: env.CHAT_HISTORY || env.FORMS_KV,
       AI_GATE: env.AIGate
@@ -137,14 +137,4 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 };
 
-// OPTIONS handler for CORS
-export const OPTIONS: APIRoute = async () => {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    }
-  });
-};
+// OPTIONS handler is now handled by CORS middleware

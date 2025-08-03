@@ -21,7 +21,22 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
     !['title_subtitle', 'line_separator', 'evaluation_section', 'ai_summary'].includes(c.type)
   );
 
-  const visibilityCondition = component.props?.visibilityCondition;
+  type Operator = 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
+  interface VisibilityCondition {
+    field: string;
+    operator: Operator;
+    value: string;
+  }
+
+  // Normalize visibility condition to satisfy required fields
+  const visibilityCondition: VisibilityCondition | undefined = component.props?.visibilityCondition
+    ? {
+        field: component.props!.visibilityCondition.field ?? '',
+        operator: (component.props!.visibilityCondition.operator ?? 'equals') as Operator,
+        value: String(component.props!.visibilityCondition.value ?? ''),
+      }
+    : undefined;
+
   const hasCondition = !!visibilityCondition;
 
   const handleToggleConditional = (enabled: boolean) => {
@@ -34,7 +49,7 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
             field: availableFields[0]?.id || '',
             operator: 'equals',
             value: ''
-          }
+          } as VisibilityCondition
         }
       });
     } else {
@@ -51,22 +66,22 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
       props: {
         ...component.props,
         visibilityCondition: {
-          ...visibilityCondition,
+          ...(visibilityCondition as VisibilityCondition),
           field,
           value: '' // Reset value when field changes
-        }
+        } as VisibilityCondition
       }
     });
   };
 
-  const handleOperatorChange = (operator: string) => {
+  const handleOperatorChange = (operator: Operator) => {
     onUpdate({
       props: {
         ...component.props,
         visibilityCondition: {
-          ...visibilityCondition,
+          ...(visibilityCondition as VisibilityCondition),
           operator
-        }
+        } as VisibilityCondition
       }
     });
   };
@@ -76,9 +91,9 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
       props: {
         ...component.props,
         visibilityCondition: {
-          ...visibilityCondition,
+          ...(visibilityCondition as VisibilityCondition),
           value
-        }
+        } as VisibilityCondition
       }
     });
   };
@@ -128,8 +143,8 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
             {/* Operator Selection */}
             <div className="space-y-2">
               <Select
-                value={visibilityCondition.operator}
-                onValueChange={handleOperatorChange}
+                value={(visibilityCondition?.operator ?? 'equals') as Operator}
+                onValueChange={(val) => handleOperatorChange(val as Operator)}
               >
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Select operator" />
@@ -148,7 +163,7 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
             <div className="space-y-2">
               {triggerField?.type === 'select' || triggerField?.type === 'radio' ? (
                 <Select
-                  value={visibilityCondition.value}
+                  value={visibilityCondition?.value ?? ''}
                   onValueChange={handleValueChange}
                 >
                   <SelectTrigger className="h-9">
@@ -164,7 +179,7 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
                 </Select>
               ) : triggerField?.type === 'checkbox' ? (
                 <Select
-                  value={visibilityCondition.value}
+                  value={visibilityCondition?.value ?? ''}
                   onValueChange={handleValueChange}
                 >
                   <SelectTrigger className="h-9">
@@ -177,7 +192,7 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
                 </Select>
               ) : (
                 <Input
-                  value={visibilityCondition.value}
+                  value={visibilityCondition?.value ?? ''}
                   onChange={(e) => handleValueChange(e.target.value)}
                   placeholder={
                     triggerField?.type === 'number' ? 'Enter number' :
@@ -198,13 +213,13 @@ export function ConditionalLogicPanel({ component, allComponents, onUpdate }: Co
               <span className="font-mono bg-blue-100 px-1 rounded">
                 {triggerField?.label || 'field'}
               </span>{' '}
-              {visibilityCondition.operator === 'equals' && 'equals'}
-              {visibilityCondition.operator === 'not_equals' && 'does not equal'}
-              {visibilityCondition.operator === 'contains' && 'contains'}
-              {visibilityCondition.operator === 'greater_than' && 'is greater than'}
-              {visibilityCondition.operator === 'less_than' && 'is less than'}{' '}
+              {(visibilityCondition?.operator ?? 'equals') === 'equals' && 'equals'}
+              {(visibilityCondition?.operator ?? 'equals') === 'not_equals' && 'does not equal'}
+              {(visibilityCondition?.operator ?? 'equals') === 'contains' && 'contains'}
+              {(visibilityCondition?.operator ?? 'equals') === 'greater_than' && 'is greater than'}
+              {(visibilityCondition?.operator ?? 'equals') === 'less_than' && 'is less than'}{' '}
               <span className="font-mono bg-blue-100 px-1 rounded">
-                {visibilityCondition.value || '...'}
+                {(visibilityCondition?.value ?? '') || '...'}
               </span>
             </p>
           </div>
