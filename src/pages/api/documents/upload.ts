@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
-import { storeDocument, checkRateLimit } from '../../../lib/ai';
-import type { AIEnv, EmbedMetadata } from '../../../lib/ai';
+import { checkRateLimit } from '../../../lib/ai';
+import type { AIEnv } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
     // Check rate limit
@@ -36,6 +36,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const uploadedDocuments = [];
 
     for (const file of files) {
@@ -46,27 +58,33 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // Split text into chunks with overlap
       const chunks = splitTextIntoChunks(text, 600, 50);
       
-      // Store document with embeddings
-      const metadata: EmbedMetadata = {
-        documentId,
-        documentName: file.name,
-        documentType: file.type,
-        pageNumber: 1
-      };
+      // Call the iplc-ai worker's /documents/upload endpoint
+      const uploadResponse = await iplcAI.fetch('https://iplc-ai.worker/documents/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId,
+          documentName: file.name,
+          documentType: file.type,
+          chunks: chunks
+        })
+      });
       
-      const result = await storeDocument(chunks, metadata, env);
-      
-      if (!result.success) {
-        // Continue with other files even if one fails
-        console.error(`Failed to upload ${file.name}:`, result.error);
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.text();
+        console.error(`Failed to upload ${file.name}:`, error);
         uploadedDocuments.push({
           id: documentId,
           name: file.name,
-          error: result.error,
+          error: error,
           success: false
         });
         continue;
       }
+      
+      const result = await uploadResponse.json();
       
       uploadedDocuments.push({
         id: documentId,

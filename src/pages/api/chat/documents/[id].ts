@@ -1,9 +1,8 @@
 import type { APIRoute } from 'astro';
-import { getDocument, deleteDocument } from '../../../../lib/ai';
 import type { AIEnv } from '../../../../lib/ai';
 
 export const GET: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   const documentId = params.id;
   
   if (!documentId) {
@@ -14,15 +13,38 @@ export const GET: APIRoute = async ({ params, locals }) => {
   }
   
   try {
-    // Get document metadata from DOC_METADATA KV
-    const document = await getDocument(documentId, env);
-    
-    if (!document) {
-      return new Response(JSON.stringify({ error: 'Document not found' }), {
-        status: 404,
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    
+    // Get document metadata from iplc-ai worker
+    const getResponse = await iplcAI.fetch(`https://iplc-ai.worker/documents/${documentId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!getResponse.ok) {
+      if (getResponse.status === 404) {
+        return new Response(JSON.stringify({ error: 'Document not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const error = await getResponse.text();
+      throw new Error(error);
+    }
+    
+    const document = await getResponse.json();
 
     return new Response(JSON.stringify(document), {
       headers: { 'Content-Type': 'application/json' }
@@ -41,7 +63,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   const documentId = params.id;
   
   if (!documentId) {
@@ -52,14 +74,35 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
   }
   
   try {
-    // Delete document and its metadata
-    const success = await deleteDocument(documentId, env);
-    
-    if (!success) {
-      return new Response(JSON.stringify({ error: 'Document not found' }), {
-        status: 404,
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+    
+    // Delete document via iplc-ai worker
+    const deleteResponse = await iplcAI.fetch(`https://iplc-ai.worker/documents/${documentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!deleteResponse.ok) {
+      if (deleteResponse.status === 404) {
+        return new Response(JSON.stringify({ error: 'Document not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const error = await deleteResponse.text();
+      throw new Error(error);
     }
     
     // Also delete from CHAT_HISTORY if it exists there

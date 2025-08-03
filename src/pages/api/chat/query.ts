@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
-import { generateRAGResponse, checkRateLimit } from '../../../lib/ai';
+import { checkRateLimit } from '../../../lib/ai';
 import type { AIEnv, ChatMessage } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
     const body = await request.json() as any;
@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
-          'X-RateLimit-Limit': '60', // tokensPerMinute from RATE_LIMIT_CONFIG
+          'X-RateLimit-Limit': '60',
           'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
           'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
         }
@@ -74,37 +74,103 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // Get conversation history
     const history: ChatMessage[] = [];
-    // TODO: Implement history retrieval from CHAT_HISTORY KV
-
-    // Generate RAG response with streaming
-    const stream = await generateRAGResponse(
-      message,
-      history,
-      env,
-      {
-        maxTokens: 1000,
-        temperature: 0.7,
-        topK: 5,
-        // conversationId is not part of RAGOptions
+    const historyKeys = await env.CHAT_HISTORY.list({
+      prefix: `msg:${convId}:`,
+      limit: 10
+    });
+    
+    for (const key of historyKeys.keys) {
+      const msgData = await env.CHAT_HISTORY.get(key.name);
+      if (msgData) {
+        const msg = JSON.parse(msgData);
+        history.push({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content
+        });
       }
+    }
+    
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Call the iplc-ai worker's /rag endpoint
+    const ragResponse = await iplcAI.fetch('https://iplc-ai.worker/rag', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question: message,
+        history: history,
+        sessionId: convId,
+        documentIds: documentIds
+      })
+    });
+    
+    if (!ragResponse.ok) {
+      const error = await ragResponse.text();
+      console.error('IPLC_AI service error:', error);
+      return new Response(JSON.stringify({
+        error: 'AI service error',
+        details: error
+      }), {
+        status: ragResponse.status,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Store AI response in history
+    const assistantMessageId = `${convId}:${nanoid()}`;
+    const responseClone = ragResponse.clone();
+    const responseText = await responseClone.text();
+    
+    // Extract the actual message from SSE stream if needed
+    let assistantContent = responseText;
+    if (responseText.includes('data: ')) {
+      const lines = responseText.split('\n');
+      assistantContent = lines
+        .filter((line: string) => line.startsWith('data: '))
+        .map((line: string) => line.substring(6))
+        .filter((data: string) => data !== '[DONE]')
+        .join('');
+    }
+    
+    const assistantMessageData = {
+      id: assistantMessageId,
+      conversationId: convId,
+      role: 'assistant',
+      content: assistantContent,
+      timestamp: new Date().toISOString()
+    };
+    await env.CHAT_HISTORY.put(
+      `msg:${assistantMessageId}`,
+      JSON.stringify(assistantMessageData)
     );
-
-    // Return the streaming response
-    return new Response(stream, {
+    
+    // Return the streaming response from iplc-ai
+    return new Response(ragResponse.body, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
         'Transfer-Encoding': 'chunked',
-        'X-RateLimit-Limit': '60', // tokensPerMinute from RATE_LIMIT_CONFIG
+        'X-RateLimit-Limit': '60',
         'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
         'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
       }
     });
 
   } catch (error) {
-    // Log error safely without triggering toString on problematic objects
     console.error('Query error:', error instanceof Error ? error.message : 'Unknown error');
     if (error instanceof Error) {
       console.error('Error stack:', error.stack);

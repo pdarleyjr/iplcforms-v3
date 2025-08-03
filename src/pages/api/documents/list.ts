@@ -1,9 +1,8 @@
 import type { APIRoute } from 'astro';
-import { listDocuments, searchDocumentsByName, getStorageStats } from '../../../lib/ai';
 import type { AIEnv } from '../../../lib/ai';
 
 export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
     const params = url.searchParams;
@@ -22,31 +21,40 @@ export const GET: APIRoute = async ({ url, locals }) => {
       });
     }
 
-    let result: any;
-    
-    if (search) {
-      // Use search functionality
-      const documents = await searchDocumentsByName(search, limit, env);
-      result = {
-        documents,
-        cursor: null, // Search doesn't support pagination
-        hasMore: false
-      };
-    } else {
-      // Use regular listing with pagination
-      const { documents, cursor: nextCursor } = await listDocuments(limit, cursor, env);
-      result = {
-        documents,
-        cursor: nextCursor,
-        hasMore: !!nextCursor
-      };
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    // Include storage statistics if requested
-    if (includeStats) {
-      const stats = await getStorageStats(env);
-      result.stats = stats;
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      limit: limit.toString(),
+      ...(cursor && { cursor }),
+      ...(search && { search }),
+      ...(includeStats && { includeStats: 'true' })
+    });
+
+    // Call the iplc-ai worker's /documents/list endpoint
+    const listResponse = await iplcAI.fetch(`https://iplc-ai.worker/documents/list?${queryParams}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!listResponse.ok) {
+      const error = await listResponse.text();
+      throw new Error(error);
     }
+
+    const result = await listResponse.json();
 
     return new Response(JSON.stringify(result), {
       headers: { 

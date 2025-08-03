@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
-import { generateSummary } from '../../lib/ai/chatEngine';
 import { checkRateLimit } from '../../lib/ai/rateLimit';
 import type { AIEnv } from '../../lib/ai/types';
 
@@ -99,12 +98,37 @@ Please provide a structured summary that includes:
 
 Format the summary using markdown with clear sections.`;
     
-    // Generate AI summary
-    const summary = await generateSummary(
-      contentToSummarize,
-      aiEnv,
-      500 // Max words for summary
-    );
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Call the iplc-ai worker's /summary endpoint
+    const summaryResponse = await iplcAI.fetch('https://iplc-ai.worker/summary', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: contentToSummarize,
+        maxWords: 500
+      })
+    });
+    
+    if (!summaryResponse.ok) {
+      const error = await summaryResponse.text();
+      console.error('IPLC_AI summary error:', error);
+      throw new Error(`AI service error: ${error}`);
+    }
+    
+    const { summary } = await summaryResponse.json();
     
     if (!summary) {
       throw new Error('Failed to generate summary');

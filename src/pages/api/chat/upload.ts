@@ -1,10 +1,9 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
-import { storeDocument } from '../../../lib/ai';
-import type { AIEnv, EmbedMetadata } from '../../../lib/ai';
+import type { AIEnv } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
     const formData = await request.formData();
@@ -14,6 +13,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!files || files.length === 0) {
       return new Response(JSON.stringify({ error: 'No files provided' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -28,19 +39,31 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // Split text into chunks for better retrieval
       const chunks = splitTextIntoChunks(text, 600);
       
-      // Store document with embeddings using the new AI module
-      const metadata: EmbedMetadata = {
-        documentId,
-        documentName: file.name,
-        documentType: file.type,
-        pageNumber: 1
-      };
+      // Convert file to base64 for transmission
+      const base64Content = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(buffer))));
       
-      const result = await storeDocument(chunks, metadata, env);
+      // Call the iplc-ai worker's /documents/upload endpoint
+      const uploadResponse = await iplcAI.fetch('https://iplc-ai.worker/documents/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId,
+          documentName: file.name,
+          documentType: file.type,
+          chunks: chunks,
+          conversationId
+        })
+      });
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to store document');
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.text();
+        console.error(`Failed to upload ${file.name}:`, error);
+        continue;
       }
+      
+      const result = await uploadResponse.json();
       
       uploadedDocuments.push({
         id: documentId,

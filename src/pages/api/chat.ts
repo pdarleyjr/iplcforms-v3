@@ -1,12 +1,11 @@
 import type { APIRoute } from 'astro';
-import { generateRAGResponse, checkRateLimit } from '../../lib/ai';
+import { checkRateLimit } from '../../lib/ai';
 import type { AIEnv, ChatMessage } from '../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as unknown as AIEnv;
+  const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
-    console.log('checkRateLimit function:', typeof checkRateLimit);
     // Parse request with defensive defaults
     const body = await request.json() as any;
     
@@ -31,11 +30,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // Check rate limit
     const clientId = request.headers.get('CF-Connecting-IP') || 'anonymous';
-    console.log('Checking rate limit for client:', clientId);
     const rateLimitInfo = await checkRateLimit(clientId, env);
-    console.log('Rate limit info:', JSON.stringify(rateLimitInfo));
     
-    // Defensive check for rateLimitInfo
     if (!rateLimitInfo) {
       console.error('Rate limit info is undefined');
       return new Response(JSON.stringify({ error: 'Rate limit check failed' }), {
@@ -52,18 +48,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
-          'X-RateLimit-Limit': '60', // 60 requests per minute as per rate limit config
+          'X-RateLimit-Limit': '60',
           'X-RateLimit-Remaining': (rateLimitInfo.remaining || 0).toString(),
           'X-RateLimit-Reset': Math.floor((rateLimitInfo.resetAt || Date.now()) / 1000).toString()
         }
-      });
-    }
-
-    // Validate history format
-    if (!Array.isArray(history)) {
-      return new Response(JSON.stringify({ error: 'History must be an array of chat messages' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
       });
     }
 
@@ -88,43 +76,62 @@ export const POST: APIRoute = async ({ request, locals }) => {
       sanitizedHistory.push({ role, content } as ChatMessage);
     }
 
-    console.log('Generating RAG response for question:', question);
-    console.log('Environment bindings:', {
-      hasAI: !!env.AI,
-      hasVectorize: !!env.DOC_INDEX,
-      hasAIGate: !!env.AI_GATE,
-      hasChatHistory: !!env.CHAT_HISTORY,
-      hasDocMetadata: !!env.DOC_METADATA
-    });
+    // Use IPLC_AI service binding
+    const iplcAI = (env as any).IPLC_AI;
+    if (!iplcAI || typeof iplcAI.fetch !== 'function') {
+      return new Response(JSON.stringify({
+        error: 'AI service not available',
+        details: 'IPLC_AI service binding is not configured'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     
-    // Debug: Log the actual env object keys
-    console.log('Environment keys:', Object.keys(env));
-    
-    let stream;
-    try {
-      console.log('About to call generateRAGResponse...');
-      // Generate RAG response with streaming and safe options
-      stream = await generateRAGResponse(
-        question,
-        sanitizedHistory,
-        env,
-        {
+    // Call the iplc-ai worker's /rag endpoint
+    const ragResponse = await iplcAI.fetch('https://iplc-ai.worker/rag', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question: question,
+        history: sanitizedHistory,
+        sessionId: conversationId,
+        options: {
           maxTokens: Math.min(Number(options.maxTokens) || 1000, 2048),
           temperature: Math.min(Math.max(Number(options.temperature) || 0.7, 0), 1),
-          topK: Math.min(Number(options.topK) || 5, 10),
-          // Remove conversationId from RAGOptions as it doesn't exist in the type
+          topK: Math.min(Number(options.topK) || 5, 10)
         }
-      );
-      console.log('generateRAGResponse returned, stream type:', typeof stream);
-    } catch (ragError) {
-      console.error('Error in generateRAGResponse:', ragError);
-      console.error('Error type:', typeof ragError);
-      console.error('Error message:', ragError instanceof Error ? ragError.message : String(ragError));
-      console.error('Error stack:', ragError instanceof Error ? ragError.stack : 'No stack');
-      throw ragError;
+      })
+    });
+    
+    if (!ragResponse.ok) {
+      const error = await ragResponse.text();
+      console.error('IPLC_AI service error:', error);
+      
+      // Create error SSE stream
+      const errorStream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+          const errorEvent = `event: error\ndata: ${JSON.stringify({
+            error: 'AI service error',
+            details: error
+          })}\n\n`;
+          controller.enqueue(encoder.encode(errorEvent));
+          controller.close();
+        }
+      });
+
+      return new Response(errorStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        }
+      });
     }
 
-    console.log('Building response headers');
     const responseHeaders: Record<string, string> = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -142,10 +149,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       responseHeaders['X-RateLimit-Reset'] = String(Math.floor(rateLimitInfo.resetAt / 1000));
     }
 
-    console.log('Response headers:', JSON.stringify(responseHeaders));
-
-    // Return the streaming response
-    return new Response(stream, {
+    // Return the streaming response from iplc-ai
+    return new Response(ragResponse.body, {
       headers: responseHeaders
     });
 
