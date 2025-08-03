@@ -81,12 +81,14 @@ export interface RateLimitInfo {
   allowed: boolean;
   remaining: number;
   resetAt: number;
+  retryAfter?: number;
+  limit?: number;
 }
 
 // Worker environment interface
 export interface AIEnv {
   AI: any;
-  VECTORIZE: VectorizeIndex;
+  DOC_INDEX: VectorizeIndex;
   DOC_METADATA: KVNamespace;
   CHAT_HISTORY: KVNamespace;
   AI_GATE: DurableObjectNamespace;
@@ -94,6 +96,11 @@ export interface AIEnv {
 
 // Vectorize index interface (minimal definition for free tier)
 export interface VectorizeIndex {
-  upsert(vectors: VectorizeVector[]): Promise<void>;
+  upsert(vectors: VectorizeVector[]): Promise<VectorizeVectorMutation>;
   query(vector: number[], options?: { topK?: number }): Promise<VectorizeMatch[]>;
+}
+
+export interface VectorizeVectorMutation {
+  mutationId: string;
+  vectorIds: string[];
 }

@@ -42,13 +42,13 @@ export async function queryDocuments(
       return [];
     }
 
-    // Check if VECTORIZE binding exists
-    if (!env.VECTORIZE) {
-      throw new Error("VECTORIZE binding missing");
+    // Check if DOC_INDEX binding exists
+    if (!env.DOC_INDEX) {
+      throw new Error("DOC_INDEX binding missing");
     }
 
     // Query the Vectorize index with defensive defaults
-    const response = await env.VECTORIZE.queryEmbedding(queryEmbeddings[0], {
+    const response = await env.DOC_INDEX.query(queryEmbeddings[0], {
       topK: Math.min(typeof limit === 'number' ? limit : DEFAULT_TOP_K, 100) // Clamp to free tier limit per free plan
     });
 
@@ -82,7 +82,15 @@ export async function queryDocuments(
       .map((match: VectorizeMatch) => ({
         id: match.id ?? '',
         score: match.score ?? 0,
-        metadata: match.metadata || {},
+        metadata: {
+          chunk: match.metadata?.chunk || '',
+          fullChunk: match.metadata?.fullChunk,
+          documentId: match.metadata?.documentId,
+          documentName: match.metadata?.documentName,
+          pageNumber: match.metadata?.pageNumber,
+          timestamp: match.metadata?.timestamp,
+          ...(match.metadata || {})
+        },
       }));
 
     console.log(`Vectorize query returned ${results.length} results above threshold`);

@@ -41,9 +41,10 @@ export class AIGate {
       }
     } catch (error) {
       console.error('AIGate error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
       return new Response(
-        JSON.stringify({ error: error.message }),
-        { 
+        JSON.stringify({ error: errorMessage }),
+        {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
         }
@@ -56,7 +57,8 @@ export class AIGate {
    * Reference: "Single-Worker RAG Implementation.txt" - Concurrency Management
    */
   private async handleAcquire(request: Request): Promise<Response> {
-    const { requestId } = await request.json();
+    const data = await request.json() as any;
+    const { requestId } = data;
     
     if (!requestId) {
       return new Response(
@@ -133,7 +135,8 @@ export class AIGate {
    * Reference: "Single-Worker RAG Implementation.txt" - Concurrency Management
    */
   private async handleRelease(request: Request): Promise<Response> {
-    const { requestId } = await request.json();
+    const data = await request.json() as any;
+    const { requestId } = data;
     
     if (!requestId) {
       return new Response(

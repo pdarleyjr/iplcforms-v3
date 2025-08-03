@@ -38,7 +38,18 @@ export class AIGate {
   private async handleQueueRequest(request: Request): Promise<Response> {
     try {
       // Parse the AI request details from the body
-      const { model, params, env } = await request.json();
+      const data = await request.json() as any;
+      
+      if (!data || typeof data !== 'object') {
+        return new Response(JSON.stringify({
+          error: 'Invalid request body'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      const { model, params, env } = data;
       
       // Use blockConcurrencyWhile to enforce concurrency limit
       const result = await this.state.blockConcurrencyWhile(async () => {
@@ -72,10 +83,11 @@ export class AIGate {
       return new Response(JSON.stringify(result), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('AIGate queue error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Queue processing failed';
       return new Response(JSON.stringify({
-        error: error.message || 'Queue processing failed'
+        error: errorMessage
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }

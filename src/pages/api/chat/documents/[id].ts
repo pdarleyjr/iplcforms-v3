@@ -3,7 +3,7 @@ import { getDocument, deleteDocument } from '../../../../lib/ai';
 import type { AIEnv } from '../../../../lib/ai';
 
 export const GET: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   const documentId = params.id;
   
   if (!documentId) {
@@ -41,7 +41,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   const documentId = params.id;
   
   if (!documentId) {

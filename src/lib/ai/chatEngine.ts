@@ -456,7 +456,16 @@ export async function handleChatRequest(
   env: AIEnv
 ): Promise<Response> {
   try {
-    const { question, sessionId, history = [] } = await request.json();
+    const body = await request.json() as any;
+    
+    if (!body || typeof body !== 'object') {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    
+    const { question, sessionId, history = [] } = body;
     
     if (!question) {
       return new Response(JSON.stringify({ error: 'Question is required' }), {

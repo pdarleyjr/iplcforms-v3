@@ -3,12 +3,20 @@ import { generateRAGResponse, checkRateLimit } from '../../lib/ai';
 import type { AIEnv, ChatMessage } from '../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   
   try {
     console.log('checkRateLimit function:', typeof checkRateLimit);
     // Parse request with defensive defaults
-    const body = await request.json();
+    const body = await request.json() as any;
+    
+    if (!body || typeof body !== 'object') {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     const question = String(body.question ?? '').trim();
     const history = Array.isArray(body.history) ? body.history : [];
     const conversationId = body.conversationId ?? undefined;
@@ -39,7 +47,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!rateLimitInfo.allowed) {
       return new Response(JSON.stringify({
         error: 'Rate limit exceeded',
-        retryAfter: rateLimitInfo.retryAfter
+        retryAfter: (rateLimitInfo as any).retryAfter || 60
       }), {
         status: 429,
         headers: {
@@ -83,7 +91,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     console.log('Generating RAG response for question:', question);
     console.log('Environment bindings:', {
       hasAI: !!env.AI,
-      hasVectorize: !!env.VECTORIZE,
+      hasVectorize: !!env.DOC_INDEX,
       hasAIGate: !!env.AI_GATE,
       hasChatHistory: !!env.CHAT_HISTORY,
       hasDocMetadata: !!env.DOC_METADATA
@@ -104,7 +112,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           maxTokens: Math.min(Number(options.maxTokens) || 1000, 2048),
           temperature: Math.min(Math.max(Number(options.temperature) || 0.7, 0), 1),
           topK: Math.min(Number(options.topK) || 5, 10),
-          conversationId: conversationId || undefined
+          // Remove conversationId from RAGOptions as it doesn't exist in the type
         }
       );
       console.log('generateRAGResponse returned, stream type:', typeof stream);

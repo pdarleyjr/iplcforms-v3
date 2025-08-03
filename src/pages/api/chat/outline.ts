@@ -6,9 +6,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   
   try {
-    const { conversationId, documentIds } = await request.json();
+    const body = await request.json() as any;
     
-    if (!conversationId || !documentIds || documentIds.length === 0) {
+    if (!body || typeof body !== 'object') {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const { conversationId, documentIds } = body;
+    
+    if (!conversationId || !documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
       return new Response(JSON.stringify({ error: 'Missing required parameters' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }

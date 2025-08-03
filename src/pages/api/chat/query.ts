@@ -4,12 +4,21 @@ import { generateRAGResponse, checkRateLimit } from '../../../lib/ai';
 import type { AIEnv, ChatMessage } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   
   try {
-    const { message, conversationId, documentIds } = await request.json();
+    const body = await request.json() as any;
     
-    if (!message) {
+    if (!body || typeof body !== 'object') {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const { message, conversationId, documentIds } = body;
+    
+    if (!message || typeof message !== 'string') {
       return new Response(JSON.stringify({ error: 'No message provided' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -26,7 +35,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!rateLimitInfo.allowed) {
       return new Response(JSON.stringify({
         error: 'Rate limit exceeded',
-        retryAfter: rateLimitInfo.retryAfter
+        retryAfter: (rateLimitInfo as any).retryAfter || 60
       }), {
         status: 429,
         headers: {
@@ -76,7 +85,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         maxTokens: 1000,
         temperature: 0.7,
         topK: 5,
-        conversationId: convId
+        // conversationId is not part of RAGOptions
       }
     );
 

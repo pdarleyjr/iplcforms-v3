@@ -3,7 +3,7 @@ import { listDocuments, searchDocumentsByName, getStorageStats } from '../../../
 import type { AIEnv } from '../../../lib/ai';
 
 export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   
   try {
     const params = url.searchParams;
@@ -22,7 +22,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
       });
     }
 
-    let result;
+    let result: any;
     
     if (search) {
       // Use search functionality

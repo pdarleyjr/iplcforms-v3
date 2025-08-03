@@ -4,7 +4,7 @@ import { storeDocument } from '../../../lib/ai';
 import type { AIEnv, EmbedMetadata } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   
   try {
     const formData = await request.formData();

@@ -10,19 +10,24 @@ export * from './types';
 
 // Import AIEnv type for functions in this file
 import type { AIEnv } from './types';
+// Import getAIGateStatus for use in this file
+import { getAIGateStatus } from './aiGate';
 
 // Export embeddings functionality
 export {
   chunkText,
-  generateEmbedding,
   generateEmbeddings,
-  hashContent
+  generateContentHash,
+  embedAndPrepareVectors,
+  checkDuplicateContent,
+  storeContentHash
 } from './embeddings';
 
 // Export vector search functionality
 export {
-  searchVectors,
-  getRelevantDocuments,
+  queryDocuments,
+  getDocumentContext,
+  findSimilarDocuments,
   getDocumentStats
 } from './vectorSearch';
 
@@ -43,7 +48,6 @@ export {
   deleteDocument,
   listDocuments,
   searchDocumentsByName,
-  checkDuplicateDocument,
   getStorageStats,
   cleanupOldDocuments
 } from './documentStorage';
@@ -76,8 +80,8 @@ export async function initializeAI(env: AIEnv): Promise<void> {
     if (!env.AI) {
       throw new Error('AI binding not configured');
     }
-    if (!env.VECTORIZE) {
-      throw new Error('VECTORIZE binding not configured');
+    if (!env.DOC_INDEX) {
+      throw new Error('DOC_INDEX binding not configured');
     }
     if (!env.DOC_METADATA) {
       throw new Error('DOC_METADATA KV namespace not configured');

@@ -60,7 +60,7 @@ export async function storeDocument(
     }
 
     // Store vectors in Vectorize
-    await env.VECTORIZE.upsert(vectors);
+    await env.DOC_INDEX.upsert(vectors);
 
     // Store document metadata in KV
     const docMetadata: Document = {
@@ -93,7 +93,7 @@ export async function storeDocument(
     console.error('Store document error:', error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Failed to store document',
     };
   }
 }
@@ -160,7 +160,7 @@ export async function listDocuments(
 
     return {
       documents,
-      cursor: result.cursor || null,
+      cursor: result.list_complete ? null : result.cursor || null,
     };
   } catch (error) {
     console.error('List documents error:', error);

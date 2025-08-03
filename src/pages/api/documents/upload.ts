@@ -4,7 +4,7 @@ import { storeDocument, checkRateLimit } from '../../../lib/ai';
 import type { AIEnv, EmbedMetadata } from '../../../lib/ai';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env as AIEnv;
+  const env = locals.runtime.env as unknown as AIEnv;
   
   try {
     // Check rate limit
@@ -19,7 +19,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         status: 429,
         headers: { 
           'Content-Type': 'application/json',
-          'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
+          'X-RateLimit-Limit': (rateLimitInfo.limit || 60).toString(),
           'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
           'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
         }
@@ -91,7 +91,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }), {
       headers: { 
         'Content-Type': 'application/json',
-        'X-RateLimit-Limit': rateLimitInfo.limit.toString(),
+        'X-RateLimit-Limit': (rateLimitInfo.limit || 60).toString(),
         'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
         'X-RateLimit-Reset': rateLimitInfo.resetAt.toString()
       }

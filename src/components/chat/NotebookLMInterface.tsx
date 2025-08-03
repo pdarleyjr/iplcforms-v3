@@ -125,12 +125,30 @@ export function NotebookLMInterface() {
     loadDocuments();
   }, []);
 
+  // Type guards for unknown JSON payloads
+  function isConversationList(data: unknown): data is { conversations: Conversation[] } {
+    return !!data && typeof data === 'object' && Array.isArray((data as any).conversations);
+  }
+  function isDocumentsList(data: unknown): data is { documents: Document[] } {
+    return !!data && typeof data === 'object' && Array.isArray((data as any).documents);
+  }
+  function isConversationDetail(data: unknown): data is { messages: Message[]; documents: Document[] } {
+    return !!data && typeof data === 'object' && Array.isArray((data as any).messages) && Array.isArray((data as any).documents);
+  }
+  function isUploadResponse(data: unknown): data is { documents: Document[]; conversationId?: string } {
+    return !!data && typeof data === 'object' && Array.isArray((data as any).documents);
+  }
+
   const loadConversations = async () => {
     try {
       const response = await fetch('/api/chat/conversations');
       if (response.ok) {
-        const data = await response.json();
-        setConversations(data.conversations);
+        const data: unknown = await response.json();
+        if (isConversationList(data)) {
+          setConversations(data.conversations);
+        } else {
+          console.warn('Unexpected conversations payload');
+        }
       }
     } catch (error) {
       console.error('Failed to load conversations:', error);
@@ -141,8 +159,12 @@ export function NotebookLMInterface() {
     try {
       const response = await fetch('/api/chat/documents');
       if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.documents);
+        const data: unknown = await response.json();
+        if (isDocumentsList(data)) {
+          setDocuments(data.documents);
+        } else {
+          console.warn('Unexpected documents payload');
+        }
       }
     } catch (error) {
       console.error('Failed to load documents:', error);
@@ -153,10 +175,14 @@ export function NotebookLMInterface() {
     try {
       const response = await fetch(`/api/chat/conversations/${conversationId}`);
       if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages);
-        setDocuments(data.documents);
-        setCurrentConversationId(conversationId);
+        const data: unknown = await response.json();
+        if (isConversationDetail(data)) {
+          setMessages(data.messages);
+          setDocuments(data.documents);
+          setCurrentConversationId(conversationId);
+        } else {
+          console.warn('Unexpected conversation detail payload');
+        }
       }
     } catch (error) {
       console.error('Failed to load conversation:', error);
@@ -185,15 +211,19 @@ export function NotebookLMInterface() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        // Add documents with enabled flag set to true by default
-        const newDocs = data.documents.map((doc: Document) => ({ ...doc, enabled: true }));
-        setDocuments(prev => [...prev, ...newDocs]);
-        
-        // Create new conversation if needed
-        if (!currentConversationId && data.conversationId) {
-          setCurrentConversationId(data.conversationId);
-          await loadConversations();
+        const data: unknown = await response.json();
+        if (isUploadResponse(data)) {
+          // Add documents with enabled flag set to true by default
+          const newDocs = data.documents.map((doc) => ({ ...doc, enabled: true }));
+          setDocuments(prev => [...prev, ...newDocs]);
+
+          // Create new conversation if needed
+          if (!currentConversationId && data.conversationId) {
+            setCurrentConversationId(data.conversationId);
+            await loadConversations();
+          }
+        } else {
+          console.warn('Unexpected upload response payload');
         }
       } else {
         console.error('Upload failed:', await response.text());
@@ -520,9 +550,15 @@ export function NotebookLMInterface() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setShareUrl(data.shareUrl);
-        setShareModalOpen(true);
+        const data: unknown = await response.json();
+        const isShare = (v: unknown): v is { shareUrl: string } =>
+          !!v && typeof v === 'object' && typeof (v as any).shareUrl === 'string';
+        if (isShare(data)) {
+          setShareUrl(data.shareUrl);
+          setShareModalOpen(true);
+        } else {
+          console.warn('Unexpected share payload');
+        }
       } else {
         console.error('Failed to create share link');
       }
@@ -582,8 +618,15 @@ export function NotebookLMInterface() {
     try {
       const response = await fetch(`/api/chat/documents/${document.id}`);
       if (response.ok) {
-        const data = await response.json();
-        setDocumentContent(data.content || 'No preview available');
+        const data: unknown = await response.json();
+        const isDocContent = (v: unknown): v is { content?: string } =>
+          !!v && typeof v === 'object' && ('content' in (v as any) ? typeof (v as any).content === 'string' || typeof (v as any).content === 'undefined' : true);
+        if (isDocContent(data)) {
+          setDocumentContent((data as any).content || 'No preview available');
+        } else {
+          console.warn('Unexpected document content payload');
+          setDocumentContent('No preview available');
+        }
       }
     } catch (error) {
       console.error('Failed to load document content:', error);
@@ -919,7 +962,7 @@ export function NotebookLMInterface() {
                         </div>
                         <div
                           className={`relative rounded-2xl px-4 py-3 max-w-[80%] group ${
-                            message.role === 'assistant'
+                            'assistant' === 'assistant'
                               ? 'bg-muted'
                               : 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white'
                           }`}
@@ -960,7 +1003,7 @@ export function NotebookLMInterface() {
                       <>
                         <div
                           className={`relative rounded-2xl px-4 py-3 max-w-[80%] group ${
-                            message.role === 'assistant'
+                            'assistant' === 'assistant'
                               ? 'bg-muted'
                               : 'bg-gradient-to-r from-gradient-metal-start to-gradient-metal-end text-white'
                           }`}

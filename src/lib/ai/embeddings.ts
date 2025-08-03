@@ -119,7 +119,8 @@ export async function generateEmbeddings(
     return response.data;
   } catch (error) {
     console.error('Error generating embeddings:', error);
-    throw new Error(`Failed to generate embeddings: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to generate embeddings: ${errorMessage}`);
   }
 }
 
@@ -151,12 +152,13 @@ export async function embedAndPrepareVectors(
       chunkMetadata.push({
         ...metadata,
         chunkIndex,
-        textIndex,
         chunk: chunk.slice(0, 200), // Store preview
         fullChunk: chunk,
         contentHash,
         timestamp: new Date().toISOString(),
-      });
+        // Add textIndex as additional metadata if needed
+        ...(textIndex > 0 ? { pageNumber: textIndex + 1 } : {}),
+      } as EmbedMetadata);
     });
   });
 
