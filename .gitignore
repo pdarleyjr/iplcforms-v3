@@ -73,5 +73,11 @@ namespaces.json
 wrangler.jsonc
 test-chat.json
  
-# guard against re-nesting AI repo 
+# guard against re-nesting AI repo
 iplc-ai/
+
+# kilocode configuration
+.kilocode/
+
+# internal documents
+AUDIT_REPORT.md

@@ -1,4 +1,5 @@
 import type { APIContext, MiddlewareHandler } from 'astro';
+import { corsMiddleware } from './cors';
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
@@ -147,9 +148,12 @@ async function securityHeadersMiddleware(context: APIContext, next: () => Promis
 
 // Combine all middleware
 export const onRequest: MiddlewareHandler = async (context, next) => {
-  // Apply rate limiting first
-  return rateLimitMiddleware(context, () => 
-    // Then apply security headers
-    securityHeadersMiddleware(context, next)
+  // Apply CORS first
+  return corsMiddleware(context, () =>
+    // Then rate limiting
+    rateLimitMiddleware(context, () =>
+      // Then apply security headers
+      securityHeadersMiddleware(context, next)
+    )
   );
 };
