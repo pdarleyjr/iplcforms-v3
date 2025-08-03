@@ -1,69 +1,55 @@
 name = "iplcforms-v3"
-compatibility_date = "2025-04-01"
+main = "src/index.ts"
+compatibility_date = "2024-03-11"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "./dist"
 
-# AI binding for Cloudflare Workers AI
-# Configured via API on 2025-07-31 to fix production AI service
+[observability]
+enabled = true
+
+# Service binding to iplc-ai worker
+[[services]]
+binding = "IPLC_AI"
+service = "iplc-ai"
+
+# AI binding for Workers AI (keep for backward compatibility)
 [ai]
 binding = "AI"
 
-# D1 Database
-[[d1_databases]]
-binding = "DB"
-database_name = "admin-db"
-database_id = "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a"
+# Vectorize index for document embeddings (keep for backward compatibility)
+[[vectorize]]
+binding = "DOC_INDEX"
+index_name = "doc-index"
 
-# KV Namespaces
+# KV namespaces for data storage
+[[kv_namespaces]]
+binding = "USER_SESSIONS"
+id = "92ec4b43378242efaad5c898e961f898"
+preview_id = "92ec4b43378242efaad5c898e961f898"
+
+[[kv_namespaces]]
+binding = "DOCUMENTS"
+id = "995f435153f84382aa70fff8ab3a8e89"
+preview_id = "995f435153f84382aa70fff8ab3a8e89"
+
+[[kv_namespaces]]
+binding = "RATE_LIMITER"
+id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
+preview_id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
+
 [[kv_namespaces]]
 binding = "SESSION"
-id = "b68836e642d84fd08a40b96879cbda47"
+id = "a4926bc00e9b438a8898289934457a57"
+preview_id = "a4926bc00e9b438a8898289934457a57"
 
-[[kv_namespaces]]
-binding = "CHAT_HISTORY"
-id = "11baf1c1465d4b03afbe59fdfcdfe1b8"
-
-[[kv_namespaces]]
-binding = "METRICS_KV"
-id = "b34d60620f6b422c84f196271228c56b"
-
-[[kv_namespaces]]
-binding = "CACHE_KV"
-id = "f0468576601a4935b68069b4e54157e4"
-
-[[kv_namespaces]]
-binding = "DOC_METADATA"
-id = "bcb326be651d44e98eb4d220003d6473"
-
-[[kv_namespaces]]
-binding = "RATELIMIT_KV"
-id = "9c58f1c60ef64dafb0f8c13c9f7d534f"
-
-# Durable Objects
-[[durable_objects.bindings]]
-name = "FORM_SESSION"
-class_name = "FormSessionDO"
-
+# Durable Objects configuration
 [[durable_objects.bindings]]
 name = "AI_GATE"
 class_name = "AIGate"
 
-# Vectorize
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "iplc-forms-chat"
+[[durable_objects.bindings]]
+name = "FORM_SESSION"
+class_name = "FormSessionDO"
 
-# Workflows
-[[workflows]]
-name = "saas-admin-template-customer-workflow"
-binding = "CUSTOMER_WORKFLOW"
-class_name = "CustomerWorkflow"
-
-# Migrations for Durable Objects
 [[migrations]]
 tag = "v1"
-new_classes = ["AIGate", "FormSessionDO"]
-
-# SPA not-found handling for single-page application
-[assets]
-not_found_handling = "single-page-application"
+new_sqlite_classes = ["AIGate", "FormSessionDO"]

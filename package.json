@@ -61,6 +61,8 @@
     "@tailwindcss/postcss": "^4.1.11",
     "@types/sortablejs": "^1.15.8",
     "esbuild": "^0.25.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.4",
     "wrangler": "^4.27.0"
   },
   "scripts": {
@@ -81,6 +83,13 @@
     "test:ipad": "npx playwright test tests/form-builder-ipad.spec.ts",
     "test:ui-cleanup": "npx playwright test tests/ui-cleanup.spec.ts",
     "test:lighthouse": "lhci autorun",
-    "test:axe": "axe http://localhost:4321/forms/new --tags wcag2aa,wcag21aa --exit"
+    "test:axe": "axe http://localhost:4321/forms/new --tags wcag2aa,wcag21aa --exit",
+    "prepare": "husky",
+    "type-check": "tsc --noEmit",
+    "scan-secrets": "node scripts/scan-secrets.mjs"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": ["tsc --noEmit"],
+    "*.{js,jsx,json,md}": []
   }
 }
