@@ -10,7 +10,7 @@ interface Conversation {
 }
 
 export const GET: APIRoute = async ({ locals }) => {
-  const env = locals.runtime.env;
+  const env = (locals as any).runtime.env;
   
   try {
     // List all conversations for the user
@@ -70,7 +70,7 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
+  const env = (locals as any).runtime.env;
   
   try {
     const data = await request.json() as { title?: string };
@@ -111,7 +111,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env;
+  const env = (locals as any).runtime.env;
   const conversationId = url.pathname.split('/').pop();
   
   if (!conversationId) {

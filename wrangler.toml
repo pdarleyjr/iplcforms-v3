@@ -1,5 +1,5 @@
 name = "iplcforms-v3"
-main = "src/index.ts"
+main = "dist/_worker.js"
 compatibility_date = "2024-03-11"
 compatibility_flags = ["nodejs_compat"]
 
@@ -21,25 +21,33 @@ binding = "DOC_INDEX"
 index_name = "doc-index"
 
 # KV namespaces for data storage
-[[kv_namespaces]]
-binding = "USER_SESSIONS"
-id = "92ec4b43378242efaad5c898e961f8981"
-preview_id = "92ec4b43378242efaad5c898e961f8981"
+# Note: These namespaces need to be created in production
+# For now, commenting out to allow deployment
+
+# [[kv_namespaces]]
+# binding = "USER_SESSIONS"
+# id = "92ec4b43378242efaad5c898e961f8981"
+# preview_id = "92ec4b43378242efaad5c898e961f8981"
+
+# [[kv_namespaces]]
+# binding = "DOCUMENTS"
+# id = "995f435153f84382a70fff8ab3a8e892"
+# preview_id = "995f435153f84382a70fff8ab3a8e892"
+
+# [[kv_namespaces]]
+# binding = "RATE_LIMITER"
+# id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
+# preview_id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
+
+# [[kv_namespaces]]
+# binding = "SESSION"
+# id = "a4926bc00e9b438a898289934457a579"
+# preview_id = "a4926bc00e9b438a898289934457a579"
 
 [[kv_namespaces]]
-binding = "DOCUMENTS"
-id = "995f435153f84382a70fff8ab3a8e892"
-preview_id = "995f435153f84382a70fff8ab3a8e892"
-
-[[kv_namespaces]]
-binding = "RATE_LIMITER"
-id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
-preview_id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
-
-[[kv_namespaces]]
-binding = "SESSION"
-id = "a4926bc00e9b438a898289934457a579"
-preview_id = "a4926bc00e9b438a898289934457a579"
+binding = "CHAT_HISTORY"
+id = "11baf1c1465d4b03afbe59fdfcdfe1b8"
+preview_id = "0c59462935aa4ae5a8f2c4bc49d1aa56"
 
 # Durable Objects configuration
 [[durable_objects.bindings]]
@@ -50,9 +58,10 @@ class_name = "AIGate"
 name = "FORM_SESSION"
 class_name = "FormSessionDO"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["AIGate", "FormSessionDO"]
+# Migrations already applied, removing to prevent re-application
+# [[migrations]]
+# tag = "v1"
+# new_sqlite_classes = ["AIGate", "FormSessionDO"]
 
 # D1 Database binding
 [[d1_databases]]
