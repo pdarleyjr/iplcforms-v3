@@ -207,7 +207,7 @@ export function createExports(manifest: SSRManifest) {
         METRICS_KV: env.METRICS_KV,
         CACHE_KV: env.CACHE_KV,
         AI: env.AI,
-        VECTORIZE: env.VECTORIZE,
+        VECTORIZE: env.DOC_INDEX,
         CHAT_HISTORY: env.CHAT_HISTORY,
         DOC_METADATA: env.DOC_METADATA,
         RATELIMIT_KV: env.RATELIMIT_KV,
