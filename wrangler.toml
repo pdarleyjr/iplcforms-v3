@@ -6,6 +6,10 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
+# Static assets configuration
+[assets]
+directory = "./dist"
+
 # Service binding to iplc-ai worker
 [[services]]
 binding = "IPLC_AI"
