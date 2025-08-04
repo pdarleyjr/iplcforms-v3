@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { c as createComponent, a as createAstro, r as renderComponent, b as renderTemplate, m as maybeRenderHead } from '../../chunks/astro/server_Cd9lk-7F.mjs';
-import { $ as $$Layout } from '../../chunks/Layout_CIY5vW_S.mjs';
+import { $ as $$Layout } from '../../chunks/Layout_91kL-JTU.mjs';
 import { j as jsxRuntimeExports, e as cn, C as Card, a as CardHeader, b as CardTitle, c as CardDescription, d as CardContent } from '../../chunks/card_CmFEFEbr.mjs';
 import { a as reactExports } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
 export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
