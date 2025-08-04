@@ -43,10 +43,15 @@ index_name = "doc-index"
 # id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
 # preview_id = "30dd285e5d5a4cabafbd9fae69ba5d5e"
 
+# Optional ASSETS KV namespace for asset proxying via env.ASSETS; keep commented unless used
 # [[kv_namespaces]]
-# binding = "SESSION"
-# id = "a4926bc00e9b438a898289934457a579"
-# preview_id = "a4926bc00e9b438a898289934457a579"
+# binding = "ASSETS"
+# id = "REPLACE_WITH_ASSETS_KV_ID_AFTER_CREATION"
+
+# SESSION KV namespace binding (patched with real id)
+[[kv_namespaces]]
+binding = "SESSION"
+id = "a4926bc00e9b438a898289934457a579"
 
 [[kv_namespaces]]
 binding = "CHAT_HISTORY"
@@ -62,10 +67,10 @@ class_name = "AIGate"
 name = "FORM_SESSION"
 class_name = "FormSessionDO"
 
-# Migrations already applied, removing to prevent re-application
-# [[migrations]]
-# tag = "v1"
-# new_sqlite_classes = ["AIGate", "FormSessionDO"]
+# Durable Object migrations
+[[migrations]]
+tag = "v1"
+new_classes = [ "AIGate", "FormSessionDO" ]
 
 # D1 Database binding
 [[d1_databases]]
