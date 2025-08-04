@@ -174,20 +174,40 @@ export function createExports(manifest: SSRManifest) {
         WorkersPerformanceManager.getInstance();
       }
 
-      // Check if the request is for an asset and serve it from KV
-      try {
-        const assetResponse = await getAssetFromKV(
-          {
-            request,
-            waitUntil: ctx.waitUntil.bind(ctx),
-          },
-          {
-            ASSET_NAMESPACE: env.ASSETS,
+      // Log the request URL for debugging
+      const requestUrl = new URL(request.url);
+      console.log(`[Worker] Handling request for: ${requestUrl.pathname}`);
+      
+      // Check if the request is for a static asset
+      if (requestUrl.pathname.startsWith('/_astro/') ||
+          requestUrl.pathname.endsWith('.css') ||
+          requestUrl.pathname.endsWith('.js') ||
+          requestUrl.pathname.endsWith('.png') ||
+          requestUrl.pathname.endsWith('.jpg') ||
+          requestUrl.pathname.endsWith('.svg')) {
+        
+        console.log(`[Worker] Static asset requested: ${requestUrl.pathname}`);
+        
+        // Try to serve from KV if ASSETS is available
+        if (env.ASSETS) {
+          try {
+            const assetResponse = await getAssetFromKV(
+              {
+                request,
+                waitUntil: ctx.waitUntil.bind(ctx),
+              },
+              {
+                ASSET_NAMESPACE: env.ASSETS,
+              }
+            );
+            console.log(`[Worker] Asset served from KV: ${requestUrl.pathname}`);
+            return assetResponse;
+          } catch (e) {
+            console.error(`[Worker] Failed to serve asset from KV: ${requestUrl.pathname}`, e);
           }
-        );
-        return assetResponse;
-      } catch (e) {
-        // Asset not found or other error, continue to Astro SSR
+        } else {
+          console.warn(`[Worker] ASSETS namespace not configured, cannot serve static assets from KV`);
+        }
       }
 
       // Create a properly structured environment object for Astro.locals.env
