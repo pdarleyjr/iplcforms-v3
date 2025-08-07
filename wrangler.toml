@@ -72,10 +72,15 @@ class_name = "FormSessionDO"
 tag = "v1"
 new_classes = [ "AIGate", "FormSessionDO" ]
 
-# Add SQLite-backed namespaces for Durable Objects (required on Free plan, valid on paid)
+# First and only sqlite creation step
 [[migrations]]
-tag = "v2-do-sqlite"
+tag = "v2-aigate-sqlite"
 new_sqlite_classes = [ "AIGate", "FormSessionDO" ]
+
+# Head tag that makes no changes (no-op) for forward-only versioning
+[[migrations]]
+tag = "v3-head"
+renamed_classes = [ ]
 
 # D1 Database binding
 [[d1_databases]]
