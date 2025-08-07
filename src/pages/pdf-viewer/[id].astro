@@ -1,0 +1,77 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import PDFAnnotator from '../../components/pdf/PDFAnnotator.astro';
+
+const { id } = Astro.params;
+
+// For demo purposes, we'll use the sample PDF
+// In production, you'd fetch the PDF URL based on the ID
+const pdfUrl = '/sample.pdf';
+const pdfTitle = `PDF Document ${id}`;
+
+// You could fetch initial annotations from the database here
+let initialAnnotations = [];
+try {
+  const response = await fetch(`${Astro.url.origin}/api/pdf-annotations/${id}`);
+  if (response.ok) {
+    const data = await response.json();
+    initialAnnotations = data.annotations || [];
+  }
+} catch (error) {
+  console.error('Failed to fetch initial annotations:', error);
+}
+---
+
+<Layout title={pdfTitle}>
+  <div class="container mx-auto py-8">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold text-gray-900">{pdfTitle}</h1>
+      <p class="text-gray-600 mt-2">Document ID: {id}</p>
+    </div>
+    
+    <div class="pdf-viewer-container">
+      <PDFAnnotator 
+        pdfUrl={pdfUrl}
+        pdfId={id}
+        initialAnnotations={initialAnnotations}
+      />
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .pdf-viewer-container {
+    min-height: 800px;
+  }
+</style>
+
+<script>
+  // Listen for annotation changes and save them
+  document.addEventListener('pdf-annotations-change', async (event: any) => {
+    const { annotations } = event.detail;
+    console.log('Annotations changed:', annotations);
+  });
+
+  document.addEventListener('pdf-annotations-save', async (event: any) => {
+    const { annotations } = event.detail;
+    const pdfId = window.location.pathname.split('/').pop();
+    
+    try {
+      const response = await fetch(`/api/pdf-annotations/${pdfId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ annotations }),
+      });
+      
+      if (response.ok) {
+        console.log('Annotations saved successfully');
+      } else {
+        console.error('Failed to save annotations');
+      }
+    } catch (error) {
+      console.error('Error saving annotations:', error);
+    }
+  });
+</script>
