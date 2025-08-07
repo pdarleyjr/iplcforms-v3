@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { c as createComponent, a as createAstro, r as renderComponent, b as renderTemplate, m as maybeRenderHead, d as renderScript } from '../../../chunks/astro/server_Cd9lk-7F.mjs';
-import { $ as $$Layout } from '../../../chunks/Layout_91kL-JTU.mjs';
+import { $ as $$Layout } from '../../../chunks/Layout_Cvn2ksVx.mjs';
 import { C as Card } from '../../../chunks/card_CmFEFEbr.mjs';
 import { S as Share2, U as User, B as Bot } from '../../../chunks/user_C8IlMjJN.mjs';
 export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';

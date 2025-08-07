@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { c as createComponent, a as createAstro, r as renderComponent, b as renderTemplate, m as maybeRenderHead } from '../../chunks/astro/server_Cd9lk-7F.mjs';
-import { $ as $$Layout } from '../../chunks/Layout_91kL-JTU.mjs';
+import { $ as $$Layout } from '../../chunks/Layout_Cvn2ksVx.mjs';
 import { C as CustomerService } from '../../chunks/customer_CfmmZeU3.mjs';
 import { j as jsxRuntimeExports } from '../../chunks/card_CmFEFEbr.mjs';
 import { c as createColumnHelper, u as useReactTable, D as DataTable, g as getCoreRowModel } from '../../chunks/data-table_VJHBuh5A.mjs';
