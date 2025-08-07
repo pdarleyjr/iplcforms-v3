@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { n as nanoid } from '../../../chunks/index.browser_BfaZFivj.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const POST = async ({ request, locals }) => {
   const env = locals.runtime.env;

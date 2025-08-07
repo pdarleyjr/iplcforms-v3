@@ -1,42 +1,13 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-import { c as createComponent, a as createAstro, r as renderComponent, b as renderTemplate, m as maybeRenderHead, d as renderScript } from '../../chunks/astro/server_Cd9lk-7F.mjs';
-import { $ as $$Layout } from '../../chunks/Layout_Cvn2ksVx.mjs';
-import { C as Card, a as CardHeader, b as CardTitle, c as CardDescription, d as CardContent } from '../../chunks/card_CmFEFEbr.mjs';
-import { B as Button } from '../../chunks/button_B9vnY3WY.mjs';
-import { I as Input } from '../../chunks/input_CS4ZXKo0.mjs';
-import { L as Label } from '../../chunks/label_Ch9XXvk2.mjs';
-import { A as Alert, a as AlertDescription } from '../../chunks/alert_W4kakS3Y.mjs';
-import { c as createLucideIcon } from '../../chunks/createLucideIcon_BcqoDbb6.mjs';
-import { S as Shield } from '../../chunks/shield_qIIVy2Tj.mjs';
-import { M as MessageSquare } from '../../chunks/message-square_ColC9o4y.mjs';
-export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
-
-/**
- * @license lucide-react v0.525.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-
-
-const __iconNode$1 = [
-  ["path", { d: "M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z", key: "p7xjir" }]
-];
-const Cloud = createLucideIcon("cloud", __iconNode$1);
-
-/**
- * @license lucide-react v0.525.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-
-
-const __iconNode = [
-  ["path", { d: "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7", key: "132q7q" }],
-  ["rect", { x: "2", y: "4", width: "20", height: "16", rx: "2", key: "izxlao" }]
-];
-const Mail = createLucideIcon("mail", __iconNode);
+import { c as createComponent, a as createAstro, r as renderComponent, b as renderTemplate, m as maybeRenderHead, d as renderScript } from '../../chunks/astro/server_BhDrV1PX.mjs';
+import { $ as $$Layout } from '../../chunks/Layout_Cm10FlEX.mjs';
+import { C as Card, a as CardHeader, b as CardTitle, c as CardDescription, d as CardContent } from '../../chunks/card_DRaKdq96.mjs';
+import { B as Button } from '../../chunks/button_D4hUjemp.mjs';
+import { I as Input } from '../../chunks/input_BA3f0EGX.mjs';
+import { L as Label } from '../../chunks/label_BGeTbS01.mjs';
+import { A as Alert, a as AlertDescription } from '../../chunks/alert_oZX2k7yW.mjs';
+import { C as Cloud, S as Shield, M as MessageSquare, a as Mail } from '../../chunks/react-vendor_BBaf1uT2.mjs';
+export { renderers } from '../../renderers.mjs';
 
 const $$Astro = createAstro();
 const $$Integrations = createComponent(async ($$result, $$props, $$slots) => {

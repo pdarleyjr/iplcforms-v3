@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-import { o as object, e as boolean, s as string } from '../../chunks/schemas_RvMANBrn.mjs';
-export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { o as object, b as boolean, s as string } from '../../chunks/form-vendor_rc_Y5fZa.mjs';
+export { renderers } from '../../renderers.mjs';
 
 const LockRequestSchema = object({
   formId: string(),

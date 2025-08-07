@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { a as handlePlausibleScript } from '../../../chunks/plausible-proxy_CO7DzKo-.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const GET = async ({ request, locals }) => {
   const env = locals.runtime.env;

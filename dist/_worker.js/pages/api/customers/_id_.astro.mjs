@@ -3,7 +3,7 @@ import { C as CustomerService } from '../../../chunks/customer_CfmmZeU3.mjs';
 import { a as authenticate, b as authorize } from '../../../chunks/rbac-middleware_C5PL4AHx.mjs';
 import { P as PERMISSIONS } from '../../../chunks/rbac_vK5lyOl9.mjs';
 import { w as withPerformanceMonitoring } from '../../../chunks/performance-wrapper_COlTcJLx.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const getHandler = async (context) => {
   const { id } = context.params;

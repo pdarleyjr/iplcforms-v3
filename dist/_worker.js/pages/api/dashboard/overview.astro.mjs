@@ -2,7 +2,7 @@ globalThis.process ??= {}; globalThis.process.env ??= {};
 import { F as FormTemplateService } from '../../../chunks/form_template_whHHz9qG.mjs';
 import { F as FormSubmissionService } from '../../../chunks/form_submission_DFkhSEjI.mjs';
 import { g as getD1Manager } from '../../../chunks/d1-connection-manager_oVL7uFVJ.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const GET = async ({ locals }) => {
   try {
