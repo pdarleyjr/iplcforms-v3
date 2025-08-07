@@ -77,6 +77,11 @@ new_classes = [ "AIGate", "FormSessionDO" ]
 tag = "v2-do-sqlite"
 new_sqlite_classes = [ "AIGate", "FormSessionDO" ]
 
+# Migration v3 to maintain consistency with deployed version
+[[migrations]]
+tag = "v3-head"
+new_sqlite_classes = [ "AIGate", "FormSessionDO" ]
+
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"

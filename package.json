@@ -89,7 +89,9 @@
     "scan-secrets": "node scripts/scan-secrets.mjs"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["tsc --noEmit"],
+    "*.{ts,tsx}": [
+      "tsc --noEmit"
+    ],
     "*.{js,jsx,json,md}": []
   }
 }
