@@ -18,6 +18,7 @@ import TitleElement from './components/TitleElement';
 import SubtitleElement from './components/SubtitleElement';
 import SeparatorElement from './components/SeparatorElement';
 import evaluationSectionsConfig from './evaluation-sections-config.json';
+import { createAnalytics } from '../../lib/analytics/plausibleClient';
 
 interface LiveFormRendererProps {
   template: FormTemplate;
@@ -36,6 +37,11 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
   onSubmit,
   className = ''
 }) => {
+  // Analytics client (proxied plausible). Enabled via env or QA override.
+  const ANALYTICS_ENABLED =
+    (typeof import.meta !== 'undefined' && import.meta.env?.ANALYTICS_ENABLED === 'true') ||
+    ((globalThis as any).__FEATURE_FLAGS__?.['analytics.plausible.enabled'] === true);
+  const analytics = ANALYTICS_ENABLED ? createAnalytics({ enabled: true }) : null;
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -267,6 +273,19 @@ export const LiveFormRenderer: React.FC<LiveFormRendererProps> = ({
           throw new Error('Failed to submit form');
         }
       }
+
+      // Emit analytics event only on successful submission
+      try {
+        if (analytics) {
+          const env = (typeof import.meta !== 'undefined' && import.meta.env?.MODE) || 'unknown';
+          const pageId = isMultiPage ? pages[currentPageIndex]?.id : undefined;
+          analytics.event('form_submit', {
+            formId: String(template.id ?? 'unknown'),
+            pageId: pageId ? String(pageId) : null,
+            env
+          });
+        }
+      } catch {}
 
       setSubmitStatus('success');
       setFormData({});

@@ -12,13 +12,15 @@ const RATE_LIMIT_MAX_REQUESTS = 60; // 60 requests per minute
 const RATE_LIMIT_BURST = 10; // Allow burst of 10 requests
 
 // Security headers configuration
-const getSecurityHeaders = (isProduction: boolean = true) => {
-  // In production, use strict CSP with hashes
+const getSecurityHeaders = (isProduction: boolean = true, requiresUnsafeInline: boolean = false) => {
+  // In production, use strict CSP with hashes for inline scripts
   // In development/E2E, we need more relaxed CSP
+  // For pages with Astro define:vars, we need 'unsafe-inline' due to dynamic content
   const scriptSrc = isProduction
     ? formatScriptSrcCSP([
         "'unsafe-eval'", // Still needed for some libraries, will be removed in phase 2
-        "'unsafe-inline'", // Still needed for Astro define:vars, will be addressed in phase 2
+        // Add 'unsafe-inline' only for pages that use Astro define:vars (form pages)
+        ...(requiresUnsafeInline ? ["'unsafe-inline'"] : []),
         "/api/plausible/script.js"
       ])
     : "'self' 'unsafe-inline' 'unsafe-eval' /api/plausible/script.js blob:";
@@ -34,7 +36,7 @@ const getSecurityHeaders = (isProduction: boolean = true) => {
   };
 };
 
-const SECURITY_HEADERS = getSecurityHeaders();
+// Note: We'll determine if unsafe-inline is needed based on the request path
 
 // Helper to get client IP
 function getClientIP(request: Request): string {
@@ -175,8 +177,13 @@ async function securityHeadersMiddleware(context: APIContext, next: () => Promis
     const contentType = response.headers.get('content-type') || '';
     const isHTML = contentType.includes('text/html');
 
-    // Get appropriate headers based on environment
-    const headers = isE2E ? getSecurityHeaders(false) : SECURITY_HEADERS;
+    // Check if this is a form page that uses Astro define:vars
+    const requiresUnsafeInline = url.pathname.match(/^\/forms\/[^\/]+\/(submissions|preview|edit|analytics)/);
+    
+    // Get appropriate headers based on environment and page requirements
+    const headers = isE2E
+      ? getSecurityHeaders(false, false)
+      : getSecurityHeaders(true, !!requiresUnsafeInline);
     
     const { ['Content-Security-Policy']: cspHeader, ...baseHeaders } = headers as Record<string, string>;
     Object.entries(baseHeaders).forEach(([header, value]) => {
@@ -190,7 +197,9 @@ async function securityHeadersMiddleware(context: APIContext, next: () => Promis
       response.headers.set('Content-Security-Policy', cspHeader);
     }
   } catch {
-    Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+    // Fallback: apply default strict headers
+    const fallbackHeaders = getSecurityHeaders(true, false);
+    Object.entries(fallbackHeaders).forEach(([header, value]) => {
       response.headers.set(header, value);
     });
   }

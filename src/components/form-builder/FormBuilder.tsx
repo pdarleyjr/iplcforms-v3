@@ -75,9 +75,13 @@ interface FormBuilderProps {
 }
  
 export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }: FormBuilderProps) {
-  // Minimal analytics instrumentation guarded by feature flag to avoid heavy bundles
-  const ANALYTICS_ENABLED = (globalThis as any).__FEATURE_FLAGS__?.['analytics.plausible.enabled'] === true;
-  const analytics = ANALYTICS_ENABLED ? createAnalytics({ enabled: true, siteId: 'iplcforms' }) : null;
+  // Analytics client (proxied plausible). Enabled via env or QA override.
+  const ANALYTICS_ENABLED =
+    (typeof import.meta !== 'undefined' && import.meta.env?.ANALYTICS_ENABLED === 'true') ||
+    ((globalThis as any).__FEATURE_FLAGS__?.['analytics.plausible.enabled'] === true);
+
+  const analytics = ANALYTICS_ENABLED ? createAnalytics({ enabled: true }) : null;
+
   // Multi-page form state
   const [isMultiPage, setIsMultiPage] = useState(template?.schema?.isMultiPage || false);
   const [pages, setPages] = useState<FormPage[]>(() => {
@@ -490,9 +494,18 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     // Trigger debounced autosave
     debouncedAutoSave({});
     
-    // Analytics: palette add
-    try { analytics?.event('builder_palette_add', { type: component.type }); } catch {}
-  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave]);
+    // Analytics: field added (only on actual state change and when unlocked or user owns lock)
+    try {
+      if (analytics && (!lockStatus.isLocked || lockStatus.lockedBy === userName)) {
+        analytics.event('field_added', {
+          formId: String(template?.id ?? 'new'),
+          fieldType: component.type,
+          pageId: activePageId ?? 'page_1',
+          env: (typeof import.meta !== 'undefined' && import.meta.env?.MODE) || 'unknown'
+        });
+      }
+    } catch {}
+  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave, analytics, template?.id, activePageId]);
 
   const handleDrop = useCallback((event: React.DragEvent, targetIndex?: number) => {
     event.preventDefault();
@@ -537,9 +550,11 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     // Trigger debounced autosave
     debouncedAutoSave({});
     
-    // Analytics: reorder commit
-    try { analytics?.event('builder_reorder', { from: fromIndex, to: toIndex }); } catch {}
-  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave]);
+    // Optional analytics: reorder commit (kept for diagnostics)
+    try {
+      analytics?.event('builder_reorder', { from: fromIndex, to: toIndex });
+    } catch {}
+  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave, analytics]);
 
   // Enhanced drag handlers using DragManager
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -582,7 +597,20 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     
     // Trigger debounced autosave
     debouncedAutoSave({});
-  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave]);
+
+    // Analytics: field removed
+    try {
+      if (analytics && (!lockStatus.isLocked || lockStatus.lockedBy === userName)) {
+        const removed = components[index];
+        analytics.event('field_removed', {
+          formId: String(template?.id ?? 'new'),
+          fieldType: removed?.type || 'unknown',
+          pageId: activePageId ?? 'page_1',
+          env: (typeof import.meta !== 'undefined' && import.meta.env?.MODE) || 'unknown'
+        });
+      }
+    } catch {}
+  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave, analytics, template?.id, activePageId]);
 
   const updateComponent = useCallback((index: number, updates: Partial<FormComponent>) => {
     // Check lock status before allowing mutation

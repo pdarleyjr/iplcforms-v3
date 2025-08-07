@@ -51,6 +51,46 @@ const apiTokenSet = API_TOKEN && API_TOKEN !== '' && API_TOKEN !== 'dev_fallback
       </div>
       <slot />
     </div>
+
+    <!-- Analytics SPA pageview wiring -->
+    <script type="module">
+      import { initPlausibleScript, createAnalytics } from '/src/lib/analytics/plausibleClient.ts';
+      try {
+        initPlausibleScript();
+        const analytics = createAnalytics({ enabled: import.meta.env?.ANALYTICS_ENABLED === 'true' });
+
+        // Initial pageview
+        analytics.pageview();
+
+        // Patch history methods to detect SPA navigations
+        const origPush = history.pushState;
+        const origReplace = history.replaceState;
+        const emit = () => analytics.pageview();
+        history.pushState = new Proxy(origPush, {
+          apply(target, thisArg, args) {
+            const ret = Reflect.apply(target, thisArg, args);
+            emit();
+            return ret;
+          }
+        });
+        history.replaceState = new Proxy(origReplace, {
+          apply(target, thisArg, args) {
+            const ret = Reflect.apply(target, thisArg, args);
+            emit();
+            return ret;
+          }
+        });
+        window.addEventListener('popstate', emit);
+        // Astro onPageLoad hook (if available) for client navigation
+        // @ts-ignore
+        if (typeof Astro !== 'undefined' && Astro.onPageLoad) {
+          // @ts-ignore
+          Astro.onPageLoad(() => analytics.pageview());
+        }
+      } catch (e) {
+        console.debug('analytics init failed', e);
+      }
+    </script>
   </body>
 </html>
 

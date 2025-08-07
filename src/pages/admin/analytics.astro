@@ -1,0 +1,147 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+import type { APIRoute } from 'astro';
+
+/**
+ * Gate this page to users with analytics_viewer or admin roles.
+ * Using existing withRBAC helper which:
+ * - Honors x-e2e bypass for tests
+ * - Authenticates request and ensures customer's role is one of required
+ * - Returns 403 on failure without exposing data
+ *
+ * We export a GET handler to run before page rendering in Astro's server context.
+ */
+export const GET: APIRoute = withRBAC(['analytics_viewer', 'admin'], async () => {
+  // If we reach here, access is granted. Continue to render page normally.
+  // Return nothing so Astro continues with the page component render.
+  return undefined as any;
+});
+---
+
+<!--
+  Analytics Dashboard (RBAC-protected)
+  - No inline scripts; purely static placeholder content to keep CSP-friendly.
+  - Uses existing AdminLayout and UI components.
+-->
+
+<AdminLayout title="Analytics">
+  <section class="space-y-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
+        <p class="text-muted-foreground mt-2">
+          High-level overview of tracked metrics for forms and app activity. Access granted based on role:
+          <Badge class="ml-1" variant="secondary">analytics_viewer</Badge> or <Badge class="ml-1" variant="destructive">admin</Badge>.
+        </p>
+      </div>
+    </div>
+
+    <Alert>
+      <AlertDescription>
+        Data source: metrics proxied via Plausible through <code class="font-mono text-sm">/api/plausible</code>.
+        This page intentionally avoids inline scripts to comply with strict CSP. Charts and live data wiring are not enabled yet.
+      </AlertDescription>
+    </Alert>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="p-4">
+        <div class="space-y-1">
+          <div class="text-sm text-muted-foreground">Overview</div>
+          <div class="text-lg font-semibold">Last 7 days</div>
+        </div>
+        <div class="mt-4 space-y-2 text-sm">
+          <div class="flex items-center justify-between">
+            <span>Unique visitors</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Pageviews</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Bounce rate</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div class="space-y-1">
+          <div class="text-sm text-muted-foreground">Forms</div>
+          <div class="text-lg font-semibold">Submission Activity</div>
+        </div>
+        <div class="mt-4 space-y-2 text-sm">
+          <div class="flex items-center justify-between">
+            <span>Total submissions</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Avg. per day</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Active templates</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div class="space-y-1">
+          <div class="text-sm text-muted-foreground">Performance</div>
+          <div class="text-lg font-semibold">Client + API</div>
+        </div>
+        <div class="mt-4 space-y-2 text-sm">
+          <div class="flex items-center justify-between">
+            <span>Avg. page load</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>API latency (p95)</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Error rate</span>
+            <span class="text-muted-foreground">—</span>
+          </div>
+        </div>
+      </Card>
+    </div>
+
+    <Card className="p-6">
+      <h2 class="text-xl font-semibold">Events being tracked</h2>
+      <p class="text-muted-foreground mt-1">
+        The following custom events are emitted from the form builder and runtime.
+      </p>
+      <ul class="list-disc pl-6 mt-4 space-y-2 text-sm">
+        <li>
+          <span class="font-medium">field_added</span> — Triggered when a new field/component is added in the builder.
+        </li>
+        <li>
+          <span class="font-medium">field_removed</span> — Triggered when an existing field/component is removed.
+        </li>
+        <li>
+          <span class="font-medium">form_submit</span> — Triggered when a user submits a form.
+        </li>
+        <li>
+          <span class="font-medium">pageview</span> — SPA page views proxied to Plausible.
+        </li>
+      </ul>
+    </Card>
+
+    <Card className="p-6">
+      <h2 class="text-xl font-semibold">Implementation notes</h2>
+      <div class="prose prose-sm dark:prose-invert mt-2">
+        <ul>
+          <li>RBAC enforced via <code class="font-mono text-sm">withRBAC(['analytics_viewer','admin'])</code> before page render.</li>
+          <li>Future charts should fetch via server routes (e.g., <code class="font-mono text-sm">/api/plausible</code>) to remain CSP-friendly.</li>
+          <li>No client-side scripts on this page yet; all content is static placeholders.</li>
+        </ul>
+      </div>
+    </Card>
+  </section>
+</AdminLayout>
