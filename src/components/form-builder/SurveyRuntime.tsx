@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import type { FormComponent } from '@/lib/api-form-builder';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
+import type { FormComponent } from '../../lib/api-form-builder';
 
 // Type definitions for SurveyJS
 interface SurveyModel {
