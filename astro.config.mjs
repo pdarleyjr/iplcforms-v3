@@ -65,7 +65,7 @@ export default defineConfig({
     // Enhanced development server optimizations
     optimizeDeps: {
       include: ["react", "react-dom", "lucide-react", "@tanstack/react-table"],
-      exclude: ["@astrojs/cloudflare"]
+      exclude: ["@astrojs/cloudflare", "survey-react-ui", "pdfjs-dist"]
     },
     // Build performance optimizations
     build: {
@@ -75,19 +75,40 @@ export default defineConfig({
       rollupOptions: {
         external: ["openai"],
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom'],
-            'ui-vendor': ['lucide-react', '@radix-ui/react-slot'],
-            'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
-            'table-vendor': ['@tanstack/react-table']
+          manualChunks: (id) => {
+            // Keep SurveyJS in its own chunk for client-side only loading
+            if (id.includes('survey-react-ui') || id.includes('survey-core')) {
+              return 'survey-vendor';
+            }
+            // Keep PDF.js and related libraries in their own chunk
+            if (id.includes('pdfjs-dist') || id.includes('react-pdf-highlighter')) {
+              return 'pdf-vendor';
+            }
+            // Keep dnd-kit in its own chunk
+            if (id.includes('@dnd-kit')) {
+              return 'dnd-vendor';
+            }
+            // Existing vendor chunks
+            if (id.includes('react') && !id.includes('react-hook-form')) {
+              return 'react-vendor';
+            }
+            if (id.includes('lucide-react') || id.includes('@radix-ui')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) {
+              return 'form-vendor';
+            }
+            if (id.includes('@tanstack/react-table')) {
+              return 'table-vendor';
+            }
           }
         }
       }
     },
     // Enhanced SSR optimization
     ssr: {
-      external: ["@astrojs/cloudflare", "openai", "crypto"],
-      noExternal: ["react-hook-form", "lucide-react"]
+      external: ["@astrojs/cloudflare", "openai", "crypto", "survey-react-ui", "pdfjs-dist"],
+      noExternal: ["react-hook-form", "lucide-react", "@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities", "@dnd-kit/modifiers"]
     }
   },
   // Image optimization
