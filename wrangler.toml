@@ -87,3 +87,9 @@ new_sqlite_classes = [ "AIGate", "FormSessionDO" ]
 binding = "DB"
 database_name = "admin-db"
 database_id = "ef0966c1-4e6b-40a3-bdd2-57fe48ad3b3a"
+
+# Environment variables
+[vars]
+ANALYTICS_ENABLED = "false"
+# PLAUSIBLE_DOMAIN = "plausible.io"  # Optional: Custom Plausible domain
+# DATA_DOMAIN = "your-domain.com"     # Optional: Your site domain for analytics

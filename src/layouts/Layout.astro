@@ -10,6 +10,10 @@ const title = Astro.props.title || 'SaaS Admin Template';
 const env = Astro.locals.env || {};
 const API_TOKEN = env.API_TOKEN || process.env.API_TOKEN || 'dev_fallback_token';
 const apiTokenSet = API_TOKEN && API_TOKEN !== '' && API_TOKEN !== 'dev_fallback_token';
+
+// Analytics configuration
+const analyticsEnabled = env.ANALYTICS_ENABLED === 'true' || env.ANALYTICS_ENABLED === true;
+const dataDomain = env.DATA_DOMAIN || Astro.url.hostname;
 ---
 
 <script is:inline>
@@ -39,6 +43,16 @@ const apiTokenSet = API_TOKEN && API_TOKEN !== '' && API_TOKEN !== 'dev_fallback
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
     <title>{title ? `${title} - SaaS Admin Template` : 'SaaS Admin Template'}</title>
+    
+    {/* Plausible Analytics - Only load if enabled */}
+    {analyticsEnabled && (
+      <script
+        defer
+        data-domain={dataDomain}
+        data-api="/a"
+        src="/a/js/plausible.js"
+      ></script>
+    )}
   </head>
   <body>
     <Header currentPath={currentPath} />
