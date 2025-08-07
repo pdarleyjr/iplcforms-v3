@@ -1,0 +1,95 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PDFAnnotator from '../components/pdf/PDFAnnotator.astro';
+
+// Get PDF URL from query params or use a default
+const url = Astro.url;
+const pdfUrl = url.searchParams.get('pdf') || '/sample.pdf';
+const readOnly = url.searchParams.get('readonly') === 'true';
+
+// You can load initial annotations from a database or API here
+const initialAnnotations = [];
+---
+
+<Layout title="PDF Annotator">
+  <div class="container mx-auto py-8">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold mb-2">PDF Annotator</h1>
+      <p class="text-gray-600">
+        View and annotate PDF documents. Select text to highlight, add comments, and export your annotations.
+      </p>
+      <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+        <p class="text-sm text-blue-800">
+          <strong>Tips:</strong>
+          <ul class="list-disc list-inside mt-2">
+            <li>Select text to create a highlight</li>
+            <li>Hold Alt and drag to create area highlights</li>
+            <li>Click on highlights to view or edit comments</li>
+            <li>Use the toolbar to change highlight colors</li>
+            <li>Export annotations as JSON for backup</li>
+          </ul>
+        </p>
+      </div>
+    </div>
+
+    <PDFAnnotator 
+      pdfUrl={pdfUrl}
+      initialAnnotations={initialAnnotations}
+      readOnly={readOnly}
+      showToolbar={true}
+      height="calc(100vh - 300px)"
+      className="shadow-lg rounded-lg"
+    />
+  </div>
+
+  <script>
+    // Listen for annotation changes
+    document.addEventListener('pdf-annotations-change', (event: any) => {
+      console.log('Annotations changed:', event.detail.annotations);
+      // You can send these to your backend or store locally
+    });
+
+    // Listen for save events
+    document.addEventListener('pdf-annotations-save', async (event: any) => {
+      console.log('Saving annotations:', event.detail.annotations);
+      
+      try {
+        // Save to backend
+        const response = await fetch('/api/pdf-annotations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            pdfUrl: new URLSearchParams(window.location.search).get('pdf'),
+            annotations: event.detail.annotations
+          }),
+        });
+
+        if (response.ok) {
+          // Show success message
+          const toast = document.createElement('div');
+          toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+          toast.textContent = 'Annotations saved successfully!';
+          document.body.appendChild(toast);
+          
+          setTimeout(() => {
+            toast.remove();
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('Failed to save annotations:', error);
+        
+        // Show error message
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50';
+        toast.textContent = 'Failed to save annotations';
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+          toast.remove();
+        }, 3000);
+      }
+    });
+  </script>
+</Layout>
