@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-import { a as authenticate, r as requireAdmin } from '../../../chunks/rbac-middleware_C5PL4AHx.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { a as authenticate, r as requireAdmin } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const GET = async (context) => {
   const authResult = await authenticate(context);

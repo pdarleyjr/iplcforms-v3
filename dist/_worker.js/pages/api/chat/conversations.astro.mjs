@@ -1,7 +1,8 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { w as withRBAC } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
-const GET = async ({ locals }) => {
+const GET = withRBAC(["clinician", "admin"], async ({ locals }) => {
   const env = locals.runtime.env;
   try {
     const { keys } = await env.CHAT_HISTORY.list({
@@ -47,8 +48,8 @@ const GET = async ({ locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
-const POST = async ({ request, locals }) => {
+});
+const POST = withRBAC(["clinician", "admin"], async ({ request, locals }) => {
   const env = locals.runtime.env;
   try {
     const data = await request.json();
@@ -79,8 +80,8 @@ const POST = async ({ request, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
-const DELETE = async ({ url, locals }) => {
+});
+const DELETE = withRBAC(["clinician", "admin"], async ({ url, locals }) => {
   const env = locals.runtime.env;
   const conversationId = url.pathname.split("/").pop();
   if (!conversationId) {
@@ -115,7 +116,7 @@ const DELETE = async ({ url, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
+});
 
 const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,

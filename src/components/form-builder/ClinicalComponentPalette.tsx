@@ -157,8 +157,9 @@ export function ClinicalComponentPalette({
 
   const handleComponentClick = (component: ClinicalComponentDefinition) => {
     const cfg = (component.config ?? {}) as Record<string, unknown>;
+    const suffix = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}`;
     const formComponent: FormComponent = {
-      id: `${component.type}_${Date.now()}`,
+      id: `${component.type}_${suffix}`,
       type: 'clinical_component',
       label: component.name,
       order: 0,
@@ -176,8 +177,9 @@ export function ClinicalComponentPalette({
 
   const handleDragStart = (e: React.DragEvent, component: ClinicalComponentDefinition) => {
     const cfg = (component.config ?? {}) as Record<string, unknown>;
+    const suffix = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}`;
     const formComponent: FormComponent = {
-      id: `${component.type}_${Date.now()}`,
+      id: `${component.type}_${suffix}`,
       type: 'clinical_component',
       label: component.name,
       order: 0,

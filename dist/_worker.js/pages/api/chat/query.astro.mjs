@@ -1,9 +1,10 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { n as nanoid } from '../../../chunks/index.browser_BfaZFivj.mjs';
 import { c as checkRateLimit } from '../../../chunks/rateLimit_B8vzP1Fn.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { w as withRBAC } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
-const POST = async ({ request, locals }) => {
+const POST = withRBAC(["clinician", "admin"], async ({ request, locals }) => {
   const env = locals.runtime.env;
   try {
     const body = await request.json();
@@ -150,7 +151,7 @@ const POST = async ({ request, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
+});
 
 const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,

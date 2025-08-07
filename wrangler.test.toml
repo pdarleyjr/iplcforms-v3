@@ -1,0 +1,11 @@
+name = "iplcforms-e2e"
+main = "dist/_worker.js/index.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[dev]
+port = 8788
+
+[build]
+command = "pnpm -s build"

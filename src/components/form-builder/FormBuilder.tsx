@@ -15,7 +15,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Save, Settings, Eye, Plus, Trash2, GripVertical, Cloud, CloudOff, Loader2, Sparkles, Users, Clock, Tag, Palette, Share2, FolderPlus, Search, Filter, Grid, List, Download, Calendar, Star, ChevronDown, Shield } from "lucide-react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import Sortable from "sortablejs";
+// dnd-kit
+import { DndContext, DragOverlay } from "@dnd-kit/core";
+import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  useDragSensors,
+  DragContextConfig,
+  reorderArray,
+  generateDragId,
+  nestedSortableManager,
+  createDragStateManager
+} from "./DragManager";
 import { ComponentPalette } from "./ComponentPalette";
 import { FormPreview } from "./FormPreview";
 import { EvaluationSectionsModule } from "./EvaluationSectionsModule";
@@ -26,6 +38,7 @@ import type { FormTemplate, FormComponent } from "@/lib/api-form-builder";
 import type { FormPage } from "@/lib/schemas/api-validation";
 import { useFormAutosave } from "@/hooks/useFormAutosave";
 import { useFormLock } from "@/hooks/useFormLock";
+import { debounce } from "@/utils/debounce";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Lock } from "lucide-react";
 import { FormSummary } from "./FormSummary";
@@ -34,6 +47,7 @@ import TitleElement from "./components/TitleElement";
 import SubtitleElement from "./components/SubtitleElement";
 import SeparatorElement from "./components/SeparatorElement";
 import evaluationSectionsConfig from "./evaluation-sections-config.json";
+import { createAnalytics } from "../../lib/analytics/plausibleClient";
 
 const templateFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -59,8 +73,11 @@ interface FormBuilderProps {
   onSave?: (template: FormTemplate) => void;
   mode?: 'create' | 'edit';
 }
-
+ 
 export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }: FormBuilderProps) {
+  // Minimal analytics instrumentation guarded by feature flag to avoid heavy bundles
+  const ANALYTICS_ENABLED = (globalThis as any).__FEATURE_FLAGS__?.['analytics.plausible.enabled'] === true;
+  const analytics = ANALYTICS_ENABLED ? createAnalytics({ enabled: true, siteId: 'iplcforms' }) : null;
   // Multi-page form state
   const [isMultiPage, setIsMultiPage] = useState(template?.schema?.isMultiPage || false);
   const [pages, setPages] = useState<FormPage[]>(() => {
@@ -82,17 +99,6 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   const currentPage = pages.find(p => p.id === activePageId);
   const components = currentPage?.components || [];
   
-  // Helper to update components in the current page
-  const setComponents = useCallback((newComponents: FormComponent[]) => {
-    setPages(prevPages =>
-      prevPages.map(page =>
-        page.id === activePageId
-          ? { ...page, components: newComponents }
-          : page
-      )
-    );
-  }, [activePageId]);
-  
   const [previewMode, setPreviewMode] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
@@ -112,82 +118,77 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const formListRef = useRef<HTMLDivElement>(null);
-  const sortableInstanceRef = useRef<Sortable | null>(null);
-  
-  // Page management functions
-  const addPage = useCallback(() => {
-    const newPageId = `page_${Date.now()}`;
-    const newPage: FormPage = {
-      id: newPageId,
-      title: `Page ${pages.length + 1}`,
-      description: '',
-      order: pages.length,
-      components: []
-    };
-    setPages([...pages, newPage]);
-    setActivePageId(newPageId);
-  }, [pages]);
-  
-  const removePage = useCallback((pageId: string) => {
-    if (pages.length <= 1) return; // Keep at least one page
-    
-    const pageIndex = pages.findIndex(p => p.id === pageId);
-    const newPages = pages.filter(p => p.id !== pageId);
-    
-    // Update order
-    newPages.forEach((page, index) => {
-      page.order = index;
-    });
-    
-    setPages(newPages);
-    
-    // If removing active page, switch to previous or first page
-    if (pageId === activePageId) {
-      const newActiveIndex = Math.max(0, pageIndex - 1);
-      setActivePageId(newPages[newActiveIndex].id);
-    }
-  }, [pages, activePageId]);
-  
-  const updatePageTitle = useCallback((pageId: string, title: string) => {
-    setPages(prevPages =>
-      prevPages.map(page =>
-        page.id === pageId ? { ...page, title } : page
-      )
-    );
-  }, []);
-  
-  const updatePageDescription = useCallback((pageId: string, description: string) => {
-    setPages(prevPages =>
-      prevPages.map(page =>
-        page.id === pageId ? { ...page, description } : page
-      )
-    );
-  }, []);
-  
-  const reorderPages = useCallback((fromIndex: number, toIndex: number) => {
-    const newPages = [...pages];
-    const [movedPage] = newPages.splice(fromIndex, 1);
-    newPages.splice(toIndex, 0, movedPage);
-    
-    // Update order
-    newPages.forEach((page, index) => {
-      page.order = index;
-    });
-    
-    setPages(newPages);
-  }, [pages]);
   
   // Generate session ID for autosave
   const sessionId = useMemo(() => {
+    const suffix = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `${Date.now()}`;
     if (template?.id) {
-      return `form_${template.id}_${Date.now()}`;
+      return `form_${template.id}_${suffix}`;
     }
-    return `form_new_${Date.now()}`;
+    return `form_new_${suffix}`;
   }, [template?.id]);
   
   // TODO: Get from auth context when available
   const userId = "1";
   const userName = "User";
+  
+  // Helper function to recompute order for components
+  const recomputeOrder = useCallback((items: FormComponent[]): FormComponent[] => {
+    return items.map((item, index) => ({
+      ...item,
+      order: index
+    }));
+  }, []);
+
+  // Helper function to normalize payload for save
+  const normalizePayload = useCallback((state: {
+    components: FormComponent[];
+    pages: FormPage[];
+    isMultiPage: boolean;
+  }) => {
+    if (!state.isMultiPage) {
+      // Single page: normalize components order
+      return {
+        components: recomputeOrder(state.components),
+        pages: [],
+        isMultiPage: false
+      };
+    } else {
+      // Multi page: normalize each page's components and page order
+      const normalizedPages = state.pages.map((page, index) => ({
+        ...page,
+        order: index,
+        components: recomputeOrder(page.components)
+      }));
+      return {
+        components: [],
+        pages: normalizedPages,
+        isMultiPage: true
+      };
+    }
+  }, [recomputeOrder]);
+  
+  // Helper to update components in the current page
+  const setComponents = useCallback((newComponents: FormComponent[]) => {
+    // For cross-page moves, ensure both source and target pages have recomputed order
+    setPages(prevPages => {
+      const updatedPages = prevPages.map(page => {
+        if (page.id === activePageId) {
+          // This is the target page - update with recomputed order
+          return {
+            ...page,
+            components: recomputeOrder(newComponents)
+          };
+        }
+        // For other pages that might have been source of a move, ensure order is correct
+        return {
+          ...page,
+          components: recomputeOrder(page.components)
+        };
+      });
+      return updatedPages;
+    });
+  }, [activePageId, recomputeOrder]);
   
   // Form locking
   const {
@@ -208,9 +209,29 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   
   const [showLockWarning, setShowLockWarning] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+
+  // Form instance for settings
+  const form = useForm<TemplateFormValues>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: {
+      name: template?.name || "",
+      description: template?.description || "",
+      category: template?.category || "",
+      subcategory: (template?.metadata as any)?.subcategory || "",
+      clinical_context: template?.clinical_context || "",
+      tags: (template?.metadata as any)?.tags?.join(', ') || "",
+      targetAudience: (template?.metadata as any)?.targetAudience || [],
+      estimatedCompletionTime: (template?.metadata as any)?.estimatedCompletionTime || 15,
+      showIplcLogo: template?.metadata?.showIplcLogo ?? true,
+      logoPosition: (template?.metadata as any)?.logoPosition || 'top-left',
+      primaryColor: (template?.metadata as any)?.customStyling?.primaryColor || "#007bff",
+      fontFamily: (template?.metadata as any)?.customStyling?.fontFamily || "system",
+      isPublic: (template?.metadata as any)?.isPublic ?? false,
+    },
+  });
   
-  // Initialize autosave
-  const { save: autoSave, status: saveStatus, deleteSession } = useFormAutosave({
+  // Initialize autosave with immediate save function
+  const { save: immediateSave, status: saveStatus, deleteSession, flush: flushSave } = useFormAutosave({
     sessionId,
     formId: template?.id?.toString() || 'new',
     userId,
@@ -220,73 +241,66 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     },
     onSaveError: (error) => {
       console.error('Autosave failed:', error);
-    }
+    },
+    debounceMs: 0 // No debounce in the hook, we'll handle it here
   });
-  
-  // Autosave when components or pages change
-  useEffect(() => {
-    if (isMultiPage && pages.length > 0) {
-      autoSave({
-        components: [], // Empty for multi-page forms
-        pages,
-        isMultiPage: true,
-        metadata: {
-          name: form.getValues("name"),
-          description: form.getValues("description"),
-          category: form.getValues("category"),
-          clinical_context: form.getValues("clinical_context"),
-          showIplcLogo: form.getValues("showIplcLogo"),
-        }
-      });
-    } else if (!isMultiPage && components.length > 0) {
-      autoSave({
-        components,
-        pages: [],
-        isMultiPage: false,
-        metadata: {
-          name: form.getValues("name"),
-          description: form.getValues("description"),
-          category: form.getValues("category"),
-          clinical_context: form.getValues("clinical_context"),
-          showIplcLogo: form.getValues("showIplcLogo"),
-        }
-      });
-    }
-  }, [components, pages, isMultiPage, autoSave]);
-  
-  // Initialize SortableJS for form components
-  useEffect(() => {
-    if (!formListRef.current || previewMode) return;
 
-    sortableInstanceRef.current = Sortable.create(formListRef.current, {
-      group: {
-        name: 'form-components',
-        put: true
-      },
-      animation: 150,
-      handle: '.drag-handle',
-      ghostClass: 'sortable-ghost',
-      chosenClass: 'sortable-chosen',
-      dragClass: 'sortable-drag',
-      onEnd: (evt: Sortable.SortableEvent) => {
-        if (evt.oldIndex !== undefined && evt.newIndex !== undefined) {
-          moveComponent(evt.oldIndex, evt.newIndex);
-        }
-      },
-      // Touch support for mobile/iPad
-      forceFallback: true,
-      fallbackTolerance: 3,
-      fallbackOnBody: true,
-      swapThreshold: 0.65,
-      // iOS specific optimizations
-      delayOnTouchOnly: true,
-      touchStartThreshold: 5
-    });
+  // Create debounced autosave with 600ms delay
+  const debouncedAutoSave = useMemo(
+    () => debounce((data: any) => {
+      try {
+        const normalized = normalizePayload({
+          components: !isMultiPage ? components : [],
+          pages: isMultiPage ? pages : [],
+          isMultiPage
+        });
+        
+        immediateSave({
+          ...normalized,
+          metadata: {
+            name: form.getValues("name"),
+            description: form.getValues("description"),
+            category: form.getValues("category"),
+            clinical_context: form.getValues("clinical_context"),
+            showIplcLogo: form.getValues("showIplcLogo"),
+          }
+        });
+      } catch (error) {
+        console.error('Error during autosave:', error);
+      }
+    }, 600),
+    [immediateSave, normalizePayload, isMultiPage, components, pages, form]
+  );
 
+  // Cleanup effect to flush pending save on unmount
+  useEffect(() => {
     return () => {
-      sortableInstanceRef.current?.destroy();
+      // Flush any pending save before unmounting
+      debouncedAutoSave.flush();
+      if (flushSave) {
+        flushSave();
+      }
     };
-  }, [previewMode]);
+  }, [debouncedAutoSave, flushSave]);
+  
+  // Trigger debounced autosave when components or pages change
+  useEffect(() => {
+    if ((isMultiPage && pages.length > 0) || (!isMultiPage && components.length > 0)) {
+      debouncedAutoSave({});
+    }
+  }, [components, pages, isMultiPage, debouncedAutoSave]);
+  
+  // Use optimized drag sensors from DragManager
+  const sensors = useDragSensors();
+  
+  // Initialize drag state manager
+  const dragStateManager = useMemo(() => createDragStateManager<FormComponent>(), []);
+
+  // Map id to index for current components (declare once, above moveComponent usage)
+  const idToIndex = useCallback(
+    (id: string) => components.findIndex(c => c.id === id),
+    [components]
+  );
   
   // iOS keyboard handling
   useEffect(() => {
@@ -322,64 +336,163 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     };
   }, []);
 
-  const form = useForm<TemplateFormValues>({
-    resolver: zodResolver(templateFormSchema),
-    defaultValues: {
-      name: template?.name || "",
-      description: template?.description || "",
-      category: template?.category || "",
-      subcategory: (template?.metadata as any)?.subcategory || "",
-      clinical_context: template?.clinical_context || "",
-      tags: (template?.metadata as any)?.tags?.join(', ') || "",
-      targetAudience: (template?.metadata as any)?.targetAudience || [],
-      estimatedCompletionTime: (template?.metadata as any)?.estimatedCompletionTime || 15,
-      showIplcLogo: template?.metadata?.showIplcLogo ?? true,
-      logoPosition: (template?.metadata as any)?.logoPosition || 'top-left',
-      primaryColor: (template?.metadata as any)?.customStyling?.primaryColor || "#007bff",
-      fontFamily: (template?.metadata as any)?.customStyling?.fontFamily || "system",
-      isPublic: (template?.metadata as any)?.isPublic ?? false,
-    },
-  });
+  // Page management functions (moved after lock and autosave initialization)
+  const addPage = useCallback(() => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot add page: form is locked by another user');
+      return;
+    }
+
+    const newPageId = typeof crypto !== "undefined" && "randomUUID" in crypto ? `page_${crypto.randomUUID()}` : `page_${Date.now()}`;
+    const newPage: FormPage = {
+      id: newPageId,
+      title: `Page ${pages.length + 1}`,
+      description: '',
+      order: pages.length,
+      components: []
+    };
+    
+    const newPages = [...pages, newPage];
+    // Recompute page order
+    const orderedPages = newPages.map((page, index) => ({
+      ...page,
+      order: index
+    }));
+    
+    setPages(orderedPages);
+    setActivePageId(newPageId);
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [pages, lockStatus, userName, debouncedAutoSave]);
   
-  // Autosave form metadata changes
+  const removePage = useCallback((pageId: string) => {
+    if (pages.length <= 1) return; // Keep at least one page
+    
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot remove page: form is locked by another user');
+      return;
+    }
+    
+    const pageIndex = pages.findIndex(p => p.id === pageId);
+    const newPages = pages.filter(p => p.id !== pageId);
+    
+    // Recompute order
+    const orderedPages = newPages.map((page, index) => ({
+      ...page,
+      order: index
+    }));
+    
+    setPages(orderedPages);
+    
+    // If removing active page, switch to previous or first page
+    if (pageId === activePageId) {
+      const newActiveIndex = Math.max(0, pageIndex - 1);
+      setActivePageId(orderedPages[newActiveIndex].id);
+    }
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [pages, activePageId, lockStatus, userName, debouncedAutoSave]);
+  
+  const updatePageTitle = useCallback((pageId: string, title: string) => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot update page title: form is locked by another user');
+      return;
+    }
+
+    setPages(prevPages =>
+      prevPages.map(page =>
+        page.id === pageId ? { ...page, title } : page
+      )
+    );
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [lockStatus, userName, debouncedAutoSave]);
+  
+  const updatePageDescription = useCallback((pageId: string, description: string) => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot update page description: form is locked by another user');
+      return;
+    }
+
+    setPages(prevPages =>
+      prevPages.map(page =>
+        page.id === pageId ? { ...page, description } : page
+      )
+    );
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [lockStatus, userName, debouncedAutoSave]);
+  
+  const reorderPages = useCallback((fromIndex: number, toIndex: number) => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot reorder pages: form is locked by another user');
+      return;
+    }
+
+    const newPages = [...pages];
+    const [movedPage] = newPages.splice(fromIndex, 1);
+    newPages.splice(toIndex, 0, movedPage);
+    
+    // Recompute order
+    const orderedPages = newPages.map((page, index) => ({
+      ...page,
+      order: index
+    }));
+    
+    setPages(orderedPages);
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [pages, lockStatus, userName, debouncedAutoSave]);
+  
+  // Autosave form metadata changes with debounce
   useEffect(() => {
-    const subscription = form.watch((value) => {
-      if (components.length > 0) {
-        autoSave({
-          components,
-          metadata: value
-        });
+    const subscription = form.watch(() => {
+      if ((isMultiPage && pages.length > 0) || (!isMultiPage && components.length > 0)) {
+        debouncedAutoSave({});
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, components, autoSave]);
+  }, [form, isMultiPage, pages, components, debouncedAutoSave]);
 
   const addComponent = useCallback((component: FormComponent, targetIndex?: number) => {
-    console.log('FormBuilder: addComponent called with', component);
-    console.log('Component type:', component.type);
-    console.log('Component sectionId:', (component as any).sectionId);
-    
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot add component: form is locked by another user');
+      return;
+    }
+
     const newComponents = [...components];
     const insertIndex = targetIndex !== undefined ? targetIndex : newComponents.length;
-    
-    // Add new component with unique ID
+
+    // Add new component with unique ID using DragManager utility
     const newComponent: FormComponent = {
       ...component,
-      id: component.id || `${component.type}_${Date.now()}`,
+      id: component.id || generateDragId(component.type),
       order: insertIndex,
     };
 
     newComponents.splice(insertIndex, 0, newComponent);
-    
-    // Update order for all components
-    newComponents.forEach((comp, index) => {
-      comp.order = index;
-    });
 
-    console.log('FormBuilder: setting components to', newComponents);
-    console.log('New components array length:', newComponents.length);
-    setComponents(newComponents);
-  }, [components]);
+    // Recompute order for all components
+    const orderedComponents = recomputeOrder(newComponents);
+    setComponents(orderedComponents);
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+    
+    // Analytics: palette add
+    try { analytics?.event('builder_palette_add', { type: component.type }); } catch {}
+  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave]);
 
   const handleDrop = useCallback((event: React.DragEvent, targetIndex?: number) => {
     event.preventDefault();
@@ -391,12 +504,13 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
     setDragOverIndex(null);
   }, [draggedComponent, addComponent]);
 
+
   const handleComponentClick = useCallback((component: FormComponent) => {
     console.log('FormBuilder: handleComponentClick called with', component);
     addComponent(component);
   }, [addComponent]);
 
-  const handleDragOver = useCallback((event: React.DragEvent, index: number) => {
+  const handleReactDragOver = useCallback((event: React.DragEvent, index: number) => {
     event.preventDefault();
     setDragOverIndex(index);
   }, []);
@@ -406,31 +520,84 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
   }, []);
 
   const moveComponent = useCallback((fromIndex: number, toIndex: number) => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot move component: form is locked by another user');
+      return;
+    }
+
     const newComponents = [...components];
     const [movedComponent] = newComponents.splice(fromIndex, 1);
     newComponents.splice(toIndex, 0, movedComponent);
     
-    // Update order
-    newComponents.forEach((comp, index) => {
-      comp.order = index;
-    });
+    // Recompute order
+    const orderedComponents = recomputeOrder(newComponents);
+    setComponents(orderedComponents);
     
-    setComponents(newComponents);
-  }, [components]);
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+    
+    // Analytics: reorder commit
+    try { analytics?.event('builder_reorder', { from: fromIndex, to: toIndex }); } catch {}
+  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave]);
+
+  // Enhanced drag handlers using DragManager
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const draggedIndex = idToIndex(String(event.active.id));
+    if (draggedIndex >= 0) {
+      dragStateManager.handleDragStart(event, components[draggedIndex]);
+    }
+  }, [idToIndex, components, dragStateManager]);
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    dragStateManager.handleDragOver(event);
+    setDragOverIndex(event.over ? idToIndex(String(event.over.id)) : null);
+  }, [idToIndex, dragStateManager]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    dragStateManager.handleDragEnd();
+    setDragOverIndex(null);
+    
+    if (!over || active.id === over.id) return;
+    
+    const oldIndex = idToIndex(String(active.id));
+    const newIndex = idToIndex(String(over.id));
+    
+    if (oldIndex >= 0 && newIndex >= 0 && oldIndex !== newIndex) {
+      moveComponent(oldIndex, newIndex);
+    }
+  }, [idToIndex, moveComponent, dragStateManager]);
 
   const removeComponent = useCallback((index: number) => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot remove component: form is locked by another user');
+      return;
+    }
+
     const newComponents = components.filter((_: FormComponent, i: number) => i !== index);
-    newComponents.forEach((comp: FormComponent, i: number) => {
-      comp.order = i;
-    });
-    setComponents(newComponents);
-  }, [components]);
+    const orderedComponents = recomputeOrder(newComponents);
+    setComponents(orderedComponents);
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [components, lockStatus, userName, recomputeOrder, debouncedAutoSave]);
 
   const updateComponent = useCallback((index: number, updates: Partial<FormComponent>) => {
+    // Check lock status before allowing mutation
+    if (lockStatus.isLocked && lockStatus.lockedBy !== userName) {
+      console.warn('Cannot update component: form is locked by another user');
+      return;
+    }
+
     const newComponents = [...components];
     newComponents[index] = { ...newComponents[index], ...updates };
     setComponents(newComponents);
-  }, [components]);
+    
+    // Trigger debounced autosave
+    debouncedAutoSave({});
+  }, [components, lockStatus, userName, debouncedAutoSave]);
 
   // Load templates function
   const loadTemplates = useCallback(async () => {
@@ -1127,75 +1294,90 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
               showIplcLogo={form.getValues("showIplcLogo")}
             />
           ) : (
-            <div
-              className="min-h-full bg-white rounded-lg border-2 border-dashed border-gray-300 p-6"
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
+            <DndContext
+              sensors={sensors}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              collisionDetection={DragContextConfig.formBuilder.collisionDetection}
+              modifiers={DragContextConfig.formBuilder.modifiers}
+              autoScroll={DragContextConfig.formBuilder.autoScroll}
             >
-              {components.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                  <Plus className="h-12 w-12 mb-4" />
-                  <p className="text-lg font-medium">Start building your form</p>
-                  <p className="text-sm">Drag components from the palette to begin</p>
-                </div>
-              ) : (
-                <div className="space-y-4" ref={formListRef}>
-                  {components.map((component: FormComponent, index: number) => (
-                    <div
-                      key={component.id}
-                      data-id={component.id}
-                      className={`relative group border rounded-lg p-4 bg-white ${
-                        dragOverIndex === index ? "border-primary bg-primary/5" :
-                        selectedComponentIndex === index ? "border-blue-500 bg-blue-50/50" : "border-gray-200"
-                      } transition-all duration-200 cursor-pointer`}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, index)}
-                      onClick={() => setSelectedComponentIndex(index === selectedComponentIndex ? null : index)}
-                    >
-                      {/* Component Controls */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
-                            onClick={() => removeComponent(index)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <div className="drag-handle cursor-move p-2 hover:bg-gradient-metallic-primary hover:text-white rounded-md shadow-sm border border-gray-200 hover:border-iplc-primary transition-all duration-150"
-                               style={{ minWidth: '40px', minHeight: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <GripVertical className="h-5 w-5" />
+              <div
+                className="min-h-full bg-white rounded-lg border-2 border-dashed border-gray-300 p-6"
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                data-testid="canvas-root"
+              >
+                {components.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                    <Plus className="h-12 w-12 mb-4" />
+                    <p className="text-lg font-medium">Start building your form</p>
+                    <p className="text-sm">Drag components from the palette to begin</p>
+                  </div>
+                ) : (
+                  <SortableContext
+                    items={nestedSortableManager.ensureUniqueIds(`form-builder-${activePageId}`, components.map(c => c.id))}
+                    strategy={verticalListSortingStrategy}
+                    id={`form-builder-${activePageId}`}
+                  >
+                    <div className="space-y-4" ref={formListRef}>
+                      {components.map((component: FormComponent, index: number) => (
+                        <DraggableRow
+                          key={component.id}
+                          id={component.id}
+                          index={index}
+                          isSelected={selectedComponentIndex === index}
+                          isDragOver={dragOverIndex === index}
+                          onRemove={() => removeComponent(index)}
+                          onClick={() => setSelectedComponentIndex(index === selectedComponentIndex ? null : index)}
+                        >
+                          <div className="pr-16">
+                            <ComponentRenderer
+                              component={component}
+                              onUpdate={(updates: Partial<FormComponent>) => updateComponent(index, updates)}
+                              isEditing={true}
+                              allComponents={components}
+                            />
                           </div>
+                          {selectedComponentIndex === index && component.type !== 'title_subtitle' && component.type !== 'line_separator' && component.type !== 'evaluation_section' && (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <ConditionalLogicPanel
+                                component={component}
+                                allComponents={components}
+                                onUpdate={(updates) => updateComponent(index, updates)}
+                              />
+                            </div>
+                          )}
+                        </DraggableRow>
+                      ))}
+                    </div>
+                  </SortableContext>
+                )}
+              </div>
+              <DragOverlay>
+                {(() => {
+                  const state = dragStateManager.getState();
+                  const item = state.draggedItem as FormComponent | null;
+                  if (!state.isDragging || !item) return null;
+                  return (
+                    <div className="pointer-events-none opacity-80">
+                      <div className="border rounded-lg p-4 bg-white shadow-lg w-[600px] max-w-[80vw]">
+                        <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+                          <GripVertical className="h-4 w-4" />
+                          Dragging: <span className="font-medium">{item.label}</span>
                         </div>
-                      </div>
-
-                      {/* Component Content */}
-                      <div className="pr-16">
                         <ComponentRenderer
-                          component={component}
-                          onUpdate={(updates: Partial<FormComponent>) => updateComponent(index, updates)}
-                          isEditing={true}
+                          component={item}
+                          isEditing={false}
                           allComponents={components}
                         />
                       </div>
-                      
-                      {/* Conditional Logic Panel */}
-                      {selectedComponentIndex === index && component.type !== 'title_subtitle' && component.type !== 'line_separator' && component.type !== 'evaluation_section' && (
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <ConditionalLogicPanel
-                            component={component}
-                            allComponents={components}
-                            onUpdate={(updates) => updateComponent(index, updates)}
-                          />
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  );
+                })()}
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
       </div>
@@ -1475,6 +1657,81 @@ export function FormBuilder({ apiToken = '', template, onSave, mode = 'create' }
         isOpen={showSummary}
         onClose={() => setShowSummary(false)}
       />
+    </div>
+  );
+}
+
+// Local sortable row wrapper to keep handle-only dragging and avoid stealing events from inner controls
+function DraggableRow({
+  id,
+  index,
+  isSelected,
+  isDragOver,
+  onRemove,
+  onClick,
+  children
+}: {
+  id: string;
+  index: number;
+  isSelected: boolean;
+  isDragOver: boolean;
+  onRemove: () => void;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  } as React.CSSProperties;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-id={id}
+      data-item-id={id}
+      data-dragging={isDragging ? "true" : "false"}
+      data-testid="canvas-item"
+      className={`relative group border rounded-lg p-4 bg-white ${
+        isDragOver ? "border-primary bg-primary/5" :
+        isSelected ? "border-blue-500 bg-blue-50/50" : "border-gray-200"
+      } transition-all duration-200 cursor-pointer`}
+      onClick={onClick}
+    >
+      {/* Component Controls */}
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            aria-label="Remove component"
+            disabled={false}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <div
+            className="drag-handle cursor-move p-2 hover:bg-gradient-metallic-primary hover:text-white rounded-md shadow-sm border border-gray-200 hover:border-iplc-primary transition-all duration-150"
+            style={{ minWidth: '40px', minHeight: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}
+            aria-label="Reorder"
+            data-testid="drag-handle"
+            // attach only to the handle to preserve inner controls events
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+
+      {children}
     </div>
   );
 }

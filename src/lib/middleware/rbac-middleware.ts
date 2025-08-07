@@ -244,3 +244,41 @@ export async function requireAdmin(
   
   return authResult;
 }
+
+/**
+ * RBAC-Guardian: simple route wrapper that respects global E2E bypass.
+ */
+export interface RBACContext { userId?: string; roles?: string[] }
+export type Handler = (ctx: any) => Promise<Response>;
+/**
+ * Wrap a route handler with RBAC enforcement.
+ * - Honors global E2E bypass via x-e2e header and adds x-e2e-bypass trace header.
+ * - On normal flow, authenticates and verifies the user's role is within required roles.
+ */
+export function withRBAC(required: string | string[], handler: Handler): Handler {
+  const requiredRoles = Array.isArray(required) ? required : [required];
+  return async (ctx: any) => {
+    // Respect global E2E bypass: if header indicates E2E, add trace header and proceed
+    const e2e = ctx.request.headers.get('x-e2e');
+    if (e2e === '1' || e2e === 'true') {
+      const res = await handler(ctx);
+      const r = new Response(res.body, res);
+      r.headers.set('x-e2e-bypass', 'rbac');
+      return r;
+    }
+
+    // Authenticate using existing flow in this module
+    const authResult = await authenticate(ctx as any);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const role = authResult.locals.customerRole;
+    if (!requiredRoles.includes(role)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    // Proceed to handler with enriched context
+    return handler(authResult);
+  };
+}

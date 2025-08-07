@@ -1,9 +1,9 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { F as FormAnalyticsService } from '../../../chunks/form_analytics_0O1GYlLm.mjs';
 import { w as withPerformanceMonitoring } from '../../../chunks/performance-wrapper_COlTcJLx.mjs';
-import { a as authenticate, b as authorize } from '../../../chunks/rbac-middleware_C5PL4AHx.mjs';
+import { a as authenticate, b as authorize } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
 import { P as PERMISSIONS } from '../../../chunks/rbac_vK5lyOl9.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const getHandler = async (context) => {
   const { DB } = context.locals.runtime.env;

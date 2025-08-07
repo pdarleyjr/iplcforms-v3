@@ -1,0 +1,327 @@
+---
+import { assertDev } from '../../utils/dev-guard';
+import SurveyIsland from '../../components/islands/survey/SurveyIsland';
+import PdfAnnotatorIsland from '../../components/islands/pdf/PdfAnnotatorIsland';
+
+assertDev();
+
+// Demo survey JSON for testing
+const surveyJson = {
+  title: "Phase 0 Demo Survey",
+  description: "A simple survey to test the SurveyJS integration",
+  pages: [
+    {
+      name: "page1",
+      elements: [
+        {
+          type: "text",
+          name: "fullName",
+          title: "What is your full name?",
+          isRequired: true,
+          placeHolder: "Enter your full name"
+        },
+        {
+          type: "radiogroup",
+          name: "department",
+          title: "Which department are you from?",
+          isRequired: true,
+          choices: [
+            "Engineering",
+            "Marketing",
+            "Sales",
+            "HR",
+            "Other"
+          ]
+        },
+        {
+          type: "rating",
+          name: "satisfaction",
+          title: "How satisfied are you with our services?",
+          isRequired: true,
+          rateMin: 1,
+          rateMax: 5,
+          minRateDescription: "Very Unsatisfied",
+          maxRateDescription: "Very Satisfied"
+        }
+      ]
+    },
+    {
+      name: "page2",
+      elements: [
+        {
+          type: "checkbox",
+          name: "features",
+          title: "Which features do you use most? (Select all that apply)",
+          choices: [
+            "Form Builder",
+            "Survey Runtime",
+            "PDF Annotations",
+            "Analytics Dashboard",
+            "User Management"
+          ]
+        },
+        {
+          type: "comment",
+          name: "feedback",
+          title: "Please provide any additional feedback or suggestions:",
+          rows: 4,
+          placeHolder: "Your feedback helps us improve..."
+        }
+      ]
+    }
+  ],
+  showProgressBar: "top",
+  showQuestionNumbers: "on",
+  completedHtml: "<h3>Thank you for completing the survey!</h3><p>Your responses have been recorded.</p>"
+};
+
+// Handler for survey submission
+const handleSurveySubmit = (data: Record<string, unknown>) => {
+  console.log('Survey submitted with data:', data);
+  // In a real app, this would send data to an API
+};
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phase-0 Smoke Test</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      section {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      h2 {
+        margin-top: 0;
+        color: #333;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 10px;
+      }
+      .placeholder {
+        padding: 20px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        color: #666;
+        text-align: center;
+      }
+      .analytics-status {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .analytics-status.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .analytics-status.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .analytics-status.loading {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .event-log {
+        margin-top: 10px;
+        padding: 10px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .event-log-entry {
+        padding: 4px 0;
+        border-bottom: 1px solid #e9ecef;
+      }
+      .event-log-entry:last-child {
+        border-bottom: none;
+      }
+    </style>
+    <script>
+      // Initialize Plausible Analytics through proxy
+      (function() {
+        // Check if analytics should be enabled
+        const analyticsEnabled = true; // In production, this would come from env vars
+        
+        if (analyticsEnabled) {
+          // Load the proxied Plausible script
+          const script = document.createElement('script');
+          script.defer = true;
+          script.dataset.domain = window.location.hostname;
+          script.src = '/api/plausible/script.js';
+          script.dataset.api = '/api/plausible/api/event';
+          
+          script.onload = function() {
+            console.log('✅ Plausible Analytics loaded successfully');
+            updateAnalyticsStatus('Script loaded successfully', 'success');
+            
+            // Track initial page view
+            if (window.plausible) {
+              window.plausible('pageview');
+              logEvent('pageview', { path: window.location.pathname });
+            }
+          };
+          
+          script.onerror = function() {
+            console.error('❌ Failed to load Plausible Analytics');
+            updateAnalyticsStatus('Failed to load analytics script', 'error');
+          };
+          
+          document.head.appendChild(script);
+        } else {
+          updateAnalyticsStatus('Analytics disabled', 'error');
+        }
+        
+        // Helper function to update status display
+        function updateAnalyticsStatus(message, type) {
+          const statusEl = document.getElementById('analytics-status');
+          if (statusEl) {
+            statusEl.textContent = message;
+            statusEl.className = 'analytics-status ' + type;
+          }
+        }
+        
+        // Helper function to log events
+        function logEvent(eventName, props) {
+          const logEl = document.getElementById('event-log');
+          if (logEl) {
+            const entry = document.createElement('div');
+            entry.className = 'event-log-entry';
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${eventName}: ${JSON.stringify(props || {})}`;
+            logEl.insertBefore(entry, logEl.firstChild);
+          }
+        }
+        
+        // Make logEvent available globally for button click
+        window.logAnalyticsEvent = logEvent;
+      })();
+    </script>
+  </head>
+  <body>
+    <h1>Phase-0 Smoke Test Page</h1>
+    
+    <section id="dnd-demo" data-testid="dnd-demo">
+      <h2>Drag & Drop Demo</h2>
+      <div class="placeholder">DnD Demo Placeholder</div>
+    </section>
+    
+    <section id="survey-demo" data-testid="survey-demo">
+      <h2>SurveyJS Runtime Demo</h2>
+      <SurveyIsland 
+        client:load 
+        surveyJson={surveyJson} 
+        onSubmit={handleSurveySubmit} 
+      />
+    </section>
+    
+    <section id="pdf-demo" data-testid="pdf-demo">
+      <h2>PDF Annotator Demo</h2>
+      <PdfAnnotatorIsland client:visible src="/sample.pdf" />
+    </section>
+    
+    <section id="analytics-demo" data-testid="analytics-demo">
+      <h2>Analytics Demo (Plausible Proxy)</h2>
+      
+      <div style="margin-bottom: 20px;">
+        <p style="margin: 0 0 10px 0; color: #666;">
+          This demo shows the Plausible Analytics proxy in action. Events are sent through <code>/api/plausible/</code> endpoints.
+        </p>
+      </div>
+      
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+        <button
+          data-testid="analytics-fire"
+          aria-label="Send Analytics"
+          onclick="sendCustomEvent('demo_click')"
+          style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;"
+        >
+          Send Click Event
+        </button>
+        
+        <button
+          onclick="sendCustomEvent('demo_conversion', { value: 100 })"
+          style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;"
+        >
+          Send Conversion Event
+        </button>
+        
+        <button
+          onclick="sendCustomEvent('demo_error', { error: 'Test error' })"
+          style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;"
+        >
+          Send Error Event
+        </button>
+      </div>
+      
+      <div id="analytics-status" class="analytics-status loading">
+        Initializing analytics...
+      </div>
+      
+      <div style="margin-top: 20px;">
+        <h3 style="margin: 0 0 10px 0; font-size: 16px;">Event Log:</h3>
+        <div id="event-log" class="event-log">
+          <div class="event-log-entry" style="color: #666;">Waiting for events...</div>
+        </div>
+      </div>
+      
+      <script>
+        function sendCustomEvent(eventName, props) {
+          if (window.plausible) {
+            // Send the event through Plausible
+            window.plausible(eventName, { props: props || {} });
+            
+            // Log it locally for demo purposes
+            if (window.logAnalyticsEvent) {
+              window.logAnalyticsEvent(eventName, props);
+            }
+            
+            // Show success feedback
+            const statusEl = document.getElementById('analytics-status');
+            if (statusEl) {
+              statusEl.textContent = `Event "${eventName}" sent successfully!`;
+              statusEl.className = 'analytics-status success';
+              
+              // Reset status after 3 seconds
+              setTimeout(() => {
+                statusEl.textContent = 'Analytics active and ready';
+                statusEl.className = 'analytics-status success';
+              }, 3000);
+            }
+          } else {
+            console.error('Plausible not loaded');
+            const statusEl = document.getElementById('analytics-status');
+            if (statusEl) {
+              statusEl.textContent = 'Analytics not available - please check console';
+              statusEl.className = 'analytics-status error';
+            }
+          }
+        }
+      </script>
+    </section>
+    
+    <section id="rbac-demo" data-testid="rbac-demo">
+      <h2>RBAC Demo</h2>
+      <div data-testid="rbac-403" hidden>403</div>
+      <div data-testid="rbac-bypass" hidden>Bypass</div>
+      <div class="placeholder">RBAC functionality placeholder</div>
+    </section>
+  </body>
+</html>

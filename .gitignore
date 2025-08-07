@@ -72,6 +72,10 @@ test-ai-fixes.md
 namespaces.json
 wrangler.jsonc
 test-chat.json
+
+# snapshots and temp artifacts (not committed)
+tmp/
+./tmp/
  
 # guard against re-nesting AI repo
 iplc-ai/

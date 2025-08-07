@@ -14,6 +14,8 @@ declare namespace Cloudflare {
 		IPLC_AI: Fetcher /* iplc-ai */;
 		DOC_INDEX: VectorizeIndex;
 		AI: Ai;
+		PLAUSIBLE_DOMAIN?: string;
+		PLAUSIBLE_ENABLED?: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

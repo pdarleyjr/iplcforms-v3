@@ -1,8 +1,9 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { n as nanoid } from '../../../chunks/index.browser_BfaZFivj.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { w as withRBAC } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
-const POST = async ({ request, locals }) => {
+const POST = withRBAC(["clinician", "admin"], async ({ request, locals }) => {
   const env = locals.runtime.env;
   try {
     const formData = await request.formData();
@@ -91,7 +92,7 @@ const POST = async ({ request, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
+});
 async function extractTextFromFile(file, buffer) {
   const type = file.type;
   const decoder = new TextDecoder();

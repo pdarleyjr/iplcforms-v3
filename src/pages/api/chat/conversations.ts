@@ -9,7 +9,8 @@ interface Conversation {
   messageCount: number;
 }
 
-export const GET: APIRoute = async ({ locals }) => {
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+export const GET: APIRoute = withRBAC(['clinician','admin'], async ({ locals }) => {
   const env = (locals as any).runtime.env;
   
   try {
@@ -67,9 +68,9 @@ export const GET: APIRoute = async ({ locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = withRBAC(['clinician','admin'], async ({ request, locals }) => {
   const env = (locals as any).runtime.env;
   
   try {
@@ -108,9 +109,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
-export const DELETE: APIRoute = async ({ url, locals }) => {
+export const DELETE: APIRoute = withRBAC(['clinician','admin'], async ({ url, locals }) => {
   const env = (locals as any).runtime.env;
   const conversationId = url.pathname.split('/').pop();
   
@@ -154,4 +155,4 @@ export const DELETE: APIRoute = async ({ url, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});

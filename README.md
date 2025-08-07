@@ -251,6 +251,33 @@ curl -u admin:password https://your-domain.workers.dev/api/admin/sse-metrics
 npm test
 ```
 
+### E2E: Playwright on Windows
+
+Wrangler dev is launched by Playwright using a test-specific config to ensure stable Windows pathing and E2E headers.
+
+1) Test config
+- wrangler.test.toml points to the compiled Worker:
+  - name = "iplcforms-e2e"
+  - main = "dist/_worker.js/index.js"
+  - [dev] port = 8788
+  - [build] command = "pnpm -s build"
+
+2) Playwright config
+- baseURL is http://127.0.0.1:8788
+- All requests include x-e2e: 1 via extraHTTPHeaders
+- webServer starts Wrangler with the test config and sets E2E_BASE_URL
+
+3) Commands
+```bash
+pnpm test:e2e
+# or
+npx playwright test
+```
+
+4) Notes
+- E2E relaxes CSP and auth only when the x-e2e header is present
+- grepInvert is currently set to skip specs while Phase-0 work lands
+
 ### Run linting
 ```bash
 npm run lint

@@ -3,7 +3,8 @@ import { nanoid } from 'nanoid';
 import { checkRateLimit } from '../../../lib/ai';
 import type { AIEnv, ChatMessage } from '../../../lib/ai';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+export const POST: APIRoute = withRBAC(['clinician','admin'], async ({ request, locals }) => {
   const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
@@ -183,4 +184,4 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});

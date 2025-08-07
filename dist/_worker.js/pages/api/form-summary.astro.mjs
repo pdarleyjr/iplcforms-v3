@@ -1,7 +1,7 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { c as checkRateLimit } from '../../chunks/rateLimit_B8vzP1Fn.mjs';
 import { o as object, s as string, r as record, d as array, f as any } from '../../chunks/schemas_RvMANBrn.mjs';
-export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { r as renderers } from '../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const SummaryRequestSchema = object({
   formId: string(),

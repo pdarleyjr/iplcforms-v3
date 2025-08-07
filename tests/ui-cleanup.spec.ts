@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { BASE_URL } from './helpers/env';
 
 test.describe('UI Cleanup Tests', () => {
   test('Landing Page displays live stats from API', async ({ page }) => {
     // Mock the API response with specific values
-    await page.route('**/api/dashboard/overview', async (route) => {
+    await page.route(`${BASE_URL}/api/dashboard/overview?e2e=1`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -15,8 +16,8 @@ test.describe('UI Cleanup Tests', () => {
       });
     });
 
-    // Navigate to landing page
-    await page.goto('/');
+    // Navigate to landing page with E2E bypass
+    await page.goto(`${BASE_URL}/?e2e=1`);
 
     // Wait for stats to load
     await page.waitForSelector('[data-testid="dashboard-stats"]', { 
@@ -37,8 +38,8 @@ test.describe('UI Cleanup Tests', () => {
   });
 
   test('Header style - no blue box artifact', async ({ page }) => {
-    // Navigate to any page with the header
-    await page.goto('/admin');
+    // Navigate to any page with the header with E2E bypass
+    await page.goto(`${BASE_URL}/admin?e2e=1`);
 
     // Wait for header to be visible
     const header = page.locator('header, nav').first();
@@ -69,8 +70,8 @@ test.describe('UI Cleanup Tests', () => {
   });
 
   test('Create New Form page has only one primary heading', async ({ page }) => {
-    // Navigate to the Create New Form page
-    await page.goto('/forms/new');
+    // Navigate to the Create New Form page with E2E bypass
+    await page.goto(`${BASE_URL}/forms/new?e2e=1`);
 
     // Wait for the page to load
     await page.waitForLoadState('domcontentloaded');
@@ -107,8 +108,8 @@ test.describe('UI Cleanup Tests', () => {
   });
 
   test('AI Summary is in component palette, not in toolbar', async ({ page }) => {
-    // Navigate to the form builder
-    await page.goto('/forms/new');
+    // Navigate to the form builder with E2E bypass
+    await page.goto(`${BASE_URL}/forms/new?e2e=1`);
 
     // Wait for the form builder to load
     await page.waitForSelector('[data-testid="form-builder"]', { 
@@ -154,7 +155,7 @@ test.describe('UI Cleanup Tests', () => {
 
 // Helper test to verify the form builder loads correctly
 test('Form builder loads successfully', async ({ page }) => {
-  await page.goto('/forms/new');
+  await page.goto(`${BASE_URL}/forms/new?e2e=1`);
   
   // Wait for key elements
   await expect(page.locator('[data-testid="form-builder"]')).toBeVisible({ timeout: 10000 });

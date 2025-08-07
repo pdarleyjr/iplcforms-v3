@@ -8,13 +8,15 @@ test.use({
   isMobile: true
 });
 
+import { BASE_URL } from './helpers/env';
+
 test.describe('Form Builder - iPad Testing', () => {
   test.beforeEach(async ({ page }) => {
     // Capture console logs for debugging
     page.on('console', msg => console.log('PAGE LOG:', msg.text()));
     
-    // Navigate to the form builder page
-    await page.goto('/forms/new');
+    // Navigate to the form builder page with E2E auth bypass
+    await page.goto(`${BASE_URL}/forms/new?e2e=1`);
     
     // Wait for React to hydrate - client:only components need time to load
     // Wait for the form builder container to appear
@@ -204,8 +206,8 @@ test.describe('Form Builder - iPad Testing', () => {
   });
 
   test('should display form lock warning when appropriate', async ({ page }) => {
-    // Navigate to an existing form that might be locked
-    await page.goto('/forms/1/edit');
+    // Navigate to an existing form that might be locked (ensure E2E bypass)
+    await page.goto(`${BASE_URL}/forms/1/edit?e2e=1`);
     
     // Check if lock warning appears (if form is locked)
     const lockWarning = page.locator('.border-yellow-500');
@@ -293,7 +295,7 @@ test.describe('Form Builder - iPad Testing', () => {
 
 test.describe('Form Builder - Offline Support', () => {
   test('should save to IndexedDB when offline', async ({ page, context }) => {
-    await page.goto('/forms/new');
+    await page.goto(`${BASE_URL}/forms/new?e2e=1`);
     
     // Add a component using click
     const textInputComponent = page.locator('[data-component-type="text_input"]').first();
@@ -359,7 +361,7 @@ test.describe('Form Builder - Offline Support', () => {
 
 test.describe('Form Builder - Accessibility', () => {
   test('should meet WCAG touch target guidelines', async ({ page }) => {
-    await page.goto('/forms/new');
+    await page.goto(`${BASE_URL}/forms/new?e2e=1`);
     
     // Add a component to test controls using click
     const textInputComponent = page.locator('[data-component-type="text_input"]').first();
@@ -433,7 +435,7 @@ test.describe('Form Builder - Accessibility', () => {
   });
 
   test('should have proper ARIA labels', async ({ page }) => {
-    await page.goto('/forms/new');
+    await page.goto(`${BASE_URL}/forms/new?e2e=1`);
     
     // Wait for page to fully load
     await page.waitForLoadState('networkidle');

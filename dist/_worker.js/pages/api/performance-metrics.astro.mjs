@@ -1,8 +1,8 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { W as WorkersPerformanceManager } from '../../chunks/workers-performance_DPmskpeQ.mjs';
-import { a as authenticate, b as authorize } from '../../chunks/rbac-middleware_C5PL4AHx.mjs';
+import { a as authenticate, b as authorize } from '../../chunks/rbac-middleware_CqpNIYMv.mjs';
 import { P as PERMISSIONS } from '../../chunks/rbac_vK5lyOl9.mjs';
-export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { r as renderers } from '../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const GET = async (context) => {
   try {

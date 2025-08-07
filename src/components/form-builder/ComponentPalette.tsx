@@ -179,10 +179,11 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
   };
 
   const createComponent = (item: ComponentPaletteItem) => {
+    const suffix = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}`;
     return {
       type: item.type,
       label: item.label,
-      id: `${item.type}_${Date.now()}`,
+      id: `${item.type}_${suffix}`,
       props: {
         required: false,
         placeholder: `Enter ${item.label.toLowerCase()}...`,
@@ -355,6 +356,18 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
                 className="w-full p-2 rounded-lg bg-white/10 hover:bg-gradient-metallic-primary transition-all group"
                 onClick={(e) => handleClick(e, item)}
                 title={item.label}
+                role="button"
+                aria-label={`Add ${item.label}`}
+                data-component-type={item.type}
+                data-testid={`palette-item-${item.type}`}
+                tabIndex={0}
+                style={{ touchAction: 'manipulation' as React.CSSProperties['touchAction'] }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleClick(e as any, item);
+                  }
+                }}
               >
                 <div className="text-white group-hover:scale-110 transition-transform">
                   {item.icon}
@@ -391,8 +404,11 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({ className = 
                       onDragStart={(e) => handleDragStart(e, item)}
                       onClick={(e) => handleClick(e, item)}
                       data-component-type={item.type}
+                      data-testid={`palette-item-${item.type}`}
                       role="button"
+                      aria-label={`Add ${item.label}`}
                       tabIndex={0}
+                      style={{ touchAction: 'manipulation' as React.CSSProperties['touchAction'] }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();

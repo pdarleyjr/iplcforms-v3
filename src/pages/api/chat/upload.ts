@@ -2,7 +2,8 @@ import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
 import type { AIEnv } from '../../../lib/ai';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+export const POST: APIRoute = withRBAC(['clinician','admin'], async ({ request, locals }) => {
   const env = (locals as any).runtime.env as unknown as AIEnv;
   
   try {
@@ -110,7 +111,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
 async function extractTextFromFile(file: File, buffer: ArrayBuffer): Promise<string> {
   const type = file.type;

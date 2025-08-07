@@ -1,8 +1,9 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { w as withRBAC } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const runtime = "edge";
-const POST = async ({ request, locals }) => {
+const POST = withRBAC(["clinician", "admin"], async ({ request, locals }) => {
   try {
     const { env } = locals.runtime;
     const body = await request.json();
@@ -109,8 +110,8 @@ const POST = async ({ request, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
-const GET = async () => {
+});
+const GET = withRBAC(["clinician", "admin"], async () => {
   return new Response(JSON.stringify({
     formats: [
       {
@@ -130,7 +131,7 @@ const GET = async () => {
     status: 200,
     headers: { "Content-Type": "application/json" }
   });
-};
+});
 
 const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,

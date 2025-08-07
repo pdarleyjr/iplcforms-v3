@@ -1,6 +1,7 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { n as nanoid } from '../../../chunks/index.browser_BfaZFivj.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { w as withRBAC } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const AI_MAX_RETRIES = 3;
 const AI_INITIAL_RETRY_DELAY = 1e3;
@@ -214,7 +215,7 @@ function formatAIError(error) {
   return { message, details };
 }
 
-const POST = async ({ request, locals }) => {
+const POST = withRBAC(["clinician", "admin"], async ({ request, locals }) => {
   const env = locals.runtime.env;
   try {
     const body = await request.json();
@@ -323,8 +324,8 @@ Also include a brief executive summary at the beginning.`;
       headers: { "Content-Type": "application/json" }
     });
   }
-};
-const GET = async ({ url, locals }) => {
+});
+const GET = withRBAC(["clinician", "admin"], async ({ url, locals }) => {
   const env = locals.runtime.env;
   const conversationId = url.searchParams.get("conversationId");
   if (!conversationId) {
@@ -361,7 +362,7 @@ const GET = async ({ url, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
+});
 
 const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
-
-export const GET: APIRoute = async ({ url, locals }) => {
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+ 
+export const GET: APIRoute = withRBAC(['clinician','admin'], async ({ url, locals }) => {
   const env = locals.runtime.env;
   const conversationId = url.searchParams.get('conversationId');
   
@@ -47,4 +48,4 @@ export const GET: APIRoute = async ({ url, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});

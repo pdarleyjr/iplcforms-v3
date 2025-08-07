@@ -1,0 +1,1 @@
+export interface SurveyJSON { pages: Array<{ name: string; elements: any[] }>; }

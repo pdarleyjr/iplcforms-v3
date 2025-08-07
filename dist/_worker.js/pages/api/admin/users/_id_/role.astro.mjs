@@ -1,7 +1,7 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-import { a as authenticate, r as requireAdmin } from '../../../../../chunks/rbac-middleware_C5PL4AHx.mjs';
+import { a as authenticate, r as requireAdmin } from '../../../../../chunks/rbac-middleware_CqpNIYMv.mjs';
 import { o as object, _ as _enum } from '../../../../../chunks/schemas_RvMANBrn.mjs';
-export { r as renderers } from '../../../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { r as renderers } from '../../../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
 const updateRoleSchema = object({
   role: _enum(["patient", "clinician", "admin", "researcher"])

@@ -2,7 +2,8 @@ import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
 import { callAIWithRetry, formatAIError } from '../../../lib/utils/ai-retry';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+export const POST: APIRoute = withRBAC(['clinician','admin'], async ({ request, locals }) => {
   const env = locals.runtime.env;
   
   try {
@@ -133,9 +134,9 @@ Also include a brief executive summary at the beginning.`;
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
-export const GET: APIRoute = async ({ url, locals }) => {
+export const GET: APIRoute = withRBAC(['clinician','admin'], async ({ url, locals }) => {
   const env = locals.runtime.env;
   const conversationId = url.searchParams.get('conversationId');
   
@@ -179,4 +180,4 @@ export const GET: APIRoute = async ({ url, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});

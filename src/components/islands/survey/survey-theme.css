@@ -1,0 +1,10 @@
+/* Minimal SurveyJS theme import via CDN to avoid Vite package deep-import issues.
+   This keeps Phase-0 simple while providing basic styling.
+   If you later prefer local bundling, replace this file with copied CSS from the package. */
+
+@import url("https://unpkg.com/survey-core@1.12.8/themes/defaultV2.css");
+
+/* Small guard to avoid FOUC if CDN is slow */
+.sv-root-modern {
+  visibility: visible;
+}

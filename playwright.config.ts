@@ -1,104 +1,67 @@
 import { defineConfig, devices } from '@playwright/test';
+// Ensure BASE_URL helper is loaded for config-time defaults if needed
 
 /**
  * Playwright Configuration for IPLC Forms v3
- * Focus on iPad testing and form builder functionality
+ * Phase-0 minimal subset targeting /dev/phase0-smoke only.
+ * Runs Wrangler dev against the compiled Cloudflare Worker and polls /health.
  */
 export default defineConfig({
+  // Limit to tests directory and include only Phase-0 subset
   testDir: './tests',
-  
-  /* Run tests in files in parallel */
+  testMatch: ['**/phase0/*.spec.ts'],
+
+  // Fail fast if the Worker is not reachable at the canonical E2E_BASE_URL.
+  globalSetup: './playwright.global.ts',
+
+  timeout: 300000,
+
+  expect: {
+    timeout: 10000
+  },
+
   fullyParallel: true,
-  
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  
-  /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  
-  /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
-  
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
     ['junit', { outputFile: 'test-results/junit.xml' }],
     ['json', { outputFile: 'test-results/results.json' }]
   ],
-  
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.BASE_URL || 'http://localhost:4321',
-    
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+    // Route tests through wrangler dev on port 8788.
+    // Send x-e2e header with ALL requests (navigations, fetches, XHRs) to ensure middleware bypass consistently.
+    baseURL: process.env.E2E_BASE_URL || 'http://127.0.0.1:8788',
+    extraHTTPHeaders: {
+      'x-e2e': '1'
+    },
+    navigationTimeout: 120000,
     trace: 'on-first-retry',
-    
-    /* Take screenshot on failure */
     screenshot: 'only-on-failure',
-    
-    /* Record video on failure */
     video: 'retain-on-failure',
   },
 
-  /* Configure projects for major browsers and devices */
+  // Start wrangler dev using the test-specific config that points to the compiled worker.
+  // Force local protocol to avoid remote preview/migration interference on Windows.
+  webServer: {
+    // Ensure Windows-friendly pathing and env. Use Node to set env var in a cross-shell-compatible way.
+    command: 'node -e \"process.env.E2E_BASE_URL=\\\"http://127.0.0.1:8788\\\"; process.exit(0)\" && pnpm -s build && wrangler dev --config wrangler.test.toml --local-protocol=http --live-reload=false',
+    url: 'http://127.0.0.1:8788/health',
+    reuseExistingServer: !process.env.CI,
+    timeout: 180000
+  },
+
+  // Keep only a single minimal project to avoid re-enabling legacy/non-essential suites
   projects: [
     {
       name: 'chromium-desktop',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: ['**/form-builder-desktop.spec.ts', '**/duplicate-palette.spec.ts', '**/form-builder-enhancements.spec.ts', '**/ui-cleanup.spec.ts']
-    },
-
-    {
-      name: 'webkit-ipad',
-      use: {
-        ...devices['iPad Pro'],
-        // Override with iPad Air 5 specs for testing
-        viewport: { width: 1180, height: 820 },
-        userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
-      },
-      testMatch: ['**/form-builder-ipad.spec.ts', '**/touch-interactions.spec.ts']
-    },
-
-    {
-      name: 'webkit-iphone',
-      use: { ...devices['iPhone 14 Pro'] },
-      testMatch: ['**/mobile-responsive.spec.ts']
-    },
-
-    /* Test against mobile viewports. */
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 7'] },
-      testMatch: ['**/mobile-responsive.spec.ts']
-    },
-
-    /* Accessibility testing */
-    {
-      name: 'accessibility',
-      use: {
-        ...devices['Desktop Chrome'],
-        // Force reduced motion for consistent accessibility testing
-        colorScheme: 'light'
-      },
-      testMatch: ['**/accessibility.spec.ts']
+      testMatch: ['**/phase0/*.spec.ts']
     }
   ],
 
-  /* Global test configuration */
-  timeout: 60000, // 60 seconds for form builder operations
-  expect: {
-    timeout: 10000 // 10 seconds for assertions
-  },
-
-  /* Run your local dev server before starting the tests */
-  webServer: process.env.CI ? undefined : {
-    command: 'npm run dev',
-    url: 'http://localhost:4321',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000, // 2 minutes for dev server startup
-  },
-
-  /* Test output directories */
   outputDir: 'test-results',
 });

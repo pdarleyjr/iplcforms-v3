@@ -1,7 +1,8 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+import { w as withRBAC } from '../../../chunks/rbac-middleware_CqpNIYMv.mjs';
+export { r as renderers } from '../../../chunks/_@astro-renderers_DXs7ZzLR.mjs';
 
-const GET = async ({ url, locals }) => {
+const GET = withRBAC(["clinician", "admin"], async ({ url, locals }) => {
   const env = locals.runtime.env;
   const conversationId = url.searchParams.get("conversationId");
   try {
@@ -39,7 +40,7 @@ const GET = async ({ url, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   }
-};
+});
 
 const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
   __proto__: null,

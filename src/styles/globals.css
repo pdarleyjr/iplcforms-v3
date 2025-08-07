@@ -228,23 +228,24 @@
   }
 }
 
-/* SortableJS styles for form builder */
-.sortable-ghost {
-  opacity: 0.4;
-  background-color: #f3f4f6;
-}
-
-.sortable-chosen {
-  background-color: #eff6ff;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.sortable-drag {
+/* dnd-kit styles for form builder */
+.dnd-kit-dragging {
   opacity: 0.9;
   cursor: move;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  transform: rotate(2deg);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  transform: scale(1.02);
+  z-index: 1000;
+}
+
+.dnd-kit-drag-overlay {
+  cursor: grabbing;
+}
+
+.dnd-kit-drop-indicator {
+  background-color: #3b82f6;
+  height: 2px;
+  margin: 8px 0;
+  border-radius: 1px;
 }
 
 /* iOS/iPad optimizations */

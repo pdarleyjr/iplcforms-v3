@@ -167,8 +167,15 @@ export function useFormAutosave({
   return {
     save: debouncedSave,
     status,
+    flush: () => {
+      // Flush any pending debounced save
+      debouncedSave.flush();
+    },
     deleteSession: async () => {
       try {
+        // Flush any pending save before deleting
+        debouncedSave.flush();
+        
         await fetch(`/api/form-sessions?sessionId=${sessionId}`, {
           method: 'DELETE'
         });

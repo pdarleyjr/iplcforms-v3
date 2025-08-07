@@ -19,7 +19,8 @@ interface Message {
   }>;
 }
 
-export const POST: APIRoute = async ({ request, locals }) => {
+import { withRBAC } from '@/lib/middleware/rbac-middleware';
+export const POST: APIRoute = withRBAC(['clinician','admin'], async ({ request, locals }) => {
   try {
     const { env } = locals.runtime;
     const body = await request.json() as ExportRequest;
@@ -128,10 +129,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
 // GET endpoint to retrieve available export formats
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = withRBAC(['clinician','admin'], async () => {
   return new Response(JSON.stringify({
     formats: [
       {
@@ -151,4 +152,4 @@ export const GET: APIRoute = async () => {
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
-};
+});
