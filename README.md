@@ -157,6 +157,11 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 
 # Workers AI Model
 AI_MODEL=@cf/qwen/qwen1.5-14b-chat-awq
+
+# Analytics (optional)
+ANALYTICS_ENABLED=false
+# PLAUSIBLE_DOMAIN=plausible.io  # Optional: Custom Plausible domain
+# DATA_DOMAIN=your-domain.com     # Optional: Your site domain for analytics
 ```
 
 ## 🔒 Security Best Practices
@@ -243,6 +248,68 @@ curl -u admin:password https://your-domain.workers.dev/api/admin/sse-metrics
 - X-Frame-Options: DENY
 - X-Content-Type-Options: nosniff
 - X-XSS-Protection: 1; mode=block
+
+## 📈 Analytics
+
+### Plausible Analytics Integration
+
+This project includes privacy-preserving analytics through Plausible Analytics, proxied through Cloudflare Workers for enhanced privacy.
+
+#### Configuration
+
+1. **Enable Analytics**
+   ```bash
+   # In wrangler.toml or via environment variables
+   ANALYTICS_ENABLED=true
+   DATA_DOMAIN=your-domain.com  # Your site domain
+   # PLAUSIBLE_DOMAIN=plausible.io  # Optional: Custom Plausible instance
+   ```
+
+2. **Privacy Features**
+   - All analytics requests are proxied through your domain (`/a/js/plausible.js` and `/a/api/event`)
+   - No cookies or personal data collection
+   - GDPR compliant by default
+   - Zero impact when `ANALYTICS_ENABLED=false`
+
+3. **Custom Event Tracking**
+
+   Use the React hook for custom events:
+   ```typescript
+   import { usePlausibleAnalytics } from '@/hooks/usePlausibleAnalytics';
+
+   function MyComponent() {
+     const { trackEvent, trackOutboundLink } = usePlausibleAnalytics();
+     
+     // Track custom events
+     trackEvent('Form Submitted', {
+       props: { formId: 'contact-form' }
+     });
+     
+     // Track outbound links
+     trackOutboundLink('https://external-site.com');
+   }
+   ```
+
+4. **Automatic Tracking**
+   - Page views are automatically tracked for all routes
+   - SPA navigation is handled automatically
+   - 404 errors can be tracked with `track404()`
+
+5. **Testing Analytics**
+   ```bash
+   # Run tests for analytics integration
+   npm test tests/analytics/plausible.test.ts
+   ```
+
+6. **Production Deployment**
+   ```bash
+   # Set analytics configuration for production
+   npx wrangler secret put ANALYTICS_ENABLED
+   # Enter: true
+   
+   npx wrangler secret put DATA_DOMAIN
+   # Enter: your-production-domain.com
+   ```
 
 ## 🧪 Testing
 

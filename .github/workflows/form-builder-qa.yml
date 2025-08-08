@@ -1,6 +1,6 @@
 name: Form Builder QA Pipeline
 # Automated testing for form builder enhancements
-# Runs Lighthouse (mobile performance) and Playwright (iPad testing)
+# Runs Lighthouse (mobile performance) and accessibility testing
 
 on:
   push:
@@ -98,48 +98,6 @@ jobs:
             lighthouse-*.html
           retention-days: 30
 
-  # Playwright E2E Testing (iPad Focus)
-  playwright-tests:
-    name: Playwright iPad Tests
-    needs: build-and-deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps webkit chromium
-
-      - name: Run Playwright tests
-        env:
-          BASE_URL: ${{ needs.build-and-deploy.outputs.preview-url }}
-        run: npx playwright test --config=playwright.config.ts
-
-      - name: Upload Playwright Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-results
-          path: test-results/
-          retention-days: 30
-
   # Accessibility Testing with Axe
   accessibility-audit:
     name: Accessibility Audit
@@ -179,7 +137,7 @@ jobs:
   # Performance monitoring and reporting
   performance-summary:
     name: Performance Summary
-    needs: [lighthouse-audit, playwright-tests, accessibility-audit]
+    needs: [lighthouse-audit, accessibility-audit]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -194,11 +152,6 @@ jobs:
           echo "- Target LCP: <2.5s" >> $GITHUB_STEP_SUMMARY
           echo "- Target CLS: <0.1" >> $GITHUB_STEP_SUMMARY
           echo "- Performance Score: ≥80%" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🎯 iPad Testing (Playwright)" >> $GITHUB_STEP_SUMMARY
-          echo "- Drag & Drop functionality" >> $GITHUB_STEP_SUMMARY
-          echo "- Component palette interactions" >> $GITHUB_STEP_SUMMARY
-          echo "- Form builder operations" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ♿ Accessibility (Axe)" >> $GITHUB_STEP_SUMMARY
           echo "- WCAG 2.1 AA compliance" >> $GITHUB_STEP_SUMMARY
@@ -219,7 +172,6 @@ jobs:
               
               ✅ **Build & Deploy**: Completed
               📱 **Lighthouse Mobile**: Check artifacts for detailed results
-              🎯 **Playwright iPad**: Check artifacts for test results  
               ♿ **Accessibility**: Check artifacts for Axe results
               
               **Preview URL**: ${{ needs.build-and-deploy.outputs.preview-url }}

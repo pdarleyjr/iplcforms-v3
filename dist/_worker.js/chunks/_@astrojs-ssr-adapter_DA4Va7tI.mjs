@@ -1,0 +1,2099 @@
+globalThis.process ??= {}; globalThis.process.env ??= {};
+import { r as requestIs404Or500, i as isRequestServerIsland, n as notFound, a as redirectToFallback, b as redirectToDefaultLocale, c as requestHasLocale, d as normalizeTheLocale, e as defineMiddleware, S as SERVER_ISLAND_COMPONENT, f as SERVER_ISLAND_ROUTE, g as createEndpoint, R as RouteCache, s as sequence, h as fileExtension, j as joinPaths, k as slash, p as prependForwardSlash, l as findRouteToRewrite, m as removeTrailingForwardSlash, o as matchRoute, q as appendForwardSlash, t as collapseDuplicateTrailingSlashes, u as hasFileExtension, v as RenderContext, P as PERSIST_SYMBOL, w as getSetCookiesFromResponse } from './index_2DQbn14a.mjs';
+import { E as ROUTE_TYPE_HEADER, k as REROUTE_DIRECTIVE_HEADER, D as DEFAULT_404_COMPONENT, A as AstroError, a7 as ActionNotFoundError, a8 as bold, a9 as red, aa as yellow, ab as dim, ac as blue, T as clientAddressSymbol, ad as LocalsNotAnObject, ae as REROUTABLE_STATUS_CODES, X as responseSentSymbol } from './astro/server_Cd9lk-7F.mjs';
+import { D as DEFAULT_404_ROUTE, f as default404Instance, h as ensure404Route } from './astro-designed-error-pages_nD8cktMX.mjs';
+import { N as NOOP_MIDDLEWARE_FN } from './noop-middleware_CycarsGI.mjs';
+import { WorkflowEntrypoint } from 'cloudflare:workers';
+import { W as WorkersPerformanceManager } from './workers-performance_DPmskpeQ.mjs';
+
+function createI18nMiddleware(i18n, base, trailingSlash, format) {
+  if (!i18n) return (_, next) => next();
+  const payload = {
+    ...i18n,
+    trailingSlash,
+    base,
+    format};
+  const _redirectToDefaultLocale = redirectToDefaultLocale(payload);
+  const _noFoundForNonLocaleRoute = notFound(payload);
+  const _requestHasLocale = requestHasLocale(payload.locales);
+  const _redirectToFallback = redirectToFallback(payload);
+  const prefixAlways = (context, response) => {
+    const url = context.url;
+    if (url.pathname === base + "/" || url.pathname === base) {
+      return _redirectToDefaultLocale(context);
+    } else if (!_requestHasLocale(context)) {
+      return _noFoundForNonLocaleRoute(context, response);
+    }
+    return void 0;
+  };
+  const prefixOtherLocales = (context, response) => {
+    let pathnameContainsDefaultLocale = false;
+    const url = context.url;
+    for (const segment of url.pathname.split("/")) {
+      if (normalizeTheLocale(segment) === normalizeTheLocale(i18n.defaultLocale)) {
+        pathnameContainsDefaultLocale = true;
+        break;
+      }
+    }
+    if (pathnameContainsDefaultLocale) {
+      const newLocation = url.pathname.replace(`/${i18n.defaultLocale}`, "");
+      response.headers.set("Location", newLocation);
+      return _noFoundForNonLocaleRoute(context);
+    }
+    return void 0;
+  };
+  return async (context, next) => {
+    const response = await next();
+    const type = response.headers.get(ROUTE_TYPE_HEADER);
+    const isReroute = response.headers.get(REROUTE_DIRECTIVE_HEADER);
+    if (isReroute === "no" && typeof i18n.fallback === "undefined") {
+      return response;
+    }
+    if (type !== "page" && type !== "fallback") {
+      return response;
+    }
+    if (requestIs404Or500(context.request, base)) {
+      return response;
+    }
+    if (isRequestServerIsland(context.request, base)) {
+      return response;
+    }
+    const { currentLocale } = context;
+    switch (i18n.strategy) {
+      // NOTE: theoretically, we should never hit this code path
+      case "manual": {
+        return response;
+      }
+      case "domains-prefix-other-locales": {
+        if (localeHasntDomain(i18n, currentLocale)) {
+          const result = prefixOtherLocales(context, response);
+          if (result) {
+            return result;
+          }
+        }
+        break;
+      }
+      case "pathname-prefix-other-locales": {
+        const result = prefixOtherLocales(context, response);
+        if (result) {
+          return result;
+        }
+        break;
+      }
+      case "domains-prefix-always-no-redirect": {
+        if (localeHasntDomain(i18n, currentLocale)) {
+          const result = _noFoundForNonLocaleRoute(context, response);
+          if (result) {
+            return result;
+          }
+        }
+        break;
+      }
+      case "pathname-prefix-always-no-redirect": {
+        const result = _noFoundForNonLocaleRoute(context, response);
+        if (result) {
+          return result;
+        }
+        break;
+      }
+      case "pathname-prefix-always": {
+        const result = prefixAlways(context, response);
+        if (result) {
+          return result;
+        }
+        break;
+      }
+      case "domains-prefix-always": {
+        if (localeHasntDomain(i18n, currentLocale)) {
+          const result = prefixAlways(context, response);
+          if (result) {
+            return result;
+          }
+        }
+        break;
+      }
+    }
+    return _redirectToFallback(context, response);
+  };
+}
+function localeHasntDomain(i18n, currentLocale) {
+  for (const domainLocale of Object.values(i18n.domainLookupTable)) {
+    if (domainLocale === currentLocale) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const NOOP_ACTIONS_MOD = {
+  server: {}
+};
+
+const FORM_CONTENT_TYPES = [
+  "application/x-www-form-urlencoded",
+  "multipart/form-data",
+  "text/plain"
+];
+const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
+function createOriginCheckMiddleware() {
+  return defineMiddleware((context, next) => {
+    const { request, url, isPrerendered } = context;
+    if (isPrerendered) {
+      return next();
+    }
+    if (SAFE_METHODS.includes(request.method)) {
+      return next();
+    }
+    const isSameOrigin = request.headers.get("origin") === url.origin;
+    const hasContentType = request.headers.has("content-type");
+    if (hasContentType) {
+      const formLikeHeader = hasFormLikeHeader(request.headers.get("content-type"));
+      if (formLikeHeader && !isSameOrigin) {
+        return new Response(`Cross-site ${request.method} form submissions are forbidden`, {
+          status: 403
+        });
+      }
+    } else {
+      if (!isSameOrigin) {
+        return new Response(`Cross-site ${request.method} form submissions are forbidden`, {
+          status: 403
+        });
+      }
+    }
+    return next();
+  });
+}
+function hasFormLikeHeader(contentType) {
+  if (contentType) {
+    for (const FORM_CONTENT_TYPE of FORM_CONTENT_TYPES) {
+      if (contentType.toLowerCase().includes(FORM_CONTENT_TYPE)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function createDefaultRoutes(manifest) {
+  const root = new URL(manifest.hrefRoot);
+  return [
+    {
+      instance: default404Instance,
+      matchesComponent: (filePath) => filePath.href === new URL(DEFAULT_404_COMPONENT, root).href,
+      route: DEFAULT_404_ROUTE.route,
+      component: DEFAULT_404_COMPONENT
+    },
+    {
+      instance: createEndpoint(manifest),
+      matchesComponent: (filePath) => filePath.href === new URL(SERVER_ISLAND_COMPONENT, root).href,
+      route: SERVER_ISLAND_ROUTE,
+      component: SERVER_ISLAND_COMPONENT
+    }
+  ];
+}
+
+class Pipeline {
+  constructor(logger, manifest, runtimeMode, renderers, resolve, serverLike, streaming, adapterName = manifest.adapterName, clientDirectives = manifest.clientDirectives, inlinedScripts = manifest.inlinedScripts, compressHTML = manifest.compressHTML, i18n = manifest.i18n, middleware = manifest.middleware, routeCache = new RouteCache(logger, runtimeMode), site = manifest.site ? new URL(manifest.site) : void 0, defaultRoutes = createDefaultRoutes(manifest), actions = manifest.actions) {
+    this.logger = logger;
+    this.manifest = manifest;
+    this.runtimeMode = runtimeMode;
+    this.renderers = renderers;
+    this.resolve = resolve;
+    this.serverLike = serverLike;
+    this.streaming = streaming;
+    this.adapterName = adapterName;
+    this.clientDirectives = clientDirectives;
+    this.inlinedScripts = inlinedScripts;
+    this.compressHTML = compressHTML;
+    this.i18n = i18n;
+    this.middleware = middleware;
+    this.routeCache = routeCache;
+    this.site = site;
+    this.defaultRoutes = defaultRoutes;
+    this.actions = actions;
+    this.internalMiddleware = [];
+    if (i18n?.strategy !== "manual") {
+      this.internalMiddleware.push(
+        createI18nMiddleware(i18n, manifest.base, manifest.trailingSlash, manifest.buildFormat)
+      );
+    }
+  }
+  internalMiddleware;
+  resolvedMiddleware = void 0;
+  resolvedActions = void 0;
+  /**
+   * Resolves the middleware from the manifest, and returns the `onRequest` function. If `onRequest` isn't there,
+   * it returns a no-op function
+   */
+  async getMiddleware() {
+    if (this.resolvedMiddleware) {
+      return this.resolvedMiddleware;
+    } else if (this.middleware) {
+      const middlewareInstance = await this.middleware();
+      const onRequest = middlewareInstance.onRequest ?? NOOP_MIDDLEWARE_FN;
+      const internalMiddlewares = [onRequest];
+      if (this.manifest.checkOrigin) {
+        internalMiddlewares.unshift(createOriginCheckMiddleware());
+      }
+      this.resolvedMiddleware = sequence(...internalMiddlewares);
+      return this.resolvedMiddleware;
+    } else {
+      this.resolvedMiddleware = NOOP_MIDDLEWARE_FN;
+      return this.resolvedMiddleware;
+    }
+  }
+  setActions(actions) {
+    this.resolvedActions = actions;
+  }
+  async getActions() {
+    if (this.resolvedActions) {
+      return this.resolvedActions;
+    } else if (this.actions) {
+      return await this.actions();
+    }
+    return NOOP_ACTIONS_MOD;
+  }
+  async getAction(path) {
+    const pathKeys = path.split(".").map((key) => decodeURIComponent(key));
+    let { server } = await this.getActions();
+    if (!server || !(typeof server === "object")) {
+      throw new TypeError(
+        `Expected \`server\` export in actions file to be an object. Received ${typeof server}.`
+      );
+    }
+    for (const key of pathKeys) {
+      if (!(key in server)) {
+        throw new AstroError({
+          ...ActionNotFoundError,
+          message: ActionNotFoundError.message(pathKeys.join("."))
+        });
+      }
+      server = server[key];
+    }
+    if (typeof server !== "function") {
+      throw new TypeError(
+        `Expected handler for action ${pathKeys.join(".")} to be a function. Received ${typeof server}.`
+      );
+    }
+    return server;
+  }
+}
+
+const RedirectComponentInstance = {
+  default() {
+    return new Response(null, {
+      status: 301
+    });
+  }
+};
+const RedirectSinglePageBuiltModule = {
+  page: () => Promise.resolve(RedirectComponentInstance),
+  onRequest: (_, next) => next(),
+  renderers: []
+};
+
+const dateTimeFormat = new Intl.DateTimeFormat([], {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false
+});
+const levels = {
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  silent: 90
+};
+function log(opts, level, label, message, newLine = true) {
+  const logLevel = opts.level;
+  const dest = opts.dest;
+  const event = {
+    label,
+    level,
+    message,
+    newLine
+  };
+  if (!isLogLevelEnabled(logLevel, level)) {
+    return;
+  }
+  dest.write(event);
+}
+function isLogLevelEnabled(configuredLogLevel, level) {
+  return levels[configuredLogLevel] <= levels[level];
+}
+function info(opts, label, message, newLine = true) {
+  return log(opts, "info", label, message, newLine);
+}
+function warn(opts, label, message, newLine = true) {
+  return log(opts, "warn", label, message, newLine);
+}
+function error(opts, label, message, newLine = true) {
+  return log(opts, "error", label, message, newLine);
+}
+function debug(...args) {
+  if ("_astroGlobalDebug" in globalThis) {
+    globalThis._astroGlobalDebug(...args);
+  }
+}
+function getEventPrefix({ level, label }) {
+  const timestamp = `${dateTimeFormat.format(/* @__PURE__ */ new Date())}`;
+  const prefix = [];
+  if (level === "error" || level === "warn") {
+    prefix.push(bold(timestamp));
+    prefix.push(`[${level.toUpperCase()}]`);
+  } else {
+    prefix.push(timestamp);
+  }
+  if (label) {
+    prefix.push(`[${label}]`);
+  }
+  if (level === "error") {
+    return red(prefix.join(" "));
+  }
+  if (level === "warn") {
+    return yellow(prefix.join(" "));
+  }
+  if (prefix.length === 1) {
+    return dim(prefix[0]);
+  }
+  return dim(prefix[0]) + " " + blue(prefix.splice(1).join(" "));
+}
+class Logger {
+  options;
+  constructor(options) {
+    this.options = options;
+  }
+  info(label, message, newLine = true) {
+    info(this.options, label, message, newLine);
+  }
+  warn(label, message, newLine = true) {
+    warn(this.options, label, message, newLine);
+  }
+  error(label, message, newLine = true) {
+    error(this.options, label, message, newLine);
+  }
+  debug(label, ...messages) {
+    debug(label, ...messages);
+  }
+  level() {
+    return this.options.level;
+  }
+  forkIntegrationLogger(label) {
+    return new AstroIntegrationLogger(this.options, label);
+  }
+}
+class AstroIntegrationLogger {
+  options;
+  label;
+  constructor(logging, label) {
+    this.options = logging;
+    this.label = label;
+  }
+  /**
+   * Creates a new logger instance with a new label, but the same log options.
+   */
+  fork(label) {
+    return new AstroIntegrationLogger(this.options, label);
+  }
+  info(message) {
+    info(this.options, this.label, message);
+  }
+  warn(message) {
+    warn(this.options, this.label, message);
+  }
+  error(message) {
+    error(this.options, this.label, message);
+  }
+  debug(message) {
+    debug(this.label, message);
+  }
+}
+
+const consoleLogDestination = {
+  write(event) {
+    let dest = console.error;
+    if (levels[event.level] < levels["error"]) {
+      dest = console.info;
+    }
+    if (event.label === "SKIP_FORMAT") {
+      dest(event.message);
+    } else {
+      dest(getEventPrefix(event) + " " + event.message);
+    }
+    return true;
+  }
+};
+
+function getAssetsPrefix(fileExtension, assetsPrefix) {
+  if (!assetsPrefix) return "";
+  if (typeof assetsPrefix === "string") return assetsPrefix;
+  const dotLessFileExtension = fileExtension.slice(1);
+  if (assetsPrefix[dotLessFileExtension]) {
+    return assetsPrefix[dotLessFileExtension];
+  }
+  return assetsPrefix.fallback;
+}
+
+function createAssetLink(href, base, assetsPrefix) {
+  if (assetsPrefix) {
+    const pf = getAssetsPrefix(fileExtension(href), assetsPrefix);
+    return joinPaths(pf, slash(href));
+  } else if (base) {
+    return prependForwardSlash(joinPaths(base, slash(href)));
+  } else {
+    return href;
+  }
+}
+function createStylesheetElement(stylesheet, base, assetsPrefix) {
+  if (stylesheet.type === "inline") {
+    return {
+      props: {},
+      children: stylesheet.content
+    };
+  } else {
+    return {
+      props: {
+        rel: "stylesheet",
+        href: createAssetLink(stylesheet.src, base, assetsPrefix)
+      },
+      children: ""
+    };
+  }
+}
+function createStylesheetElementSet(stylesheets, base, assetsPrefix) {
+  return new Set(stylesheets.map((s) => createStylesheetElement(s, base, assetsPrefix)));
+}
+function createModuleScriptElement(script, base, assetsPrefix) {
+  if (script.type === "external") {
+    return createModuleScriptElementWithSrc(script.value, base, assetsPrefix);
+  } else {
+    return {
+      props: {
+        type: "module"
+      },
+      children: script.value
+    };
+  }
+}
+function createModuleScriptElementWithSrc(src, base, assetsPrefix) {
+  return {
+    props: {
+      type: "module",
+      src: createAssetLink(src, base, assetsPrefix)
+    },
+    children: ""
+  };
+}
+
+function redirectTemplate({
+  status,
+  absoluteLocation,
+  relativeLocation,
+  from
+}) {
+  const delay = status === 302 ? 2 : 0;
+  return `<!doctype html>
+<title>Redirecting to: ${relativeLocation}</title>
+<meta http-equiv="refresh" content="${delay};url=${relativeLocation}">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="${absoluteLocation}">
+<body>
+	<a href="${relativeLocation}">Redirecting ${from ? `from <code>${from}</code> ` : ""}to <code>${relativeLocation}</code></a>
+</body>`;
+}
+
+class AppPipeline extends Pipeline {
+  static create({
+    logger,
+    manifest,
+    runtimeMode,
+    renderers,
+    resolve,
+    serverLike,
+    streaming,
+    defaultRoutes
+  }) {
+    const pipeline = new AppPipeline(
+      logger,
+      manifest,
+      runtimeMode,
+      renderers,
+      resolve,
+      serverLike,
+      streaming,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      defaultRoutes
+    );
+    return pipeline;
+  }
+  headElements(routeData) {
+    const routeInfo = this.manifest.routes.find((route) => route.routeData === routeData);
+    const links = /* @__PURE__ */ new Set();
+    const scripts = /* @__PURE__ */ new Set();
+    const styles = createStylesheetElementSet(routeInfo?.styles ?? []);
+    for (const script of routeInfo?.scripts ?? []) {
+      if ("stage" in script) {
+        if (script.stage === "head-inline") {
+          scripts.add({
+            props: {},
+            children: script.children
+          });
+        }
+      } else {
+        scripts.add(createModuleScriptElement(script));
+      }
+    }
+    return { links, styles, scripts };
+  }
+  componentMetadata() {
+  }
+  async getComponentByRoute(routeData) {
+    const module = await this.getModuleForRoute(routeData);
+    return module.page();
+  }
+  async tryRewrite(payload, request) {
+    const { newUrl, pathname, routeData } = findRouteToRewrite({
+      payload,
+      request,
+      routes: this.manifest?.routes.map((r) => r.routeData),
+      trailingSlash: this.manifest.trailingSlash,
+      buildFormat: this.manifest.buildFormat,
+      base: this.manifest.base,
+      outDir: this.serverLike ? this.manifest.buildClientDir : this.manifest.outDir
+    });
+    const componentInstance = await this.getComponentByRoute(routeData);
+    return { newUrl, pathname, componentInstance, routeData };
+  }
+  async getModuleForRoute(route) {
+    for (const defaultRoute of this.defaultRoutes) {
+      if (route.component === defaultRoute.component) {
+        return {
+          page: () => Promise.resolve(defaultRoute.instance),
+          renderers: []
+        };
+      }
+    }
+    if (route.type === "redirect") {
+      return RedirectSinglePageBuiltModule;
+    } else {
+      if (this.manifest.pageMap) {
+        const importComponentInstance = this.manifest.pageMap.get(route.component);
+        if (!importComponentInstance) {
+          throw new Error(
+            `Unexpectedly unable to find a component instance for route ${route.route}`
+          );
+        }
+        return await importComponentInstance();
+      } else if (this.manifest.pageModule) {
+        return this.manifest.pageModule;
+      }
+      throw new Error(
+        "Astro couldn't find the correct page to render, probably because it wasn't correctly mapped for SSR usage. This is an internal error, please file an issue."
+      );
+    }
+  }
+}
+
+class App {
+  #manifest;
+  #manifestData;
+  #logger = new Logger({
+    dest: consoleLogDestination,
+    level: "info"
+  });
+  #baseWithoutTrailingSlash;
+  #pipeline;
+  #adapterLogger;
+  constructor(manifest, streaming = true) {
+    this.#manifest = manifest;
+    this.#manifestData = {
+      routes: manifest.routes.map((route) => route.routeData)
+    };
+    ensure404Route(this.#manifestData);
+    this.#baseWithoutTrailingSlash = removeTrailingForwardSlash(this.#manifest.base);
+    this.#pipeline = this.#createPipeline(streaming);
+    this.#adapterLogger = new AstroIntegrationLogger(
+      this.#logger.options,
+      this.#manifest.adapterName
+    );
+  }
+  getAdapterLogger() {
+    return this.#adapterLogger;
+  }
+  /**
+   * Creates a pipeline by reading the stored manifest
+   *
+   * @param streaming
+   * @private
+   */
+  #createPipeline(streaming = false) {
+    return AppPipeline.create({
+      logger: this.#logger,
+      manifest: this.#manifest,
+      runtimeMode: "production",
+      renderers: this.#manifest.renderers,
+      defaultRoutes: createDefaultRoutes(this.#manifest),
+      resolve: async (specifier) => {
+        if (!(specifier in this.#manifest.entryModules)) {
+          throw new Error(`Unable to resolve [${specifier}]`);
+        }
+        const bundlePath = this.#manifest.entryModules[specifier];
+        if (bundlePath.startsWith("data:") || bundlePath.length === 0) {
+          return bundlePath;
+        } else {
+          return createAssetLink(bundlePath, this.#manifest.base, this.#manifest.assetsPrefix);
+        }
+      },
+      serverLike: true,
+      streaming
+    });
+  }
+  set setManifestData(newManifestData) {
+    this.#manifestData = newManifestData;
+  }
+  removeBase(pathname) {
+    if (pathname.startsWith(this.#manifest.base)) {
+      return pathname.slice(this.#baseWithoutTrailingSlash.length + 1);
+    }
+    return pathname;
+  }
+  /**
+   * It removes the base from the request URL, prepends it with a forward slash and attempts to decoded it.
+   *
+   * If the decoding fails, it logs the error and return the pathname as is.
+   * @param request
+   * @private
+   */
+  #getPathnameFromRequest(request) {
+    const url = new URL(request.url);
+    const pathname = prependForwardSlash(this.removeBase(url.pathname));
+    try {
+      return decodeURI(pathname);
+    } catch (e) {
+      this.getAdapterLogger().error(e.toString());
+      return pathname;
+    }
+  }
+  /**
+   * Given a `Request`, it returns the `RouteData` that matches its `pathname`. By default, prerendered
+   * routes aren't returned, even if they are matched.
+   *
+   * When `allowPrerenderedRoutes` is `true`, the function returns matched prerendered routes too.
+   * @param request
+   * @param allowPrerenderedRoutes
+   */
+  match(request, allowPrerenderedRoutes = false) {
+    const url = new URL(request.url);
+    if (this.#manifest.assets.has(url.pathname)) return void 0;
+    let pathname = this.#computePathnameFromDomain(request);
+    if (!pathname) {
+      pathname = prependForwardSlash(this.removeBase(url.pathname));
+    }
+    let routeData = matchRoute(decodeURI(pathname), this.#manifestData);
+    if (!routeData) return void 0;
+    if (allowPrerenderedRoutes) {
+      return routeData;
+    } else if (routeData.prerender) {
+      return void 0;
+    }
+    return routeData;
+  }
+  #computePathnameFromDomain(request) {
+    let pathname = void 0;
+    const url = new URL(request.url);
+    if (this.#manifest.i18n && (this.#manifest.i18n.strategy === "domains-prefix-always" || this.#manifest.i18n.strategy === "domains-prefix-other-locales" || this.#manifest.i18n.strategy === "domains-prefix-always-no-redirect")) {
+      let host = request.headers.get("X-Forwarded-Host");
+      let protocol = request.headers.get("X-Forwarded-Proto");
+      if (protocol) {
+        protocol = protocol + ":";
+      } else {
+        protocol = url.protocol;
+      }
+      if (!host) {
+        host = request.headers.get("Host");
+      }
+      if (host && protocol) {
+        host = host.split(":")[0];
+        try {
+          let locale;
+          const hostAsUrl = new URL(`${protocol}//${host}`);
+          for (const [domainKey, localeValue] of Object.entries(
+            this.#manifest.i18n.domainLookupTable
+          )) {
+            const domainKeyAsUrl = new URL(domainKey);
+            if (hostAsUrl.host === domainKeyAsUrl.host && hostAsUrl.protocol === domainKeyAsUrl.protocol) {
+              locale = localeValue;
+              break;
+            }
+          }
+          if (locale) {
+            pathname = prependForwardSlash(
+              joinPaths(normalizeTheLocale(locale), this.removeBase(url.pathname))
+            );
+            if (url.pathname.endsWith("/")) {
+              pathname = appendForwardSlash(pathname);
+            }
+          }
+        } catch (e) {
+          this.#logger.error(
+            "router",
+            `Astro tried to parse ${protocol}//${host} as an URL, but it threw a parsing error. Check the X-Forwarded-Host and X-Forwarded-Proto headers.`
+          );
+          this.#logger.error("router", `Error: ${e}`);
+        }
+      }
+    }
+    return pathname;
+  }
+  #redirectTrailingSlash(pathname) {
+    const { trailingSlash } = this.#manifest;
+    if (pathname === "/" || pathname.startsWith("/_")) {
+      return pathname;
+    }
+    const path = collapseDuplicateTrailingSlashes(pathname, trailingSlash !== "never");
+    if (path !== pathname) {
+      return path;
+    }
+    if (trailingSlash === "ignore") {
+      return pathname;
+    }
+    if (trailingSlash === "always" && !hasFileExtension(pathname)) {
+      return appendForwardSlash(pathname);
+    }
+    if (trailingSlash === "never") {
+      return removeTrailingForwardSlash(pathname);
+    }
+    return pathname;
+  }
+  async render(request, renderOptions) {
+    let routeData;
+    let locals;
+    let clientAddress;
+    let addCookieHeader;
+    const url = new URL(request.url);
+    const redirect = this.#redirectTrailingSlash(url.pathname);
+    const prerenderedErrorPageFetch = renderOptions?.prerenderedErrorPageFetch ?? fetch;
+    if (redirect !== url.pathname) {
+      const status = request.method === "GET" ? 301 : 308;
+      return new Response(
+        redirectTemplate({
+          status,
+          relativeLocation: url.pathname,
+          absoluteLocation: redirect,
+          from: request.url
+        }),
+        {
+          status,
+          headers: {
+            location: redirect + url.search
+          }
+        }
+      );
+    }
+    addCookieHeader = renderOptions?.addCookieHeader;
+    clientAddress = renderOptions?.clientAddress ?? Reflect.get(request, clientAddressSymbol);
+    routeData = renderOptions?.routeData;
+    locals = renderOptions?.locals;
+    if (routeData) {
+      this.#logger.debug(
+        "router",
+        "The adapter " + this.#manifest.adapterName + " provided a custom RouteData for ",
+        request.url
+      );
+      this.#logger.debug("router", "RouteData:\n" + routeData);
+    }
+    if (locals) {
+      if (typeof locals !== "object") {
+        const error = new AstroError(LocalsNotAnObject);
+        this.#logger.error(null, error.stack);
+        return this.#renderError(request, {
+          status: 500,
+          error,
+          clientAddress,
+          prerenderedErrorPageFetch
+        });
+      }
+    }
+    if (!routeData) {
+      routeData = this.match(request);
+      this.#logger.debug("router", "Astro matched the following route for " + request.url);
+      this.#logger.debug("router", "RouteData:\n" + routeData);
+    }
+    if (!routeData) {
+      routeData = this.#manifestData.routes.find(
+        (route) => route.component === "404.astro" || route.component === DEFAULT_404_COMPONENT
+      );
+    }
+    if (!routeData) {
+      this.#logger.debug("router", "Astro hasn't found routes that match " + request.url);
+      this.#logger.debug("router", "Here's the available routes:\n", this.#manifestData);
+      return this.#renderError(request, {
+        locals,
+        status: 404,
+        clientAddress,
+        prerenderedErrorPageFetch
+      });
+    }
+    const pathname = this.#getPathnameFromRequest(request);
+    const defaultStatus = this.#getDefaultStatusCode(routeData, pathname);
+    let response;
+    let session;
+    try {
+      const mod = await this.#pipeline.getModuleForRoute(routeData);
+      const renderContext = await RenderContext.create({
+        pipeline: this.#pipeline,
+        locals,
+        pathname,
+        request,
+        routeData,
+        status: defaultStatus,
+        clientAddress
+      });
+      session = renderContext.session;
+      response = await renderContext.render(await mod.page());
+    } catch (err) {
+      this.#logger.error(null, err.stack || err.message || String(err));
+      return this.#renderError(request, {
+        locals,
+        status: 500,
+        error: err,
+        clientAddress,
+        prerenderedErrorPageFetch
+      });
+    } finally {
+      await session?.[PERSIST_SYMBOL]();
+    }
+    if (REROUTABLE_STATUS_CODES.includes(response.status) && response.headers.get(REROUTE_DIRECTIVE_HEADER) !== "no") {
+      return this.#renderError(request, {
+        locals,
+        response,
+        status: response.status,
+        // We don't have an error to report here. Passing null means we pass nothing intentionally
+        // while undefined means there's no error
+        error: response.status === 500 ? null : void 0,
+        clientAddress,
+        prerenderedErrorPageFetch
+      });
+    }
+    if (response.headers.has(REROUTE_DIRECTIVE_HEADER)) {
+      response.headers.delete(REROUTE_DIRECTIVE_HEADER);
+    }
+    if (addCookieHeader) {
+      for (const setCookieHeaderValue of App.getSetCookieFromResponse(response)) {
+        response.headers.append("set-cookie", setCookieHeaderValue);
+      }
+    }
+    Reflect.set(response, responseSentSymbol, true);
+    return response;
+  }
+  setCookieHeaders(response) {
+    return getSetCookiesFromResponse(response);
+  }
+  /**
+   * Reads all the cookies written by `Astro.cookie.set()` onto the passed response.
+   * For example,
+   * ```ts
+   * for (const cookie_ of App.getSetCookieFromResponse(response)) {
+   *     const cookie: string = cookie_
+   * }
+   * ```
+   * @param response The response to read cookies from.
+   * @returns An iterator that yields key-value pairs as equal-sign-separated strings.
+   */
+  static getSetCookieFromResponse = getSetCookiesFromResponse;
+  /**
+   * If it is a known error code, try sending the according page (e.g. 404.astro / 500.astro).
+   * This also handles pre-rendered /404 or /500 routes
+   */
+  async #renderError(request, {
+    locals,
+    status,
+    response: originalResponse,
+    skipMiddleware = false,
+    error,
+    clientAddress,
+    prerenderedErrorPageFetch
+  }) {
+    const errorRoutePath = `/${status}${this.#manifest.trailingSlash === "always" ? "/" : ""}`;
+    const errorRouteData = matchRoute(errorRoutePath, this.#manifestData);
+    const url = new URL(request.url);
+    if (errorRouteData) {
+      if (errorRouteData.prerender) {
+        const maybeDotHtml = errorRouteData.route.endsWith(`/${status}`) ? ".html" : "";
+        const statusURL = new URL(
+          `${this.#baseWithoutTrailingSlash}/${status}${maybeDotHtml}`,
+          url
+        );
+        if (statusURL.toString() !== request.url) {
+          const response2 = await prerenderedErrorPageFetch(statusURL.toString());
+          const override = { status, removeContentEncodingHeaders: true };
+          return this.#mergeResponses(response2, originalResponse, override);
+        }
+      }
+      const mod = await this.#pipeline.getModuleForRoute(errorRouteData);
+      let session;
+      try {
+        const renderContext = await RenderContext.create({
+          locals,
+          pipeline: this.#pipeline,
+          middleware: skipMiddleware ? NOOP_MIDDLEWARE_FN : void 0,
+          pathname: this.#getPathnameFromRequest(request),
+          request,
+          routeData: errorRouteData,
+          status,
+          props: { error },
+          clientAddress
+        });
+        session = renderContext.session;
+        const response2 = await renderContext.render(await mod.page());
+        return this.#mergeResponses(response2, originalResponse);
+      } catch {
+        if (skipMiddleware === false) {
+          return this.#renderError(request, {
+            locals,
+            status,
+            response: originalResponse,
+            skipMiddleware: true,
+            clientAddress,
+            prerenderedErrorPageFetch
+          });
+        }
+      } finally {
+        await session?.[PERSIST_SYMBOL]();
+      }
+    }
+    const response = this.#mergeResponses(new Response(null, { status }), originalResponse);
+    Reflect.set(response, responseSentSymbol, true);
+    return response;
+  }
+  #mergeResponses(newResponse, originalResponse, override) {
+    let newResponseHeaders = newResponse.headers;
+    if (override?.removeContentEncodingHeaders) {
+      newResponseHeaders = new Headers(newResponseHeaders);
+      newResponseHeaders.delete("Content-Encoding");
+      newResponseHeaders.delete("Content-Length");
+    }
+    if (!originalResponse) {
+      if (override !== void 0) {
+        return new Response(newResponse.body, {
+          status: override.status,
+          statusText: newResponse.statusText,
+          headers: newResponseHeaders
+        });
+      }
+      return newResponse;
+    }
+    const status = override?.status ? override.status : originalResponse.status === 200 ? newResponse.status : originalResponse.status;
+    try {
+      originalResponse.headers.delete("Content-type");
+    } catch {
+    }
+    const mergedHeaders = new Map([
+      ...Array.from(newResponseHeaders),
+      ...Array.from(originalResponse.headers)
+    ]);
+    const newHeaders = new Headers();
+    for (const [name, value] of mergedHeaders) {
+      newHeaders.set(name, value);
+    }
+    return new Response(newResponse.body, {
+      status,
+      statusText: status === 200 ? newResponse.statusText : originalResponse.statusText,
+      // If you're looking at here for possible bugs, it means that it's not a bug.
+      // With the middleware, users can meddle with headers, and we should pass to the 404/500.
+      // If users see something weird, it's because they are setting some headers they should not.
+      //
+      // Although, we don't want it to replace the content-type, because the error page must return `text/html`
+      headers: newHeaders
+    });
+  }
+  #getDefaultStatusCode(routeData, pathname) {
+    if (!routeData.pattern.test(pathname)) {
+      for (const fallbackRoute of routeData.fallbackRoutes) {
+        if (fallbackRoute.pattern.test(pathname)) {
+          return 302;
+        }
+      }
+    }
+    const route = removeTrailingForwardSlash(routeData.route);
+    if (route.endsWith("/404")) return 404;
+    if (route.endsWith("/500")) return 500;
+    return 200;
+  }
+}
+
+class AIGate {
+  state;
+  activeRequests;
+  requestQueue;
+  // Free tier limit: 2 concurrent AI jobs
+  MAX_CONCURRENT_REQUESTS = 2;
+  // Timeout for stuck requests (30 seconds)
+  REQUEST_TIMEOUT = 3e4;
+  constructor(state) {
+    this.state = state;
+    this.activeRequests = /* @__PURE__ */ new Map();
+    this.requestQueue = [];
+  }
+  async fetch(request) {
+    const url = new URL(request.url);
+    try {
+      switch (url.pathname) {
+        case "/acquire":
+          return this.handleAcquire(request);
+        case "/release":
+          return this.handleRelease(request);
+        case "/status":
+          return this.handleStatus();
+        default:
+          return new Response("Not found", { status: 404 });
+      }
+    } catch (error) {
+      console.error("AIGate error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Internal server error";
+      return new Response(
+        JSON.stringify({ error: errorMessage }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+  }
+  /**
+   * Acquire a slot for AI processing
+   * Reference: "Single-Worker RAG Implementation.txt" - Concurrency Management
+   */
+  async handleAcquire(request) {
+    const data = await request.json();
+    const { requestId } = data;
+    if (!requestId) {
+      return new Response(
+        JSON.stringify({ error: "Request ID required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+    await this.cleanupTimedOutRequests();
+    if (this.activeRequests.size < this.MAX_CONCURRENT_REQUESTS) {
+      this.activeRequests.set(requestId, Date.now());
+      return new Response(
+        JSON.stringify({
+          acquired: true,
+          activeCount: this.activeRequests.size,
+          queueLength: this.requestQueue.length
+        }),
+        {
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+    return new Promise((resolve) => {
+      this.requestQueue.push({
+        id: requestId,
+        resolve: () => {
+          this.activeRequests.set(requestId, Date.now());
+          resolve(new Response(
+            JSON.stringify({
+              acquired: true,
+              activeCount: this.activeRequests.size,
+              queueLength: this.requestQueue.length,
+              wasQueued: true
+            }),
+            {
+              headers: { "Content-Type": "application/json" }
+            }
+          ));
+        },
+        timestamp: Date.now()
+      });
+      setTimeout(() => {
+        const index = this.requestQueue.findIndex((item) => item.id === requestId);
+        if (index !== -1) {
+          this.requestQueue.splice(index, 1);
+          resolve(new Response(
+            JSON.stringify({
+              error: "Request timed out waiting for AI slot",
+              acquired: false
+            }),
+            {
+              status: 408,
+              headers: { "Content-Type": "application/json" }
+            }
+          ));
+        }
+      }, this.REQUEST_TIMEOUT);
+    });
+  }
+  /**
+   * Release a slot after AI processing
+   * Reference: "Single-Worker RAG Implementation.txt" - Concurrency Management
+   */
+  async handleRelease(request) {
+    const data = await request.json();
+    const { requestId } = data;
+    if (!requestId) {
+      return new Response(
+        JSON.stringify({ error: "Request ID required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+    const wasActive = this.activeRequests.delete(requestId);
+    if (!wasActive) {
+      return new Response(
+        JSON.stringify({
+          error: "Request ID not found in active requests",
+          released: false
+        }),
+        {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+    if (this.requestQueue.length > 0) {
+      const next = this.requestQueue.shift();
+      if (next) {
+        next.resolve();
+      }
+    }
+    return new Response(
+      JSON.stringify({
+        released: true,
+        activeCount: this.activeRequests.size,
+        queueLength: this.requestQueue.length
+      }),
+      {
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+  /**
+   * Get current status of the AI gate
+   */
+  async handleStatus() {
+    await this.cleanupTimedOutRequests();
+    return new Response(
+      JSON.stringify({
+        activeRequests: this.activeRequests.size,
+        maxConcurrent: this.MAX_CONCURRENT_REQUESTS,
+        queueLength: this.requestQueue.length,
+        canAcceptMore: this.activeRequests.size < this.MAX_CONCURRENT_REQUESTS,
+        activeRequestIds: Array.from(this.activeRequests.keys()),
+        queuedRequestIds: this.requestQueue.map((item) => item.id)
+      }),
+      {
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+  /**
+   * Clean up requests that have timed out
+   */
+  async cleanupTimedOutRequests() {
+    const now = Date.now();
+    const timedOutIds = [];
+    for (const [id, timestamp] of this.activeRequests) {
+      if (now - timestamp > this.REQUEST_TIMEOUT) {
+        timedOutIds.push(id);
+      }
+    }
+    for (const id of timedOutIds) {
+      this.activeRequests.delete(id);
+      console.warn(`Cleaned up timed-out request: ${id}`);
+    }
+    this.requestQueue = this.requestQueue.filter(
+      (item) => now - item.timestamp <= this.REQUEST_TIMEOUT
+    );
+    while (this.activeRequests.size < this.MAX_CONCURRENT_REQUESTS && this.requestQueue.length > 0) {
+      const next = this.requestQueue.shift();
+      if (next) {
+        next.resolve();
+      }
+    }
+  }
+}
+
+var dist = {};
+
+var Mime_1;
+var hasRequiredMime$1;
+
+function requireMime$1 () {
+	if (hasRequiredMime$1) return Mime_1;
+	hasRequiredMime$1 = 1;
+
+	/**
+	 * @param typeMap [Object] Map of MIME type -> Array[extensions]
+	 * @param ...
+	 */
+	function Mime() {
+	  this._types = Object.create(null);
+	  this._extensions = Object.create(null);
+
+	  for (let i = 0; i < arguments.length; i++) {
+	    this.define(arguments[i]);
+	  }
+
+	  this.define = this.define.bind(this);
+	  this.getType = this.getType.bind(this);
+	  this.getExtension = this.getExtension.bind(this);
+	}
+
+	/**
+	 * Define mimetype -> extension mappings.  Each key is a mime-type that maps
+	 * to an array of extensions associated with the type.  The first extension is
+	 * used as the default extension for the type.
+	 *
+	 * e.g. mime.define({'audio/ogg', ['oga', 'ogg', 'spx']});
+	 *
+	 * If a type declares an extension that has already been defined, an error will
+	 * be thrown.  To suppress this error and force the extension to be associated
+	 * with the new type, pass `force`=true.  Alternatively, you may prefix the
+	 * extension with "*" to map the type to extension, without mapping the
+	 * extension to the type.
+	 *
+	 * e.g. mime.define({'audio/wav', ['wav']}, {'audio/x-wav', ['*wav']});
+	 *
+	 *
+	 * @param map (Object) type definitions
+	 * @param force (Boolean) if true, force overriding of existing definitions
+	 */
+	Mime.prototype.define = function(typeMap, force) {
+	  for (let type in typeMap) {
+	    let extensions = typeMap[type].map(function(t) {
+	      return t.toLowerCase();
+	    });
+	    type = type.toLowerCase();
+
+	    for (let i = 0; i < extensions.length; i++) {
+	      const ext = extensions[i];
+
+	      // '*' prefix = not the preferred type for this extension.  So fixup the
+	      // extension, and skip it.
+	      if (ext[0] === '*') {
+	        continue;
+	      }
+
+	      if (!force && (ext in this._types)) {
+	        throw new Error(
+	          'Attempt to change mapping for "' + ext +
+	          '" extension from "' + this._types[ext] + '" to "' + type +
+	          '". Pass `force=true` to allow this, otherwise remove "' + ext +
+	          '" from the list of extensions for "' + type + '".'
+	        );
+	      }
+
+	      this._types[ext] = type;
+	    }
+
+	    // Use first extension as default
+	    if (force || !this._extensions[type]) {
+	      const ext = extensions[0];
+	      this._extensions[type] = (ext[0] !== '*') ? ext : ext.substr(1);
+	    }
+	  }
+	};
+
+	/**
+	 * Lookup a mime type based on extension
+	 */
+	Mime.prototype.getType = function(path) {
+	  path = String(path);
+	  let last = path.replace(/^.*[/\\]/, '').toLowerCase();
+	  let ext = last.replace(/^.*\./, '').toLowerCase();
+
+	  let hasPath = last.length < path.length;
+	  let hasDot = ext.length < last.length - 1;
+
+	  return (hasDot || !hasPath) && this._types[ext] || null;
+	};
+
+	/**
+	 * Return file extension associated with a mime type
+	 */
+	Mime.prototype.getExtension = function(type) {
+	  type = /^\s*([^;\s]*)/.test(type) && RegExp.$1;
+	  return type && this._extensions[type.toLowerCase()] || null;
+	};
+
+	Mime_1 = Mime;
+	return Mime_1;
+}
+
+var standard;
+var hasRequiredStandard;
+
+function requireStandard () {
+	if (hasRequiredStandard) return standard;
+	hasRequiredStandard = 1;
+	standard = {"application/andrew-inset":["ez"],"application/applixware":["aw"],"application/atom+xml":["atom"],"application/atomcat+xml":["atomcat"],"application/atomdeleted+xml":["atomdeleted"],"application/atomsvc+xml":["atomsvc"],"application/atsc-dwd+xml":["dwd"],"application/atsc-held+xml":["held"],"application/atsc-rsat+xml":["rsat"],"application/bdoc":["bdoc"],"application/calendar+xml":["xcs"],"application/ccxml+xml":["ccxml"],"application/cdfx+xml":["cdfx"],"application/cdmi-capability":["cdmia"],"application/cdmi-container":["cdmic"],"application/cdmi-domain":["cdmid"],"application/cdmi-object":["cdmio"],"application/cdmi-queue":["cdmiq"],"application/cu-seeme":["cu"],"application/dash+xml":["mpd"],"application/davmount+xml":["davmount"],"application/docbook+xml":["dbk"],"application/dssc+der":["dssc"],"application/dssc+xml":["xdssc"],"application/ecmascript":["es","ecma"],"application/emma+xml":["emma"],"application/emotionml+xml":["emotionml"],"application/epub+zip":["epub"],"application/exi":["exi"],"application/express":["exp"],"application/fdt+xml":["fdt"],"application/font-tdpfr":["pfr"],"application/geo+json":["geojson"],"application/gml+xml":["gml"],"application/gpx+xml":["gpx"],"application/gxf":["gxf"],"application/gzip":["gz"],"application/hjson":["hjson"],"application/hyperstudio":["stk"],"application/inkml+xml":["ink","inkml"],"application/ipfix":["ipfix"],"application/its+xml":["its"],"application/java-archive":["jar","war","ear"],"application/java-serialized-object":["ser"],"application/java-vm":["class"],"application/javascript":["js","mjs"],"application/json":["json","map"],"application/json5":["json5"],"application/jsonml+json":["jsonml"],"application/ld+json":["jsonld"],"application/lgr+xml":["lgr"],"application/lost+xml":["lostxml"],"application/mac-binhex40":["hqx"],"application/mac-compactpro":["cpt"],"application/mads+xml":["mads"],"application/manifest+json":["webmanifest"],"application/marc":["mrc"],"application/marcxml+xml":["mrcx"],"application/mathematica":["ma","nb","mb"],"application/mathml+xml":["mathml"],"application/mbox":["mbox"],"application/mediaservercontrol+xml":["mscml"],"application/metalink+xml":["metalink"],"application/metalink4+xml":["meta4"],"application/mets+xml":["mets"],"application/mmt-aei+xml":["maei"],"application/mmt-usd+xml":["musd"],"application/mods+xml":["mods"],"application/mp21":["m21","mp21"],"application/mp4":["mp4s","m4p"],"application/msword":["doc","dot"],"application/mxf":["mxf"],"application/n-quads":["nq"],"application/n-triples":["nt"],"application/node":["cjs"],"application/octet-stream":["bin","dms","lrf","mar","so","dist","distz","pkg","bpk","dump","elc","deploy","exe","dll","deb","dmg","iso","img","msi","msp","msm","buffer"],"application/oda":["oda"],"application/oebps-package+xml":["opf"],"application/ogg":["ogx"],"application/omdoc+xml":["omdoc"],"application/onenote":["onetoc","onetoc2","onetmp","onepkg"],"application/oxps":["oxps"],"application/p2p-overlay+xml":["relo"],"application/patch-ops-error+xml":["xer"],"application/pdf":["pdf"],"application/pgp-encrypted":["pgp"],"application/pgp-signature":["asc","sig"],"application/pics-rules":["prf"],"application/pkcs10":["p10"],"application/pkcs7-mime":["p7m","p7c"],"application/pkcs7-signature":["p7s"],"application/pkcs8":["p8"],"application/pkix-attr-cert":["ac"],"application/pkix-cert":["cer"],"application/pkix-crl":["crl"],"application/pkix-pkipath":["pkipath"],"application/pkixcmp":["pki"],"application/pls+xml":["pls"],"application/postscript":["ai","eps","ps"],"application/provenance+xml":["provx"],"application/pskc+xml":["pskcxml"],"application/raml+yaml":["raml"],"application/rdf+xml":["rdf","owl"],"application/reginfo+xml":["rif"],"application/relax-ng-compact-syntax":["rnc"],"application/resource-lists+xml":["rl"],"application/resource-lists-diff+xml":["rld"],"application/rls-services+xml":["rs"],"application/route-apd+xml":["rapd"],"application/route-s-tsid+xml":["sls"],"application/route-usd+xml":["rusd"],"application/rpki-ghostbusters":["gbr"],"application/rpki-manifest":["mft"],"application/rpki-roa":["roa"],"application/rsd+xml":["rsd"],"application/rss+xml":["rss"],"application/rtf":["rtf"],"application/sbml+xml":["sbml"],"application/scvp-cv-request":["scq"],"application/scvp-cv-response":["scs"],"application/scvp-vp-request":["spq"],"application/scvp-vp-response":["spp"],"application/sdp":["sdp"],"application/senml+xml":["senmlx"],"application/sensml+xml":["sensmlx"],"application/set-payment-initiation":["setpay"],"application/set-registration-initiation":["setreg"],"application/shf+xml":["shf"],"application/sieve":["siv","sieve"],"application/smil+xml":["smi","smil"],"application/sparql-query":["rq"],"application/sparql-results+xml":["srx"],"application/srgs":["gram"],"application/srgs+xml":["grxml"],"application/sru+xml":["sru"],"application/ssdl+xml":["ssdl"],"application/ssml+xml":["ssml"],"application/swid+xml":["swidtag"],"application/tei+xml":["tei","teicorpus"],"application/thraud+xml":["tfi"],"application/timestamped-data":["tsd"],"application/toml":["toml"],"application/trig":["trig"],"application/ttml+xml":["ttml"],"application/ubjson":["ubj"],"application/urc-ressheet+xml":["rsheet"],"application/urc-targetdesc+xml":["td"],"application/voicexml+xml":["vxml"],"application/wasm":["wasm"],"application/widget":["wgt"],"application/winhlp":["hlp"],"application/wsdl+xml":["wsdl"],"application/wspolicy+xml":["wspolicy"],"application/xaml+xml":["xaml"],"application/xcap-att+xml":["xav"],"application/xcap-caps+xml":["xca"],"application/xcap-diff+xml":["xdf"],"application/xcap-el+xml":["xel"],"application/xcap-ns+xml":["xns"],"application/xenc+xml":["xenc"],"application/xhtml+xml":["xhtml","xht"],"application/xliff+xml":["xlf"],"application/xml":["xml","xsl","xsd","rng"],"application/xml-dtd":["dtd"],"application/xop+xml":["xop"],"application/xproc+xml":["xpl"],"application/xslt+xml":["*xsl","xslt"],"application/xspf+xml":["xspf"],"application/xv+xml":["mxml","xhvml","xvml","xvm"],"application/yang":["yang"],"application/yin+xml":["yin"],"application/zip":["zip"],"audio/3gpp":["*3gpp"],"audio/adpcm":["adp"],"audio/amr":["amr"],"audio/basic":["au","snd"],"audio/midi":["mid","midi","kar","rmi"],"audio/mobile-xmf":["mxmf"],"audio/mp3":["*mp3"],"audio/mp4":["m4a","mp4a"],"audio/mpeg":["mpga","mp2","mp2a","mp3","m2a","m3a"],"audio/ogg":["oga","ogg","spx","opus"],"audio/s3m":["s3m"],"audio/silk":["sil"],"audio/wav":["wav"],"audio/wave":["*wav"],"audio/webm":["weba"],"audio/xm":["xm"],"font/collection":["ttc"],"font/otf":["otf"],"font/ttf":["ttf"],"font/woff":["woff"],"font/woff2":["woff2"],"image/aces":["exr"],"image/apng":["apng"],"image/avif":["avif"],"image/bmp":["bmp"],"image/cgm":["cgm"],"image/dicom-rle":["drle"],"image/emf":["emf"],"image/fits":["fits"],"image/g3fax":["g3"],"image/gif":["gif"],"image/heic":["heic"],"image/heic-sequence":["heics"],"image/heif":["heif"],"image/heif-sequence":["heifs"],"image/hej2k":["hej2"],"image/hsj2":["hsj2"],"image/ief":["ief"],"image/jls":["jls"],"image/jp2":["jp2","jpg2"],"image/jpeg":["jpeg","jpg","jpe"],"image/jph":["jph"],"image/jphc":["jhc"],"image/jpm":["jpm"],"image/jpx":["jpx","jpf"],"image/jxr":["jxr"],"image/jxra":["jxra"],"image/jxrs":["jxrs"],"image/jxs":["jxs"],"image/jxsc":["jxsc"],"image/jxsi":["jxsi"],"image/jxss":["jxss"],"image/ktx":["ktx"],"image/ktx2":["ktx2"],"image/png":["png"],"image/sgi":["sgi"],"image/svg+xml":["svg","svgz"],"image/t38":["t38"],"image/tiff":["tif","tiff"],"image/tiff-fx":["tfx"],"image/webp":["webp"],"image/wmf":["wmf"],"message/disposition-notification":["disposition-notification"],"message/global":["u8msg"],"message/global-delivery-status":["u8dsn"],"message/global-disposition-notification":["u8mdn"],"message/global-headers":["u8hdr"],"message/rfc822":["eml","mime"],"model/3mf":["3mf"],"model/gltf+json":["gltf"],"model/gltf-binary":["glb"],"model/iges":["igs","iges"],"model/mesh":["msh","mesh","silo"],"model/mtl":["mtl"],"model/obj":["obj"],"model/step+xml":["stpx"],"model/step+zip":["stpz"],"model/step-xml+zip":["stpxz"],"model/stl":["stl"],"model/vrml":["wrl","vrml"],"model/x3d+binary":["*x3db","x3dbz"],"model/x3d+fastinfoset":["x3db"],"model/x3d+vrml":["*x3dv","x3dvz"],"model/x3d+xml":["x3d","x3dz"],"model/x3d-vrml":["x3dv"],"text/cache-manifest":["appcache","manifest"],"text/calendar":["ics","ifb"],"text/coffeescript":["coffee","litcoffee"],"text/css":["css"],"text/csv":["csv"],"text/html":["html","htm","shtml"],"text/jade":["jade"],"text/jsx":["jsx"],"text/less":["less"],"text/markdown":["markdown","md"],"text/mathml":["mml"],"text/mdx":["mdx"],"text/n3":["n3"],"text/plain":["txt","text","conf","def","list","log","in","ini"],"text/richtext":["rtx"],"text/rtf":["*rtf"],"text/sgml":["sgml","sgm"],"text/shex":["shex"],"text/slim":["slim","slm"],"text/spdx":["spdx"],"text/stylus":["stylus","styl"],"text/tab-separated-values":["tsv"],"text/troff":["t","tr","roff","man","me","ms"],"text/turtle":["ttl"],"text/uri-list":["uri","uris","urls"],"text/vcard":["vcard"],"text/vtt":["vtt"],"text/xml":["*xml"],"text/yaml":["yaml","yml"],"video/3gpp":["3gp","3gpp"],"video/3gpp2":["3g2"],"video/h261":["h261"],"video/h263":["h263"],"video/h264":["h264"],"video/iso.segment":["m4s"],"video/jpeg":["jpgv"],"video/jpm":["*jpm","jpgm"],"video/mj2":["mj2","mjp2"],"video/mp2t":["ts"],"video/mp4":["mp4","mp4v","mpg4"],"video/mpeg":["mpeg","mpg","mpe","m1v","m2v"],"video/ogg":["ogv"],"video/quicktime":["qt","mov"],"video/webm":["webm"]};
+	return standard;
+}
+
+var other;
+var hasRequiredOther;
+
+function requireOther () {
+	if (hasRequiredOther) return other;
+	hasRequiredOther = 1;
+	other = {"application/prs.cww":["cww"],"application/vnd.1000minds.decision-model+xml":["1km"],"application/vnd.3gpp.pic-bw-large":["plb"],"application/vnd.3gpp.pic-bw-small":["psb"],"application/vnd.3gpp.pic-bw-var":["pvb"],"application/vnd.3gpp2.tcap":["tcap"],"application/vnd.3m.post-it-notes":["pwn"],"application/vnd.accpac.simply.aso":["aso"],"application/vnd.accpac.simply.imp":["imp"],"application/vnd.acucobol":["acu"],"application/vnd.acucorp":["atc","acutc"],"application/vnd.adobe.air-application-installer-package+zip":["air"],"application/vnd.adobe.formscentral.fcdt":["fcdt"],"application/vnd.adobe.fxp":["fxp","fxpl"],"application/vnd.adobe.xdp+xml":["xdp"],"application/vnd.adobe.xfdf":["xfdf"],"application/vnd.ahead.space":["ahead"],"application/vnd.airzip.filesecure.azf":["azf"],"application/vnd.airzip.filesecure.azs":["azs"],"application/vnd.amazon.ebook":["azw"],"application/vnd.americandynamics.acc":["acc"],"application/vnd.amiga.ami":["ami"],"application/vnd.android.package-archive":["apk"],"application/vnd.anser-web-certificate-issue-initiation":["cii"],"application/vnd.anser-web-funds-transfer-initiation":["fti"],"application/vnd.antix.game-component":["atx"],"application/vnd.apple.installer+xml":["mpkg"],"application/vnd.apple.keynote":["key"],"application/vnd.apple.mpegurl":["m3u8"],"application/vnd.apple.numbers":["numbers"],"application/vnd.apple.pages":["pages"],"application/vnd.apple.pkpass":["pkpass"],"application/vnd.aristanetworks.swi":["swi"],"application/vnd.astraea-software.iota":["iota"],"application/vnd.audiograph":["aep"],"application/vnd.balsamiq.bmml+xml":["bmml"],"application/vnd.blueice.multipass":["mpm"],"application/vnd.bmi":["bmi"],"application/vnd.businessobjects":["rep"],"application/vnd.chemdraw+xml":["cdxml"],"application/vnd.chipnuts.karaoke-mmd":["mmd"],"application/vnd.cinderella":["cdy"],"application/vnd.citationstyles.style+xml":["csl"],"application/vnd.claymore":["cla"],"application/vnd.cloanto.rp9":["rp9"],"application/vnd.clonk.c4group":["c4g","c4d","c4f","c4p","c4u"],"application/vnd.cluetrust.cartomobile-config":["c11amc"],"application/vnd.cluetrust.cartomobile-config-pkg":["c11amz"],"application/vnd.commonspace":["csp"],"application/vnd.contact.cmsg":["cdbcmsg"],"application/vnd.cosmocaller":["cmc"],"application/vnd.crick.clicker":["clkx"],"application/vnd.crick.clicker.keyboard":["clkk"],"application/vnd.crick.clicker.palette":["clkp"],"application/vnd.crick.clicker.template":["clkt"],"application/vnd.crick.clicker.wordbank":["clkw"],"application/vnd.criticaltools.wbs+xml":["wbs"],"application/vnd.ctc-posml":["pml"],"application/vnd.cups-ppd":["ppd"],"application/vnd.curl.car":["car"],"application/vnd.curl.pcurl":["pcurl"],"application/vnd.dart":["dart"],"application/vnd.data-vision.rdz":["rdz"],"application/vnd.dbf":["dbf"],"application/vnd.dece.data":["uvf","uvvf","uvd","uvvd"],"application/vnd.dece.ttml+xml":["uvt","uvvt"],"application/vnd.dece.unspecified":["uvx","uvvx"],"application/vnd.dece.zip":["uvz","uvvz"],"application/vnd.denovo.fcselayout-link":["fe_launch"],"application/vnd.dna":["dna"],"application/vnd.dolby.mlp":["mlp"],"application/vnd.dpgraph":["dpg"],"application/vnd.dreamfactory":["dfac"],"application/vnd.ds-keypoint":["kpxx"],"application/vnd.dvb.ait":["ait"],"application/vnd.dvb.service":["svc"],"application/vnd.dynageo":["geo"],"application/vnd.ecowin.chart":["mag"],"application/vnd.enliven":["nml"],"application/vnd.epson.esf":["esf"],"application/vnd.epson.msf":["msf"],"application/vnd.epson.quickanime":["qam"],"application/vnd.epson.salt":["slt"],"application/vnd.epson.ssf":["ssf"],"application/vnd.eszigno3+xml":["es3","et3"],"application/vnd.ezpix-album":["ez2"],"application/vnd.ezpix-package":["ez3"],"application/vnd.fdf":["fdf"],"application/vnd.fdsn.mseed":["mseed"],"application/vnd.fdsn.seed":["seed","dataless"],"application/vnd.flographit":["gph"],"application/vnd.fluxtime.clip":["ftc"],"application/vnd.framemaker":["fm","frame","maker","book"],"application/vnd.frogans.fnc":["fnc"],"application/vnd.frogans.ltf":["ltf"],"application/vnd.fsc.weblaunch":["fsc"],"application/vnd.fujitsu.oasys":["oas"],"application/vnd.fujitsu.oasys2":["oa2"],"application/vnd.fujitsu.oasys3":["oa3"],"application/vnd.fujitsu.oasysgp":["fg5"],"application/vnd.fujitsu.oasysprs":["bh2"],"application/vnd.fujixerox.ddd":["ddd"],"application/vnd.fujixerox.docuworks":["xdw"],"application/vnd.fujixerox.docuworks.binder":["xbd"],"application/vnd.fuzzysheet":["fzs"],"application/vnd.genomatix.tuxedo":["txd"],"application/vnd.geogebra.file":["ggb"],"application/vnd.geogebra.tool":["ggt"],"application/vnd.geometry-explorer":["gex","gre"],"application/vnd.geonext":["gxt"],"application/vnd.geoplan":["g2w"],"application/vnd.geospace":["g3w"],"application/vnd.gmx":["gmx"],"application/vnd.google-apps.document":["gdoc"],"application/vnd.google-apps.presentation":["gslides"],"application/vnd.google-apps.spreadsheet":["gsheet"],"application/vnd.google-earth.kml+xml":["kml"],"application/vnd.google-earth.kmz":["kmz"],"application/vnd.grafeq":["gqf","gqs"],"application/vnd.groove-account":["gac"],"application/vnd.groove-help":["ghf"],"application/vnd.groove-identity-message":["gim"],"application/vnd.groove-injector":["grv"],"application/vnd.groove-tool-message":["gtm"],"application/vnd.groove-tool-template":["tpl"],"application/vnd.groove-vcard":["vcg"],"application/vnd.hal+xml":["hal"],"application/vnd.handheld-entertainment+xml":["zmm"],"application/vnd.hbci":["hbci"],"application/vnd.hhe.lesson-player":["les"],"application/vnd.hp-hpgl":["hpgl"],"application/vnd.hp-hpid":["hpid"],"application/vnd.hp-hps":["hps"],"application/vnd.hp-jlyt":["jlt"],"application/vnd.hp-pcl":["pcl"],"application/vnd.hp-pclxl":["pclxl"],"application/vnd.hydrostatix.sof-data":["sfd-hdstx"],"application/vnd.ibm.minipay":["mpy"],"application/vnd.ibm.modcap":["afp","listafp","list3820"],"application/vnd.ibm.rights-management":["irm"],"application/vnd.ibm.secure-container":["sc"],"application/vnd.iccprofile":["icc","icm"],"application/vnd.igloader":["igl"],"application/vnd.immervision-ivp":["ivp"],"application/vnd.immervision-ivu":["ivu"],"application/vnd.insors.igm":["igm"],"application/vnd.intercon.formnet":["xpw","xpx"],"application/vnd.intergeo":["i2g"],"application/vnd.intu.qbo":["qbo"],"application/vnd.intu.qfx":["qfx"],"application/vnd.ipunplugged.rcprofile":["rcprofile"],"application/vnd.irepository.package+xml":["irp"],"application/vnd.is-xpr":["xpr"],"application/vnd.isac.fcs":["fcs"],"application/vnd.jam":["jam"],"application/vnd.jcp.javame.midlet-rms":["rms"],"application/vnd.jisp":["jisp"],"application/vnd.joost.joda-archive":["joda"],"application/vnd.kahootz":["ktz","ktr"],"application/vnd.kde.karbon":["karbon"],"application/vnd.kde.kchart":["chrt"],"application/vnd.kde.kformula":["kfo"],"application/vnd.kde.kivio":["flw"],"application/vnd.kde.kontour":["kon"],"application/vnd.kde.kpresenter":["kpr","kpt"],"application/vnd.kde.kspread":["ksp"],"application/vnd.kde.kword":["kwd","kwt"],"application/vnd.kenameaapp":["htke"],"application/vnd.kidspiration":["kia"],"application/vnd.kinar":["kne","knp"],"application/vnd.koan":["skp","skd","skt","skm"],"application/vnd.kodak-descriptor":["sse"],"application/vnd.las.las+xml":["lasxml"],"application/vnd.llamagraphics.life-balance.desktop":["lbd"],"application/vnd.llamagraphics.life-balance.exchange+xml":["lbe"],"application/vnd.lotus-1-2-3":["123"],"application/vnd.lotus-approach":["apr"],"application/vnd.lotus-freelance":["pre"],"application/vnd.lotus-notes":["nsf"],"application/vnd.lotus-organizer":["org"],"application/vnd.lotus-screencam":["scm"],"application/vnd.lotus-wordpro":["lwp"],"application/vnd.macports.portpkg":["portpkg"],"application/vnd.mapbox-vector-tile":["mvt"],"application/vnd.mcd":["mcd"],"application/vnd.medcalcdata":["mc1"],"application/vnd.mediastation.cdkey":["cdkey"],"application/vnd.mfer":["mwf"],"application/vnd.mfmp":["mfm"],"application/vnd.micrografx.flo":["flo"],"application/vnd.micrografx.igx":["igx"],"application/vnd.mif":["mif"],"application/vnd.mobius.daf":["daf"],"application/vnd.mobius.dis":["dis"],"application/vnd.mobius.mbk":["mbk"],"application/vnd.mobius.mqy":["mqy"],"application/vnd.mobius.msl":["msl"],"application/vnd.mobius.plc":["plc"],"application/vnd.mobius.txf":["txf"],"application/vnd.mophun.application":["mpn"],"application/vnd.mophun.certificate":["mpc"],"application/vnd.mozilla.xul+xml":["xul"],"application/vnd.ms-artgalry":["cil"],"application/vnd.ms-cab-compressed":["cab"],"application/vnd.ms-excel":["xls","xlm","xla","xlc","xlt","xlw"],"application/vnd.ms-excel.addin.macroenabled.12":["xlam"],"application/vnd.ms-excel.sheet.binary.macroenabled.12":["xlsb"],"application/vnd.ms-excel.sheet.macroenabled.12":["xlsm"],"application/vnd.ms-excel.template.macroenabled.12":["xltm"],"application/vnd.ms-fontobject":["eot"],"application/vnd.ms-htmlhelp":["chm"],"application/vnd.ms-ims":["ims"],"application/vnd.ms-lrm":["lrm"],"application/vnd.ms-officetheme":["thmx"],"application/vnd.ms-outlook":["msg"],"application/vnd.ms-pki.seccat":["cat"],"application/vnd.ms-pki.stl":["*stl"],"application/vnd.ms-powerpoint":["ppt","pps","pot"],"application/vnd.ms-powerpoint.addin.macroenabled.12":["ppam"],"application/vnd.ms-powerpoint.presentation.macroenabled.12":["pptm"],"application/vnd.ms-powerpoint.slide.macroenabled.12":["sldm"],"application/vnd.ms-powerpoint.slideshow.macroenabled.12":["ppsm"],"application/vnd.ms-powerpoint.template.macroenabled.12":["potm"],"application/vnd.ms-project":["mpp","mpt"],"application/vnd.ms-word.document.macroenabled.12":["docm"],"application/vnd.ms-word.template.macroenabled.12":["dotm"],"application/vnd.ms-works":["wps","wks","wcm","wdb"],"application/vnd.ms-wpl":["wpl"],"application/vnd.ms-xpsdocument":["xps"],"application/vnd.mseq":["mseq"],"application/vnd.musician":["mus"],"application/vnd.muvee.style":["msty"],"application/vnd.mynfc":["taglet"],"application/vnd.neurolanguage.nlu":["nlu"],"application/vnd.nitf":["ntf","nitf"],"application/vnd.noblenet-directory":["nnd"],"application/vnd.noblenet-sealer":["nns"],"application/vnd.noblenet-web":["nnw"],"application/vnd.nokia.n-gage.ac+xml":["*ac"],"application/vnd.nokia.n-gage.data":["ngdat"],"application/vnd.nokia.n-gage.symbian.install":["n-gage"],"application/vnd.nokia.radio-preset":["rpst"],"application/vnd.nokia.radio-presets":["rpss"],"application/vnd.novadigm.edm":["edm"],"application/vnd.novadigm.edx":["edx"],"application/vnd.novadigm.ext":["ext"],"application/vnd.oasis.opendocument.chart":["odc"],"application/vnd.oasis.opendocument.chart-template":["otc"],"application/vnd.oasis.opendocument.database":["odb"],"application/vnd.oasis.opendocument.formula":["odf"],"application/vnd.oasis.opendocument.formula-template":["odft"],"application/vnd.oasis.opendocument.graphics":["odg"],"application/vnd.oasis.opendocument.graphics-template":["otg"],"application/vnd.oasis.opendocument.image":["odi"],"application/vnd.oasis.opendocument.image-template":["oti"],"application/vnd.oasis.opendocument.presentation":["odp"],"application/vnd.oasis.opendocument.presentation-template":["otp"],"application/vnd.oasis.opendocument.spreadsheet":["ods"],"application/vnd.oasis.opendocument.spreadsheet-template":["ots"],"application/vnd.oasis.opendocument.text":["odt"],"application/vnd.oasis.opendocument.text-master":["odm"],"application/vnd.oasis.opendocument.text-template":["ott"],"application/vnd.oasis.opendocument.text-web":["oth"],"application/vnd.olpc-sugar":["xo"],"application/vnd.oma.dd2+xml":["dd2"],"application/vnd.openblox.game+xml":["obgx"],"application/vnd.openofficeorg.extension":["oxt"],"application/vnd.openstreetmap.data+xml":["osm"],"application/vnd.openxmlformats-officedocument.presentationml.presentation":["pptx"],"application/vnd.openxmlformats-officedocument.presentationml.slide":["sldx"],"application/vnd.openxmlformats-officedocument.presentationml.slideshow":["ppsx"],"application/vnd.openxmlformats-officedocument.presentationml.template":["potx"],"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":["xlsx"],"application/vnd.openxmlformats-officedocument.spreadsheetml.template":["xltx"],"application/vnd.openxmlformats-officedocument.wordprocessingml.document":["docx"],"application/vnd.openxmlformats-officedocument.wordprocessingml.template":["dotx"],"application/vnd.osgeo.mapguide.package":["mgp"],"application/vnd.osgi.dp":["dp"],"application/vnd.osgi.subsystem":["esa"],"application/vnd.palm":["pdb","pqa","oprc"],"application/vnd.pawaafile":["paw"],"application/vnd.pg.format":["str"],"application/vnd.pg.osasli":["ei6"],"application/vnd.picsel":["efif"],"application/vnd.pmi.widget":["wg"],"application/vnd.pocketlearn":["plf"],"application/vnd.powerbuilder6":["pbd"],"application/vnd.previewsystems.box":["box"],"application/vnd.proteus.magazine":["mgz"],"application/vnd.publishare-delta-tree":["qps"],"application/vnd.pvi.ptid1":["ptid"],"application/vnd.quark.quarkxpress":["qxd","qxt","qwd","qwt","qxl","qxb"],"application/vnd.rar":["rar"],"application/vnd.realvnc.bed":["bed"],"application/vnd.recordare.musicxml":["mxl"],"application/vnd.recordare.musicxml+xml":["musicxml"],"application/vnd.rig.cryptonote":["cryptonote"],"application/vnd.rim.cod":["cod"],"application/vnd.rn-realmedia":["rm"],"application/vnd.rn-realmedia-vbr":["rmvb"],"application/vnd.route66.link66+xml":["link66"],"application/vnd.sailingtracker.track":["st"],"application/vnd.seemail":["see"],"application/vnd.sema":["sema"],"application/vnd.semd":["semd"],"application/vnd.semf":["semf"],"application/vnd.shana.informed.formdata":["ifm"],"application/vnd.shana.informed.formtemplate":["itp"],"application/vnd.shana.informed.interchange":["iif"],"application/vnd.shana.informed.package":["ipk"],"application/vnd.simtech-mindmapper":["twd","twds"],"application/vnd.smaf":["mmf"],"application/vnd.smart.teacher":["teacher"],"application/vnd.software602.filler.form+xml":["fo"],"application/vnd.solent.sdkm+xml":["sdkm","sdkd"],"application/vnd.spotfire.dxp":["dxp"],"application/vnd.spotfire.sfs":["sfs"],"application/vnd.stardivision.calc":["sdc"],"application/vnd.stardivision.draw":["sda"],"application/vnd.stardivision.impress":["sdd"],"application/vnd.stardivision.math":["smf"],"application/vnd.stardivision.writer":["sdw","vor"],"application/vnd.stardivision.writer-global":["sgl"],"application/vnd.stepmania.package":["smzip"],"application/vnd.stepmania.stepchart":["sm"],"application/vnd.sun.wadl+xml":["wadl"],"application/vnd.sun.xml.calc":["sxc"],"application/vnd.sun.xml.calc.template":["stc"],"application/vnd.sun.xml.draw":["sxd"],"application/vnd.sun.xml.draw.template":["std"],"application/vnd.sun.xml.impress":["sxi"],"application/vnd.sun.xml.impress.template":["sti"],"application/vnd.sun.xml.math":["sxm"],"application/vnd.sun.xml.writer":["sxw"],"application/vnd.sun.xml.writer.global":["sxg"],"application/vnd.sun.xml.writer.template":["stw"],"application/vnd.sus-calendar":["sus","susp"],"application/vnd.svd":["svd"],"application/vnd.symbian.install":["sis","sisx"],"application/vnd.syncml+xml":["xsm"],"application/vnd.syncml.dm+wbxml":["bdm"],"application/vnd.syncml.dm+xml":["xdm"],"application/vnd.syncml.dmddf+xml":["ddf"],"application/vnd.tao.intent-module-archive":["tao"],"application/vnd.tcpdump.pcap":["pcap","cap","dmp"],"application/vnd.tmobile-livetv":["tmo"],"application/vnd.trid.tpt":["tpt"],"application/vnd.triscape.mxs":["mxs"],"application/vnd.trueapp":["tra"],"application/vnd.ufdl":["ufd","ufdl"],"application/vnd.uiq.theme":["utz"],"application/vnd.umajin":["umj"],"application/vnd.unity":["unityweb"],"application/vnd.uoml+xml":["uoml"],"application/vnd.vcx":["vcx"],"application/vnd.visio":["vsd","vst","vss","vsw"],"application/vnd.visionary":["vis"],"application/vnd.vsf":["vsf"],"application/vnd.wap.wbxml":["wbxml"],"application/vnd.wap.wmlc":["wmlc"],"application/vnd.wap.wmlscriptc":["wmlsc"],"application/vnd.webturbo":["wtb"],"application/vnd.wolfram.player":["nbp"],"application/vnd.wordperfect":["wpd"],"application/vnd.wqd":["wqd"],"application/vnd.wt.stf":["stf"],"application/vnd.xara":["xar"],"application/vnd.xfdl":["xfdl"],"application/vnd.yamaha.hv-dic":["hvd"],"application/vnd.yamaha.hv-script":["hvs"],"application/vnd.yamaha.hv-voice":["hvp"],"application/vnd.yamaha.openscoreformat":["osf"],"application/vnd.yamaha.openscoreformat.osfpvg+xml":["osfpvg"],"application/vnd.yamaha.smaf-audio":["saf"],"application/vnd.yamaha.smaf-phrase":["spf"],"application/vnd.yellowriver-custom-menu":["cmp"],"application/vnd.zul":["zir","zirz"],"application/vnd.zzazz.deck+xml":["zaz"],"application/x-7z-compressed":["7z"],"application/x-abiword":["abw"],"application/x-ace-compressed":["ace"],"application/x-apple-diskimage":["*dmg"],"application/x-arj":["arj"],"application/x-authorware-bin":["aab","x32","u32","vox"],"application/x-authorware-map":["aam"],"application/x-authorware-seg":["aas"],"application/x-bcpio":["bcpio"],"application/x-bdoc":["*bdoc"],"application/x-bittorrent":["torrent"],"application/x-blorb":["blb","blorb"],"application/x-bzip":["bz"],"application/x-bzip2":["bz2","boz"],"application/x-cbr":["cbr","cba","cbt","cbz","cb7"],"application/x-cdlink":["vcd"],"application/x-cfs-compressed":["cfs"],"application/x-chat":["chat"],"application/x-chess-pgn":["pgn"],"application/x-chrome-extension":["crx"],"application/x-cocoa":["cco"],"application/x-conference":["nsc"],"application/x-cpio":["cpio"],"application/x-csh":["csh"],"application/x-debian-package":["*deb","udeb"],"application/x-dgc-compressed":["dgc"],"application/x-director":["dir","dcr","dxr","cst","cct","cxt","w3d","fgd","swa"],"application/x-doom":["wad"],"application/x-dtbncx+xml":["ncx"],"application/x-dtbook+xml":["dtb"],"application/x-dtbresource+xml":["res"],"application/x-dvi":["dvi"],"application/x-envoy":["evy"],"application/x-eva":["eva"],"application/x-font-bdf":["bdf"],"application/x-font-ghostscript":["gsf"],"application/x-font-linux-psf":["psf"],"application/x-font-pcf":["pcf"],"application/x-font-snf":["snf"],"application/x-font-type1":["pfa","pfb","pfm","afm"],"application/x-freearc":["arc"],"application/x-futuresplash":["spl"],"application/x-gca-compressed":["gca"],"application/x-glulx":["ulx"],"application/x-gnumeric":["gnumeric"],"application/x-gramps-xml":["gramps"],"application/x-gtar":["gtar"],"application/x-hdf":["hdf"],"application/x-httpd-php":["php"],"application/x-install-instructions":["install"],"application/x-iso9660-image":["*iso"],"application/x-iwork-keynote-sffkey":["*key"],"application/x-iwork-numbers-sffnumbers":["*numbers"],"application/x-iwork-pages-sffpages":["*pages"],"application/x-java-archive-diff":["jardiff"],"application/x-java-jnlp-file":["jnlp"],"application/x-keepass2":["kdbx"],"application/x-latex":["latex"],"application/x-lua-bytecode":["luac"],"application/x-lzh-compressed":["lzh","lha"],"application/x-makeself":["run"],"application/x-mie":["mie"],"application/x-mobipocket-ebook":["prc","mobi"],"application/x-ms-application":["application"],"application/x-ms-shortcut":["lnk"],"application/x-ms-wmd":["wmd"],"application/x-ms-wmz":["wmz"],"application/x-ms-xbap":["xbap"],"application/x-msaccess":["mdb"],"application/x-msbinder":["obd"],"application/x-mscardfile":["crd"],"application/x-msclip":["clp"],"application/x-msdos-program":["*exe"],"application/x-msdownload":["*exe","*dll","com","bat","*msi"],"application/x-msmediaview":["mvb","m13","m14"],"application/x-msmetafile":["*wmf","*wmz","*emf","emz"],"application/x-msmoney":["mny"],"application/x-mspublisher":["pub"],"application/x-msschedule":["scd"],"application/x-msterminal":["trm"],"application/x-mswrite":["wri"],"application/x-netcdf":["nc","cdf"],"application/x-ns-proxy-autoconfig":["pac"],"application/x-nzb":["nzb"],"application/x-perl":["pl","pm"],"application/x-pilot":["*prc","*pdb"],"application/x-pkcs12":["p12","pfx"],"application/x-pkcs7-certificates":["p7b","spc"],"application/x-pkcs7-certreqresp":["p7r"],"application/x-rar-compressed":["*rar"],"application/x-redhat-package-manager":["rpm"],"application/x-research-info-systems":["ris"],"application/x-sea":["sea"],"application/x-sh":["sh"],"application/x-shar":["shar"],"application/x-shockwave-flash":["swf"],"application/x-silverlight-app":["xap"],"application/x-sql":["sql"],"application/x-stuffit":["sit"],"application/x-stuffitx":["sitx"],"application/x-subrip":["srt"],"application/x-sv4cpio":["sv4cpio"],"application/x-sv4crc":["sv4crc"],"application/x-t3vm-image":["t3"],"application/x-tads":["gam"],"application/x-tar":["tar"],"application/x-tcl":["tcl","tk"],"application/x-tex":["tex"],"application/x-tex-tfm":["tfm"],"application/x-texinfo":["texinfo","texi"],"application/x-tgif":["*obj"],"application/x-ustar":["ustar"],"application/x-virtualbox-hdd":["hdd"],"application/x-virtualbox-ova":["ova"],"application/x-virtualbox-ovf":["ovf"],"application/x-virtualbox-vbox":["vbox"],"application/x-virtualbox-vbox-extpack":["vbox-extpack"],"application/x-virtualbox-vdi":["vdi"],"application/x-virtualbox-vhd":["vhd"],"application/x-virtualbox-vmdk":["vmdk"],"application/x-wais-source":["src"],"application/x-web-app-manifest+json":["webapp"],"application/x-x509-ca-cert":["der","crt","pem"],"application/x-xfig":["fig"],"application/x-xliff+xml":["*xlf"],"application/x-xpinstall":["xpi"],"application/x-xz":["xz"],"application/x-zmachine":["z1","z2","z3","z4","z5","z6","z7","z8"],"audio/vnd.dece.audio":["uva","uvva"],"audio/vnd.digital-winds":["eol"],"audio/vnd.dra":["dra"],"audio/vnd.dts":["dts"],"audio/vnd.dts.hd":["dtshd"],"audio/vnd.lucent.voice":["lvp"],"audio/vnd.ms-playready.media.pya":["pya"],"audio/vnd.nuera.ecelp4800":["ecelp4800"],"audio/vnd.nuera.ecelp7470":["ecelp7470"],"audio/vnd.nuera.ecelp9600":["ecelp9600"],"audio/vnd.rip":["rip"],"audio/x-aac":["aac"],"audio/x-aiff":["aif","aiff","aifc"],"audio/x-caf":["caf"],"audio/x-flac":["flac"],"audio/x-m4a":["*m4a"],"audio/x-matroska":["mka"],"audio/x-mpegurl":["m3u"],"audio/x-ms-wax":["wax"],"audio/x-ms-wma":["wma"],"audio/x-pn-realaudio":["ram","ra"],"audio/x-pn-realaudio-plugin":["rmp"],"audio/x-realaudio":["*ra"],"audio/x-wav":["*wav"],"chemical/x-cdx":["cdx"],"chemical/x-cif":["cif"],"chemical/x-cmdf":["cmdf"],"chemical/x-cml":["cml"],"chemical/x-csml":["csml"],"chemical/x-xyz":["xyz"],"image/prs.btif":["btif"],"image/prs.pti":["pti"],"image/vnd.adobe.photoshop":["psd"],"image/vnd.airzip.accelerator.azv":["azv"],"image/vnd.dece.graphic":["uvi","uvvi","uvg","uvvg"],"image/vnd.djvu":["djvu","djv"],"image/vnd.dvb.subtitle":["*sub"],"image/vnd.dwg":["dwg"],"image/vnd.dxf":["dxf"],"image/vnd.fastbidsheet":["fbs"],"image/vnd.fpx":["fpx"],"image/vnd.fst":["fst"],"image/vnd.fujixerox.edmics-mmr":["mmr"],"image/vnd.fujixerox.edmics-rlc":["rlc"],"image/vnd.microsoft.icon":["ico"],"image/vnd.ms-dds":["dds"],"image/vnd.ms-modi":["mdi"],"image/vnd.ms-photo":["wdp"],"image/vnd.net-fpx":["npx"],"image/vnd.pco.b16":["b16"],"image/vnd.tencent.tap":["tap"],"image/vnd.valve.source.texture":["vtf"],"image/vnd.wap.wbmp":["wbmp"],"image/vnd.xiff":["xif"],"image/vnd.zbrush.pcx":["pcx"],"image/x-3ds":["3ds"],"image/x-cmu-raster":["ras"],"image/x-cmx":["cmx"],"image/x-freehand":["fh","fhc","fh4","fh5","fh7"],"image/x-icon":["*ico"],"image/x-jng":["jng"],"image/x-mrsid-image":["sid"],"image/x-ms-bmp":["*bmp"],"image/x-pcx":["*pcx"],"image/x-pict":["pic","pct"],"image/x-portable-anymap":["pnm"],"image/x-portable-bitmap":["pbm"],"image/x-portable-graymap":["pgm"],"image/x-portable-pixmap":["ppm"],"image/x-rgb":["rgb"],"image/x-tga":["tga"],"image/x-xbitmap":["xbm"],"image/x-xpixmap":["xpm"],"image/x-xwindowdump":["xwd"],"message/vnd.wfa.wsc":["wsc"],"model/vnd.collada+xml":["dae"],"model/vnd.dwf":["dwf"],"model/vnd.gdl":["gdl"],"model/vnd.gtw":["gtw"],"model/vnd.mts":["mts"],"model/vnd.opengex":["ogex"],"model/vnd.parasolid.transmit.binary":["x_b"],"model/vnd.parasolid.transmit.text":["x_t"],"model/vnd.sap.vds":["vds"],"model/vnd.usdz+zip":["usdz"],"model/vnd.valve.source.compiled-map":["bsp"],"model/vnd.vtu":["vtu"],"text/prs.lines.tag":["dsc"],"text/vnd.curl":["curl"],"text/vnd.curl.dcurl":["dcurl"],"text/vnd.curl.mcurl":["mcurl"],"text/vnd.curl.scurl":["scurl"],"text/vnd.dvb.subtitle":["sub"],"text/vnd.fly":["fly"],"text/vnd.fmi.flexstor":["flx"],"text/vnd.graphviz":["gv"],"text/vnd.in3d.3dml":["3dml"],"text/vnd.in3d.spot":["spot"],"text/vnd.sun.j2me.app-descriptor":["jad"],"text/vnd.wap.wml":["wml"],"text/vnd.wap.wmlscript":["wmls"],"text/x-asm":["s","asm"],"text/x-c":["c","cc","cxx","cpp","h","hh","dic"],"text/x-component":["htc"],"text/x-fortran":["f","for","f77","f90"],"text/x-handlebars-template":["hbs"],"text/x-java-source":["java"],"text/x-lua":["lua"],"text/x-markdown":["mkd"],"text/x-nfo":["nfo"],"text/x-opml":["opml"],"text/x-org":["*org"],"text/x-pascal":["p","pas"],"text/x-processing":["pde"],"text/x-sass":["sass"],"text/x-scss":["scss"],"text/x-setext":["etx"],"text/x-sfv":["sfv"],"text/x-suse-ymp":["ymp"],"text/x-uuencode":["uu"],"text/x-vcalendar":["vcs"],"text/x-vcard":["vcf"],"video/vnd.dece.hd":["uvh","uvvh"],"video/vnd.dece.mobile":["uvm","uvvm"],"video/vnd.dece.pd":["uvp","uvvp"],"video/vnd.dece.sd":["uvs","uvvs"],"video/vnd.dece.video":["uvv","uvvv"],"video/vnd.dvb.file":["dvb"],"video/vnd.fvt":["fvt"],"video/vnd.mpegurl":["mxu","m4u"],"video/vnd.ms-playready.media.pyv":["pyv"],"video/vnd.uvvu.mp4":["uvu","uvvu"],"video/vnd.vivo":["viv"],"video/x-f4v":["f4v"],"video/x-fli":["fli"],"video/x-flv":["flv"],"video/x-m4v":["m4v"],"video/x-matroska":["mkv","mk3d","mks"],"video/x-mng":["mng"],"video/x-ms-asf":["asf","asx"],"video/x-ms-vob":["vob"],"video/x-ms-wm":["wm"],"video/x-ms-wmv":["wmv"],"video/x-ms-wmx":["wmx"],"video/x-ms-wvx":["wvx"],"video/x-msvideo":["avi"],"video/x-sgi-movie":["movie"],"video/x-smv":["smv"],"x-conference/x-cooltalk":["ice"]};
+	return other;
+}
+
+var mime;
+var hasRequiredMime;
+
+function requireMime () {
+	if (hasRequiredMime) return mime;
+	hasRequiredMime = 1;
+
+	let Mime = requireMime$1();
+	mime = new Mime(requireStandard(), requireOther());
+	return mime;
+}
+
+var types = {};
+
+var hasRequiredTypes;
+
+function requireTypes () {
+	if (hasRequiredTypes) return types;
+	hasRequiredTypes = 1;
+	Object.defineProperty(types, "__esModule", { value: true });
+	types.InternalError = types.NotFoundError = types.MethodNotAllowedError = types.KVError = void 0;
+	class KVError extends Error {
+	    constructor(message, status = 500) {
+	        super(message);
+	        // see: typescriptlang.org/docs/handbook/release-notes/typescript-2-2.html
+	        Object.setPrototypeOf(this, new.target.prototype); // restore prototype chain
+	        this.name = KVError.name; // stack traces display correctly now
+	        this.status = status;
+	    }
+	    status;
+	}
+	types.KVError = KVError;
+	class MethodNotAllowedError extends KVError {
+	    constructor(message = `Not a valid request method`, status = 405) {
+	        super(message, status);
+	    }
+	}
+	types.MethodNotAllowedError = MethodNotAllowedError;
+	class NotFoundError extends KVError {
+	    constructor(message = `Not Found`, status = 404) {
+	        super(message, status);
+	    }
+	}
+	types.NotFoundError = NotFoundError;
+	class InternalError extends KVError {
+	    constructor(message = `Internal Error in KV Asset Handler`, status = 500) {
+	        super(message, status);
+	    }
+	}
+	types.InternalError = InternalError;
+	return types;
+}
+
+var hasRequiredDist;
+
+function requireDist () {
+	if (hasRequiredDist) return dist;
+	hasRequiredDist = 1;
+	(function (exports) {
+		var __createBinding = (dist && dist.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+		    if (k2 === undefined) k2 = k;
+		    var desc = Object.getOwnPropertyDescriptor(m, k);
+		    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+		      desc = { enumerable: true, get: function() { return m[k]; } };
+		    }
+		    Object.defineProperty(o, k2, desc);
+		}) : (function(o, m, k, k2) {
+		    if (k2 === undefined) k2 = k;
+		    o[k2] = m[k];
+		}));
+		var __setModuleDefault = (dist && dist.__setModuleDefault) || (Object.create ? (function(o, v) {
+		    Object.defineProperty(o, "default", { enumerable: true, value: v });
+		}) : function(o, v) {
+		    o["default"] = v;
+		});
+		var __importStar = (dist && dist.__importStar) || (function () {
+		    var ownKeys = function(o) {
+		        ownKeys = Object.getOwnPropertyNames || function (o) {
+		            var ar = [];
+		            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+		            return ar;
+		        };
+		        return ownKeys(o);
+		    };
+		    return function (mod) {
+		        if (mod && mod.__esModule) return mod;
+		        var result = {};
+		        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+		        __setModuleDefault(result, mod);
+		        return result;
+		    };
+		})();
+		Object.defineProperty(exports, "__esModule", { value: true });
+		exports.InternalError = exports.NotFoundError = exports.MethodNotAllowedError = exports.mapRequestToAsset = exports.getAssetFromKV = void 0;
+		exports.serveSinglePageApp = serveSinglePageApp;
+		const mime = __importStar(requireMime());
+		const types_1 = requireTypes();
+		Object.defineProperty(exports, "InternalError", { enumerable: true, get: function () { return types_1.InternalError; } });
+		Object.defineProperty(exports, "MethodNotAllowedError", { enumerable: true, get: function () { return types_1.MethodNotAllowedError; } });
+		Object.defineProperty(exports, "NotFoundError", { enumerable: true, get: function () { return types_1.NotFoundError; } });
+		const defaultCacheControl = {
+		    browserTTL: null,
+		    edgeTTL: 2 * 60 * 60 * 24, // 2 days
+		    bypassCache: false, // do not bypass Cloudflare's cache
+		};
+		const parseStringAsObject = (maybeString) => typeof maybeString === "string"
+		    ? JSON.parse(maybeString)
+		    : maybeString;
+		const getAssetFromKVDefaultOptions = {
+		    ASSET_NAMESPACE: typeof __STATIC_CONTENT !== "undefined" ? __STATIC_CONTENT : undefined,
+		    ASSET_MANIFEST: typeof __STATIC_CONTENT_MANIFEST !== "undefined"
+		        ? parseStringAsObject(__STATIC_CONTENT_MANIFEST)
+		        : {},
+		    cacheControl: defaultCacheControl,
+		    defaultMimeType: "text/plain",
+		    defaultDocument: "index.html",
+		    pathIsEncoded: false,
+		    defaultETag: "strong",
+		};
+		function assignOptions(options) {
+		    // Assign any missing options passed in to the default
+		    // options.mapRequestToAsset is handled manually later
+		    return Object.assign({}, getAssetFromKVDefaultOptions, options);
+		}
+		/**
+		 * maps the path of incoming request to the request pathKey to look up
+		 * in bucket and in cache
+		 * e.g.  for a path '/' returns '/index.html' which serves
+		 * the content of bucket/index.html
+		 * @param {Request} request incoming request
+		 */
+		const mapRequestToAsset = (request, options) => {
+		    options = assignOptions(options);
+		    const parsedUrl = new URL(request.url);
+		    let pathname = parsedUrl.pathname;
+		    if (pathname.endsWith("/")) {
+		        // If path looks like a directory append options.defaultDocument
+		        // e.g. If path is /about/ -> /about/index.html
+		        pathname = pathname.concat(options.defaultDocument);
+		    }
+		    else if (!mime.getType(pathname)) {
+		        // If path doesn't look like valid content
+		        //  e.g. /about.me ->  /about.me/index.html
+		        pathname = pathname.concat("/" + options.defaultDocument);
+		    }
+		    parsedUrl.pathname = pathname;
+		    return new Request(parsedUrl.toString(), request);
+		};
+		exports.mapRequestToAsset = mapRequestToAsset;
+		/**
+		 * maps the path of incoming request to /index.html if it evaluates to
+		 * any HTML file.
+		 * @param {Request} request incoming request
+		 */
+		function serveSinglePageApp(request, options) {
+		    options = assignOptions(options);
+		    // First apply the default handler, which already has logic to detect
+		    // paths that should map to HTML files.
+		    request = mapRequestToAsset(request, options);
+		    const parsedUrl = new URL(request.url);
+		    // Detect if the default handler decided to map to
+		    // a HTML file in some specific directory.
+		    if (parsedUrl.pathname.endsWith(".html")) {
+		        // If expected HTML file was missing, just return the root index.html (or options.defaultDocument)
+		        return new Request(`${parsedUrl.origin}/${options.defaultDocument}`, request);
+		    }
+		    else {
+		        // The default handler decided this is not an HTML page. It's probably
+		        // an image, CSS, or JS file. Leave it as-is.
+		        return request;
+		    }
+		}
+		const getAssetFromKV = async (event, options) => {
+		    options = assignOptions(options);
+		    const request = event.request;
+		    const ASSET_NAMESPACE = options.ASSET_NAMESPACE;
+		    const ASSET_MANIFEST = parseStringAsObject(options.ASSET_MANIFEST);
+		    if (typeof ASSET_NAMESPACE === "undefined") {
+		        throw new types_1.InternalError(`there is no KV namespace bound to the script`);
+		    }
+		    const rawPathKey = new URL(request.url).pathname.replace(/^\/+/, ""); // strip any preceding /'s
+		    let pathIsEncoded = options.pathIsEncoded;
+		    let requestKey;
+		    // if options.mapRequestToAsset is explicitly passed in, always use it and assume user has own intentions
+		    // otherwise handle request as normal, with default mapRequestToAsset below
+		    if (options.mapRequestToAsset) {
+		        requestKey = options.mapRequestToAsset(request);
+		    }
+		    else if (ASSET_MANIFEST[rawPathKey]) {
+		        requestKey = request;
+		    }
+		    else if (ASSET_MANIFEST[decodeURIComponent(rawPathKey)]) {
+		        pathIsEncoded = true;
+		        requestKey = request;
+		    }
+		    else {
+		        const mappedRequest = mapRequestToAsset(request);
+		        const mappedRawPathKey = new URL(mappedRequest.url).pathname.replace(/^\/+/, "");
+		        if (ASSET_MANIFEST[decodeURIComponent(mappedRawPathKey)]) {
+		            pathIsEncoded = true;
+		            requestKey = mappedRequest;
+		        }
+		        else {
+		            // use default mapRequestToAsset
+		            requestKey = mapRequestToAsset(request, options);
+		        }
+		    }
+		    const SUPPORTED_METHODS = ["GET", "HEAD"];
+		    if (!SUPPORTED_METHODS.includes(requestKey.method)) {
+		        throw new types_1.MethodNotAllowedError(`${requestKey.method} is not a valid request method`);
+		    }
+		    const parsedUrl = new URL(requestKey.url);
+		    const pathname = pathIsEncoded
+		        ? decodeURIComponent(parsedUrl.pathname)
+		        : parsedUrl.pathname; // decode percentage encoded path only when necessary
+		    // pathKey is the file path to look up in the manifest
+		    let pathKey = pathname.replace(/^\/+/, ""); // remove prepended /
+		    // @ts-expect-error we should pick cf types here
+		    const cache = caches.default;
+		    let mimeType = mime.getType(pathKey) || options.defaultMimeType;
+		    if (mimeType.startsWith("text") || mimeType === "application/javascript") {
+		        mimeType += "; charset=utf-8";
+		    }
+		    let shouldEdgeCache = false; // false if storing in KV by raw file path i.e. no hash
+		    // check manifest for map from file path to hash
+		    if (typeof ASSET_MANIFEST !== "undefined") {
+		        if (ASSET_MANIFEST[pathKey]) {
+		            pathKey = ASSET_MANIFEST[pathKey];
+		            // if path key is in asset manifest, we can assume it contains a content hash and can be cached
+		            shouldEdgeCache = true;
+		        }
+		    }
+		    // TODO this excludes search params from cache, investigate ideal behavior
+		    const cacheKey = new Request(`${parsedUrl.origin}/${pathKey}`, request);
+		    // if argument passed in for cacheControl is a function then
+		    // evaluate that function. otherwise return the Object passed in
+		    // or default Object
+		    const evalCacheOpts = (() => {
+		        switch (typeof options.cacheControl) {
+		            case "function":
+		                return options.cacheControl(request);
+		            case "object":
+		                return options.cacheControl;
+		            default:
+		                return defaultCacheControl;
+		        }
+		    })();
+		    // formats the etag depending on the response context. if the entityId
+		    // is invalid, returns an empty string (instead of null) to prevent the
+		    // the potentially disastrous scenario where the value of the Etag resp
+		    // header is "null". Could be modified in future to base64 encode etc
+		    const formatETag = (entityId = pathKey, validatorType = options.defaultETag) => {
+		        if (!entityId) {
+		            return "";
+		        }
+		        switch (validatorType) {
+		            case "weak":
+		                if (!entityId.startsWith("W/")) {
+		                    if (entityId.startsWith(`"`) && entityId.endsWith(`"`)) {
+		                        return `W/${entityId}`;
+		                    }
+		                    return `W/"${entityId}"`;
+		                }
+		                return entityId;
+		            case "strong":
+		                if (entityId.startsWith(`W/"`)) {
+		                    entityId = entityId.replace("W/", "");
+		                }
+		                if (!entityId.endsWith(`"`)) {
+		                    entityId = `"${entityId}"`;
+		                }
+		                return entityId;
+		            default:
+		                return "";
+		        }
+		    };
+		    options.cacheControl = Object.assign({}, defaultCacheControl, evalCacheOpts);
+		    // override shouldEdgeCache if options say to bypassCache
+		    if (options.cacheControl.bypassCache ||
+		        options.cacheControl.edgeTTL === null ||
+		        request.method == "HEAD") {
+		        shouldEdgeCache = false;
+		    }
+		    // only set max-age if explicitly passed in a number as an arg
+		    const shouldSetBrowserCache = typeof options.cacheControl.browserTTL === "number";
+		    let response = null;
+		    if (shouldEdgeCache) {
+		        response = await cache.match(cacheKey);
+		    }
+		    if (response) {
+		        if (response.status > 300 && response.status < 400) {
+		            if (response.body && "cancel" in Object.getPrototypeOf(response.body)) {
+		                // Body exists and environment supports readable streams
+		                response.body.cancel();
+		            }
+		            response = new Response(null, response);
+		        }
+		        else {
+		            // fixes #165
+		            const opts = {
+		                headers: new Headers(response.headers),
+		                status: 0,
+		                statusText: "",
+		            };
+		            opts.headers.set("cf-cache-status", "HIT");
+		            if (response.status) {
+		                opts.status = response.status;
+		                opts.statusText = response.statusText;
+		            }
+		            else if (opts.headers.has("Content-Range")) {
+		                opts.status = 206;
+		                opts.statusText = "Partial Content";
+		            }
+		            else {
+		                opts.status = 200;
+		                opts.statusText = "OK";
+		            }
+		            response = new Response(response.body, opts);
+		        }
+		    }
+		    else {
+		        const body = await ASSET_NAMESPACE.get(pathKey, "arrayBuffer");
+		        if (body === null) {
+		            throw new types_1.NotFoundError(`could not find ${pathKey} in your content namespace`);
+		        }
+		        response = new Response(body);
+		        if (shouldEdgeCache) {
+		            response.headers.set("Accept-Ranges", "bytes");
+		            response.headers.set("Content-Length", String(body.byteLength));
+		            // set etag before cache insertion
+		            if (!response.headers.has("etag")) {
+		                response.headers.set("etag", formatETag(pathKey));
+		            }
+		            // determine Cloudflare cache behavior
+		            response.headers.set("Cache-Control", `max-age=${options.cacheControl.edgeTTL}`);
+		            event.waitUntil(cache.put(cacheKey, response.clone()));
+		            response.headers.set("CF-Cache-Status", "MISS");
+		        }
+		    }
+		    response.headers.set("Content-Type", mimeType);
+		    if (response.status === 304) {
+		        const etag = formatETag(response.headers.get("etag"));
+		        const ifNoneMatch = cacheKey.headers.get("if-none-match");
+		        const proxyCacheStatus = response.headers.get("CF-Cache-Status");
+		        if (etag) {
+		            if (ifNoneMatch && ifNoneMatch === etag && proxyCacheStatus === "MISS") {
+		                response.headers.set("CF-Cache-Status", "EXPIRED");
+		            }
+		            else {
+		                response.headers.set("CF-Cache-Status", "REVALIDATED");
+		            }
+		            response.headers.set("etag", formatETag(etag, "weak"));
+		        }
+		    }
+		    if (shouldSetBrowserCache) {
+		        response.headers.set("Cache-Control", `max-age=${options.cacheControl.browserTTL}`);
+		    }
+		    else {
+		        response.headers.delete("Cache-Control");
+		    }
+		    return response;
+		};
+		exports.getAssetFromKV = getAssetFromKV; 
+	} (dist));
+	return dist;
+}
+
+var distExports = requireDist();
+
+class CustomerWorkflow extends WorkflowEntrypoint {
+  async run(event, step) {
+    const { DB } = this.env;
+    const { id } = event.payload;
+    const customer = await step.do("fetch customer", async () => {
+      const resp = await DB.prepare(`SELECT * FROM customers WHERE id = ?`).bind(id).run();
+      if (resp.success) return resp.results[0];
+      return null;
+    });
+    if (customer) {
+      await step.do("conditional customer step", async () => {
+        console.log(
+          "A customer was found! This step only runs if a customer is found."
+        );
+        console.log(customer);
+      });
+    }
+    await step.do("example step", async () => {
+      console.log(
+        "This step always runs, and is the last step in the workflow."
+      );
+    });
+  }
+}
+
+class FormSessionDO {
+  sessions = /* @__PURE__ */ new Map();
+  ctx;
+  env;
+  constructor(state, env) {
+    this.ctx = state;
+    this.env = env;
+    this.sessions = /* @__PURE__ */ new Map();
+  }
+  async fetch(request) {
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get("sessionId");
+    if (!sessionId) {
+      return new Response("Missing sessionId", { status: 400 });
+    }
+    switch (request.method) {
+      case "GET":
+        return this.getSession(sessionId);
+      case "POST":
+        return this.saveSession(sessionId, request);
+      case "DELETE":
+        return this.deleteSession(sessionId);
+      default:
+        return new Response("Method not allowed", { status: 405 });
+    }
+  }
+  async getSession(sessionId) {
+    try {
+      let session = this.sessions.get(sessionId);
+      if (!session) {
+        session = await this.ctx.storage.get(sessionId);
+      }
+      if (!session) {
+        if (sessionId.startsWith("form_new_")) {
+          return new Response(JSON.stringify({
+            success: true,
+            session: {
+              sessionId,
+              formData: {},
+              metadata: {},
+              components: [],
+              version: 0
+            }
+          }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Session not found"
+        }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({
+        success: true,
+        session
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Failed to retrieve session"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+  async saveSession(sessionId, request) {
+    try {
+      const body = await request.json();
+      const { formData, userName, templateId, timestamp } = body;
+      const session = {
+        sessionId,
+        templateId,
+        userName,
+        formData,
+        timestamp: timestamp || (/* @__PURE__ */ new Date()).toISOString(),
+        lastModified: (/* @__PURE__ */ new Date()).toISOString(),
+        version: (this.sessions.get(sessionId)?.version || 0) + 1
+      };
+      this.sessions.set(sessionId, session);
+      await this.ctx.storage.put(sessionId, session);
+      await this.ctx.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1e3);
+      return new Response(JSON.stringify({
+        success: true,
+        session,
+        message: "Session saved successfully"
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Failed to save session"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+  async deleteSession(sessionId) {
+    try {
+      this.sessions.delete(sessionId);
+      await this.ctx.storage.delete(sessionId);
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Session deleted successfully"
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Failed to delete session"
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+  // Handle expired sessions cleanup
+  async alarm() {
+    try {
+      const keys = await this.ctx.storage.list();
+      const now = Date.now();
+      const expiredKeys = [];
+      for (const [key, session] of keys.entries()) {
+        const sessionData = session;
+        const lastModified = new Date(sessionData.lastModified).getTime();
+        if (now - lastModified > 24 * 60 * 60 * 1e3) {
+          expiredKeys.push(key);
+        }
+      }
+      if (expiredKeys.length > 0) {
+        await this.ctx.storage.delete(expiredKeys);
+        expiredKeys.forEach((key) => this.sessions.delete(key));
+      }
+      if (keys.size > expiredKeys.length) {
+        await this.ctx.storage.setAlarm(Date.now() + 60 * 60 * 1e3);
+      }
+    } catch (error) {
+      console.error("Failed to clean up expired sessions:", error);
+    }
+  }
+}
+
+function timingSafeEqual(a, b) {
+  const lengthA = a.length;
+  let result = 0;
+  if (lengthA !== b.length) {
+    b = a;
+    result = 1;
+  }
+  for (let i = 0; i < lengthA; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+async function verifyBasicAuth(request, env) {
+  const authorization = request.headers.get("Authorization");
+  if (!authorization || !authorization.startsWith("Basic ")) {
+    return false;
+  }
+  const encoded = authorization.slice(6);
+  const decoded = atob(encoded);
+  const index = decoded.indexOf(":");
+  if (index === -1) {
+    return false;
+  }
+  const username = decoded.substring(0, index);
+  const password = decoded.substring(index + 1);
+  const expectedUsername = "admin";
+  const expectedPassword = env.ADMIN_PASS || "";
+  return timingSafeEqual(username, expectedUsername) && timingSafeEqual(password, expectedPassword);
+}
+function createExports(manifest) {
+  const app = new App(manifest);
+  const handler = {
+    async fetch(request, env, ctx) {
+      const url = new URL(request.url);
+      const skipAuth = url.pathname.startsWith("/_astro") || url.pathname.startsWith("/favicon") || url.pathname === "/health" || url.pathname.endsWith(".css") || url.pathname.endsWith(".js") || url.pathname.endsWith(".png") || url.pathname.endsWith(".jpg") || url.pathname.endsWith(".svg") || url.pathname.endsWith(".ico");
+      if (!skipAuth) {
+        const isAuthenticated = await verifyBasicAuth(request, env);
+        if (!isAuthenticated) {
+          return new Response(`<!DOCTYPE html>
+<html>
+<head>
+    <title>IPLC Forms - Authentication Required</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .auth-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #c0c0c0 0%, #808080 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 24px;
+            color: #1a1a2e;
+        }
+        h1 {
+            margin: 0 0 10px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        p {
+            margin: 0 0 20px;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+        .instructions {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="logo">IPLC</div>
+        <h1>Authentication Required</h1>
+        <p>Please enter your credentials to access IPLC Forms</p>
+        <div class="instructions">
+            <strong>Instructions:</strong><br>
+            A login prompt should appear automatically.<br>
+            If not, please refresh the page.<br><br>
+            <strong>Username:</strong> admin<br>
+            <strong>Password:</strong> [configured in system]
+        </div>
+    </div>
+</body>
+</html>`, {
+            status: 401,
+            headers: {
+              "WWW-Authenticate": 'Basic realm="IPLC Forms"',
+              "Content-Type": "text/html"
+            }
+          });
+        }
+      }
+      if (env.METRICS_KV && env.CACHE_KV) {
+        globalThis.METRICS_KV = env.METRICS_KV;
+        globalThis.CACHE_KV = env.CACHE_KV;
+        WorkersPerformanceManager.getInstance();
+      }
+      const requestUrl = new URL(request.url);
+      console.log(`[Worker] Handling request for: ${requestUrl.pathname}`);
+      if (requestUrl.pathname.startsWith("/_astro/") || requestUrl.pathname.endsWith(".css") || requestUrl.pathname.endsWith(".js") || requestUrl.pathname.endsWith(".png") || requestUrl.pathname.endsWith(".jpg") || requestUrl.pathname.endsWith(".svg")) {
+        console.log(`[Worker] Static asset requested: ${requestUrl.pathname}`);
+        if (env.ASSETS) {
+          try {
+            const assetResponse = await distExports.getAssetFromKV(
+              {
+                request,
+                waitUntil: ctx.waitUntil.bind(ctx)
+              },
+              {
+                ASSET_NAMESPACE: env.ASSETS
+              }
+            );
+            console.log(`[Worker] Asset served from KV: ${requestUrl.pathname}`);
+            return assetResponse;
+          } catch (e) {
+            console.error(`[Worker] Failed to serve asset from KV: ${requestUrl.pathname}`, e);
+          }
+        } else {
+          console.warn(`[Worker] ASSETS namespace not configured, cannot serve static assets from KV`);
+        }
+      }
+      const astroEnv = {
+        // Environment variables from .dev.vars
+        API_TOKEN: env.API_TOKEN,
+        CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+        CLOUDFLARE_D1_TOKEN: env.CLOUDFLARE_D1_TOKEN,
+        CLOUDFLARE_DATABASE_ID: env.CLOUDFLARE_DATABASE_ID,
+        // Cloudflare bindings
+        DB: env.DB,
+        SESSION: env.SESSION,
+        FORM_SESSION: env.FORM_SESSION,
+        CUSTOMER_WORKFLOW: env.CUSTOMER_WORKFLOW,
+        ASSETS: env.ASSETS,
+        METRICS_KV: env.METRICS_KV,
+        CACHE_KV: env.CACHE_KV,
+        AI: env.AI,
+        VECTORIZE: env.DOC_INDEX,
+        CHAT_HISTORY: env.CHAT_HISTORY,
+        DOC_METADATA: env.DOC_METADATA,
+        RATELIMIT_KV: env.RATELIMIT_KV,
+        AI_GATE: env.AI_GATE,
+        // Authentication secret
+        ADMIN_PASS: env.ADMIN_PASS
+      };
+      return app.render(request, {
+        locals: {
+          runtime: { env },
+          ctx,
+          env: astroEnv
+        }
+      });
+    }
+  };
+  return {
+    default: handler,
+    CustomerWorkflow,
+    FormSessionDO,
+    AIGate
+  };
+}
+
+const serverEntrypointModule = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  AIGate,
+  FormSessionDO,
+  createExports
+}, Symbol.toStringTag, { value: 'Module' }));
+
+export { AIGate as A, FormSessionDO as F, createExports as c, serverEntrypointModule as s };
+//# sourceMappingURL=_@astrojs-ssr-adapter_DA4Va7tI.mjs.map

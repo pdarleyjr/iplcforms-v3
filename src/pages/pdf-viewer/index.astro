@@ -1,0 +1,82 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { Card } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { FileText, Plus, ExternalLink } from 'lucide-react';
+
+// Sample PDFs for demonstration
+const samplePDFs = [
+  { id: '1', name: 'Sample Document 1', description: 'Clinical evaluation form' },
+  { id: '2', name: 'Sample Document 2', description: 'Patient assessment report' },
+  { id: '3', name: 'Sample Document 3', description: 'Treatment plan documentation' },
+];
+---
+
+<Layout title="PDF Viewer">
+  <div class="container mx-auto py-8">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">PDF Document Viewer</h1>
+      <p class="text-gray-600 mt-2">View and annotate PDF documents</p>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {samplePDFs.map((pdf) => (
+        <Card className="p-6 hover:shadow-lg transition-shadow">
+          <div class="flex items-start justify-between mb-4">
+            <FileText className="w-8 h-8 text-blue-500" />
+            <a 
+              href={`/pdf-viewer/${pdf.id}`}
+              class="text-blue-600 hover:text-blue-800"
+            >
+              <ExternalLink className="w-5 h-5" />
+            </a>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">{pdf.name}</h3>
+          <p class="text-gray-600 text-sm mb-4">{pdf.description}</p>
+          <a href={`/pdf-viewer/${pdf.id}`}>
+            <Button variant="outline" size="sm" className="w-full">
+              View Document
+            </Button>
+          </a>
+        </Card>
+      ))}
+
+      <!-- Add new PDF card -->
+      <Card className="p-6 border-dashed border-2 border-gray-300 hover:border-gray-400 transition-colors">
+        <div class="flex flex-col items-center justify-center h-full text-gray-500">
+          <Plus className="w-12 h-12 mb-3" />
+          <p class="text-sm font-medium">Upload New PDF</p>
+          <p class="text-xs mt-1">Coming soon</p>
+        </div>
+      </Card>
+    </div>
+
+    <div class="mt-12">
+      <Card className="p-6">
+        <h2 class="text-xl font-semibold mb-4">About PDF Annotations</h2>
+        <div class="space-y-3 text-gray-600">
+          <p>
+            This PDF viewer allows you to:
+          </p>
+          <ul class="list-disc list-inside space-y-2 ml-4">
+            <li>View PDF documents directly in your browser</li>
+            <li>Add highlights and annotations to important sections</li>
+            <li>Save annotations for future reference</li>
+            <li>Export and import annotation data</li>
+            <li>Collaborate with team members on document review</li>
+          </ul>
+          <p class="mt-4">
+            <strong>How to use:</strong> Click on any document above to open it in the viewer. 
+            Select text to add highlights, and use Alt+Click to create area selections.
+          </p>
+        </div>
+      </Card>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .container {
+    max-width: 1200px;
+  }
+</style>
