@@ -1,7 +1,7 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { a as authenticate, r as requireAdmin } from '../../../chunks/rbac-middleware_C5PL4AHx.mjs';
 import { P as PERMISSIONS, a as RESOURCES, R as ROLES } from '../../../chunks/rbac_vK5lyOl9.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const GET = async (context) => {
   const authResult = await authenticate(context);

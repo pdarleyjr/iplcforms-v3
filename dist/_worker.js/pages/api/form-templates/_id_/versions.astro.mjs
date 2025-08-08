@@ -2,7 +2,7 @@ globalThis.process ??= {}; globalThis.process.env ??= {};
 import { F as FormTemplateService } from '../../../../chunks/form_template_whHHz9qG.mjs';
 import { a as authenticate, b as authorize } from '../../../../chunks/rbac-middleware_C5PL4AHx.mjs';
 import { w as withPerformanceMonitoring } from '../../../../chunks/performance-wrapper_COlTcJLx.mjs';
-export { r as renderers } from '../../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../../renderers.mjs';
 
 const getHandler = async (context) => {
   const authResult = await authenticate(context);

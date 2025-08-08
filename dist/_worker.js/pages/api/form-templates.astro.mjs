@@ -1,9 +1,9 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { F as FormTemplateService } from '../../chunks/form_template_whHHz9qG.mjs';
-import { v as validateQueryParams, e as FormTemplateFiltersSchema, d as FormTemplateSchema, f as UpdateFormTemplateRequest } from '../../chunks/api-validation_BmEG2mSm.mjs';
+import { v as validateQueryParams, e as FormTemplateFiltersSchema, d as FormTemplateSchema, f as UpdateFormTemplateRequest } from '../../chunks/api-validation_EhNMe3Jy.mjs';
 import { b as authorize } from '../../chunks/rbac-middleware_C5PL4AHx.mjs';
 import { a as RESOURCES, P as PERMISSIONS } from '../../chunks/rbac_vK5lyOl9.mjs';
-export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../renderers.mjs';
 
 const getHandler = async (context) => {
   const { locals, request } = context;

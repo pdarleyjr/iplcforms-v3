@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { debounce } from '../utils/debounce';
 
 interface UseFormAutosaveOptions {
@@ -34,98 +34,114 @@ export function useFormAutosave({
   
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  const saveData = useCallback(async (data: any) => {
-    // Cancel any pending save
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    
-    abortControllerRef.current = new AbortController();
-    
-    setStatus(prev => ({ ...prev, saving: true, error: null }));
-    
-    try {
-      const response = await fetch('/api/form-sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-          formData: data,
-          templateId: parseInt(formId, 10),
-          userName,
-          timestamp: new Date().toISOString()
-        }),
-        signal: abortControllerRef.current.signal
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        let errorMessage = `Save failed: ${response.statusText}`;
-        try {
-          const errorJson = JSON.parse(errorData);
-          if (errorJson.error) {
-            errorMessage = `Save failed: ${errorJson.error}`;
-          }
-          if (errorJson.details) {
-            errorMessage += ` - ${errorJson.details}`;
-          }
-        } catch {
-          // If response is not JSON, use the text content
-          if (errorData) {
-            errorMessage = `Save failed: ${errorData}`;
-          }
-        }
-        throw new Error(errorMessage);
+  // Store the latest save function in a ref to avoid recreating the debounced function
+  const saveDataRef = useRef<(data: any) => Promise<any>>(null as any);
+  
+  // Update the ref whenever dependencies change
+  useEffect(() => {
+    saveDataRef.current = async (data: any): Promise<any> => {
+      // Cancel any pending save
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
       
-      const result = await response.json();
+      abortControllerRef.current = new AbortController();
       
-      setStatus({
-        saving: false,
-        lastSaved: new Date(),
-        error: null
-      });
+      setStatus(prev => ({ ...prev, saving: true, error: null }));
       
-      onSaveSuccess?.();
-      
-      return result;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        // Save was cancelled, ignore
-        return;
-      }
-      
-      const errorObj = error instanceof Error ? error : new Error(String(error));
-      
-      setStatus(prev => ({
-        ...prev,
-        saving: false,
-        error: errorObj
-      }));
-      
-      onSaveError?.(errorObj);
-      
-      // Try to save to IndexedDB as fallback
       try {
-        await saveToIndexedDB(sessionId, {
-          formId,
-          userId,
-          userName,
-          data,
-          lastSaved: new Date().toISOString()
+        const response = await fetch('/api/form-sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId,
+            formData: data,
+            templateId: parseInt(formId, 10),
+            userName,
+            timestamp: new Date().toISOString()
+          }),
+          signal: abortControllerRef.current.signal
         });
-      } catch (idbError) {
-        console.error('Failed to save to IndexedDB:', idbError);
+        
+        if (!response.ok) {
+          const errorData = await response.text();
+          let errorMessage = `Save failed: ${response.statusText}`;
+          try {
+            const errorJson = JSON.parse(errorData);
+            if (errorJson.error) {
+              errorMessage = `Save failed: ${errorJson.error}`;
+            }
+            if (errorJson.details) {
+              errorMessage += ` - ${errorJson.details}`;
+            }
+          } catch {
+            // If response is not JSON, use the text content
+            if (errorData) {
+              errorMessage = `Save failed: ${errorData}`;
+            }
+          }
+          throw new Error(errorMessage);
+        }
+        
+        const result = await response.json();
+        
+        setStatus({
+          saving: false,
+          lastSaved: new Date(),
+          error: null
+        });
+        
+        onSaveSuccess?.();
+        
+        return result;
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          // Save was cancelled, ignore
+          return;
+        }
+        
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        
+        setStatus(prev => ({
+          ...prev,
+          saving: false,
+          error: errorObj
+        }));
+        
+        onSaveError?.(errorObj);
+        
+        // Try to save to IndexedDB as fallback
+        try {
+          await saveToIndexedDB(sessionId, {
+            formId,
+            userId,
+            userName,
+            data,
+            lastSaved: new Date().toISOString()
+          });
+        } catch (idbError) {
+          console.error('Failed to save to IndexedDB:', idbError);
+        }
       }
-    }
+    };
   }, [sessionId, formId, userId, userName, onSaveSuccess, onSaveError]);
   
-  // Create debounced save function
-  const debouncedSave = useRef(
-    debounce(saveData, debounceMs)
-  ).current;
+  // Create a stable debounced function that persists across renders
+  const debouncedSaveRef = useRef<ReturnType<typeof debounce> | null>(null);
+  
+  // Initialize the debounced function only once
+  if (!debouncedSaveRef.current) {
+    debouncedSaveRef.current = debounce((data: any) => {
+      saveDataRef.current?.(data);
+    }, debounceMs);
+  }
+  
+  // Create a stable callback that uses the debounced function
+  const debouncedSave = useCallback((data: any) => {
+    debouncedSaveRef.current?.(data);
+  }, []);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -133,9 +149,9 @@ export function useFormAutosave({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      debouncedSave.cancel();
+      debouncedSaveRef.current?.cancel();
     };
-  }, [debouncedSave]);
+  }, []);
   
   // Load initial data from session
   useEffect(() => {

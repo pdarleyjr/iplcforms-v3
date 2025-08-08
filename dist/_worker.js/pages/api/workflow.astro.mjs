@@ -1,9 +1,9 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { a as authenticate, b as authorize } from '../../chunks/rbac-middleware_C5PL4AHx.mjs';
 import { P as PERMISSIONS } from '../../chunks/rbac_vK5lyOl9.mjs';
-import { a as validateRequest, h as CustomerWorkflowSchema } from '../../chunks/api-validation_BmEG2mSm.mjs';
+import { a as validateRequest, h as CustomerWorkflowSchema } from '../../chunks/api-validation_EhNMe3Jy.mjs';
 import { w as withPerformanceMonitoring } from '../../chunks/performance-wrapper_COlTcJLx.mjs';
-export { r as renderers } from '../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../renderers.mjs';
 
 const postHandler = async (context) => {
   const { CUSTOMER_WORKFLOW } = context.locals.runtime.env;

@@ -1,7 +1,7 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
-import { r as renderers } from './chunks/_@astro-renderers_BIJ3dQRj.mjs';
-import { c as createExports, s as serverEntrypointModule } from './chunks/_@astrojs-ssr-adapter_DA4Va7tI.mjs';
-import { manifest } from './manifest_B2vIO7D9.mjs';
+import { renderers } from './renderers.mjs';
+import { c as createExports, s as serverEntrypointModule } from './chunks/_@astrojs-ssr-adapter_CFWwjK6x.mjs';
+import { manifest } from './manifest_DhcxWjBs.mjs';
 
 const serverIslandMap = new Map();;
 
@@ -54,21 +54,27 @@ const _page45 = () => import('./pages/api/integrations/nextcloud.astro.mjs');
 const _page46 = () => import('./pages/api/integrations/slack.astro.mjs');
 const _page47 = () => import('./pages/api/integrations/status.astro.mjs');
 const _page48 = () => import('./pages/api/integrations/webhook.astro.mjs');
-const _page49 = () => import('./pages/api/performance-metrics.astro.mjs');
-const _page50 = () => import('./pages/api/subscriptions/_id_.astro.mjs');
-const _page51 = () => import('./pages/api/subscriptions.astro.mjs');
-const _page52 = () => import('./pages/api/test-ai-binding.astro.mjs');
-const _page53 = () => import('./pages/api/workflow.astro.mjs');
-const _page54 = () => import('./pages/chat/shared/_id_.astro.mjs');
-const _page55 = () => import('./pages/chat.astro.mjs');
-const _page56 = () => import('./pages/chat-public.astro.mjs');
-const _page57 = () => import('./pages/forms/new.astro.mjs');
-const _page58 = () => import('./pages/forms/_id_/analytics.astro.mjs');
-const _page59 = () => import('./pages/forms/_id_/edit.astro.mjs');
-const _page60 = () => import('./pages/forms/_id_/preview.astro.mjs');
-const _page61 = () => import('./pages/forms/_id_/submissions/_submissionid_.astro.mjs');
-const _page62 = () => import('./pages/forms.astro.mjs');
-const _page63 = () => import('./pages/index.astro.mjs');
+const _page49 = () => import('./pages/api/pdf-annotations/_id_.astro.mjs');
+const _page50 = () => import('./pages/api/pdf-annotations.astro.mjs');
+const _page51 = () => import('./pages/api/pdf-annotations.astro2.mjs');
+const _page52 = () => import('./pages/api/performance-metrics.astro.mjs');
+const _page53 = () => import('./pages/api/subscriptions/_id_.astro.mjs');
+const _page54 = () => import('./pages/api/subscriptions.astro.mjs');
+const _page55 = () => import('./pages/api/test-ai-binding.astro.mjs');
+const _page56 = () => import('./pages/api/workflow.astro.mjs');
+const _page57 = () => import('./pages/chat/shared/_id_.astro.mjs');
+const _page58 = () => import('./pages/chat.astro.mjs');
+const _page59 = () => import('./pages/chat-public.astro.mjs');
+const _page60 = () => import('./pages/forms/new.astro.mjs');
+const _page61 = () => import('./pages/forms/_id_/analytics.astro.mjs');
+const _page62 = () => import('./pages/forms/_id_/edit.astro.mjs');
+const _page63 = () => import('./pages/forms/_id_/preview.astro.mjs');
+const _page64 = () => import('./pages/forms/_id_/submissions/_submissionid_.astro.mjs');
+const _page65 = () => import('./pages/forms.astro.mjs');
+const _page66 = () => import('./pages/pdf-viewer/_id_.astro.mjs');
+const _page67 = () => import('./pages/pdf-viewer.astro.mjs');
+const _page68 = () => import('./pages/pdf-viewer.astro2.mjs');
+const _page69 = () => import('./pages/index.astro.mjs');
 const pageMap = new Map([
     ["node_modules/@astrojs/cloudflare/dist/entrypoints/image-endpoint.js", _page0],
     ["src/pages/a/api/event.ts", _page1],
@@ -119,21 +125,27 @@ const pageMap = new Map([
     ["src/pages/api/integrations/slack.ts", _page46],
     ["src/pages/api/integrations/status.ts", _page47],
     ["src/pages/api/integrations/webhook.ts", _page48],
-    ["src/pages/api/performance-metrics.ts", _page49],
-    ["src/pages/api/subscriptions/[id].ts", _page50],
-    ["src/pages/api/subscriptions.ts", _page51],
-    ["src/pages/api/test-ai-binding.ts", _page52],
-    ["src/pages/api/workflow.ts", _page53],
-    ["src/pages/chat/shared/[id].astro", _page54],
-    ["src/pages/chat.astro", _page55],
-    ["src/pages/chat-public.astro", _page56],
-    ["src/pages/forms/new.astro", _page57],
-    ["src/pages/forms/[id]/analytics.astro", _page58],
-    ["src/pages/forms/[id]/edit.astro", _page59],
-    ["src/pages/forms/[id]/preview.astro", _page60],
-    ["src/pages/forms/[id]/submissions/[submissionId].astro", _page61],
-    ["src/pages/forms/index.astro", _page62],
-    ["src/pages/index.astro", _page63]
+    ["src/pages/api/pdf-annotations/[id].ts", _page49],
+    ["src/pages/api/pdf-annotations/index.ts", _page50],
+    ["src/pages/api/pdf-annotations.ts", _page51],
+    ["src/pages/api/performance-metrics.ts", _page52],
+    ["src/pages/api/subscriptions/[id].ts", _page53],
+    ["src/pages/api/subscriptions.ts", _page54],
+    ["src/pages/api/test-ai-binding.ts", _page55],
+    ["src/pages/api/workflow.ts", _page56],
+    ["src/pages/chat/shared/[id].astro", _page57],
+    ["src/pages/chat.astro", _page58],
+    ["src/pages/chat-public.astro", _page59],
+    ["src/pages/forms/new.astro", _page60],
+    ["src/pages/forms/[id]/analytics.astro", _page61],
+    ["src/pages/forms/[id]/edit.astro", _page62],
+    ["src/pages/forms/[id]/preview.astro", _page63],
+    ["src/pages/forms/[id]/submissions/[submissionId].astro", _page64],
+    ["src/pages/forms/index.astro", _page65],
+    ["src/pages/pdf-viewer/[id].astro", _page66],
+    ["src/pages/pdf-viewer/index.astro", _page67],
+    ["src/pages/pdf-viewer.astro", _page68],
+    ["src/pages/index.astro", _page69]
 ]);
 
 const _manifest = Object.assign(manifest, {

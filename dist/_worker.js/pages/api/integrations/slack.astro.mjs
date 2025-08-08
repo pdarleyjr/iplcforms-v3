@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { _ as _page } from '../../../chunks/slack_C2T7VPPC.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const page = () => _page;
 

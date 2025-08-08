@@ -1,6 +1,6 @@
 globalThis.process ??= {}; globalThis.process.env ??= {};
 import { b as handlePlausibleProxy } from '../../../chunks/plausible-proxy_CO7DzKo-.mjs';
-export { r as renderers } from '../../../chunks/_@astro-renderers_BIJ3dQRj.mjs';
+export { renderers } from '../../../renderers.mjs';
 
 const ALL = async ({ request, locals }) => {
   const env = locals.runtime.env;
