@@ -5,7 +5,7 @@ import Layout from '@/layouts/Layout.astro';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { LiveFormRenderer } from '@/components/form-builder/LiveFormRenderer';
+import SurveyRuntime from '@/components/form-builder/SurveyRuntime';
 import { FormTemplateService } from '@/lib/services/form_template';
 
 const { id } = Astro.params;
@@ -97,16 +97,24 @@ const formatDate = (dateString: string) => {
     <!-- Form Preview -->
     <Card>
       <CardHeader>
-        <CardTitle>Live Form</CardTitle>
+        <CardTitle>Live Form Preview</CardTitle>
         <CardDescription>
-          Complete this form as a user would - data will be saved as a submission
+          Preview how this form will appear to users using SurveyJS runtime
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div class="bg-gray-50 p-6 rounded-lg">
-          <LiveFormRenderer
+          <SurveyRuntime
             client:only="react"
-            template={template}
+            formSchema={template.schema}
+            theme="modern"
+            showProgressBar={template.schema?.isMultiPage ? 'top' : 'none'}
+            onComplete={(data) => {
+              console.log('Form completed with data:', data);
+            }}
+            onValueChanged={(name, value) => {
+              console.log(`Field ${name} changed to:`, value);
+            }}
           />
         </div>
       </CardContent>
