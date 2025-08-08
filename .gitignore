@@ -1,5 +1,6 @@
 # build output
-# dist/ - removed to allow committing for Cloudflare Pages deployment
+dist/
+.vercel/
 
 # generated types
 .astro/
